@@ -1,0 +1,22 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "anysphere.cursorpyright",
+    "ms-python.debugpy",
+    "charliermarsh.ruff",
+    "ms-python.mypy-type-checker",
+    "tamasfe.even-better-toml",
+    "timonwong.shellcheck",
+    "davidanson.vscode-markdownlint",
+    "redhat.vscode-yaml",
+    "github.vscode-github-actions"
+  ],
+  "unwantedRecommendations": [
+    "ms-python.vscode-pylance",
+    "rust-lang.rust-analyzer",
+    "llvm-vs-code-extensions.vscode-clangd",
+    "ms-vscode.cmake-tools",
+    "theqtcompany.qt-core",
+    "theqtcompany.qt-qml"
+  ]
+}

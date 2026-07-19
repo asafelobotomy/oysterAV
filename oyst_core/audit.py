@@ -1,0 +1,114 @@
+"""Security audit trail for privileged and sensitive operations."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from oyst_core.config import data_dir
+
+AUDIT_KINDS = frozenset(
+    {
+        "pack.install",
+        "quarantine.restore",
+        "quarantine.delete",
+        "config.set",
+        "schedule.install",
+        "schedule.enable_linger",
+        "schedule.disable_linger",
+        "helper.install",
+        "auth.grant",
+        "auth.revoke",
+        "privileged.run",
+        "setup.run",
+        "runtime.bootstrap",
+        "firewall.mutate",
+        "fail2ban.unban",
+        "fail2ban.jail",
+        "clamav.clamd",
+        "maldet.monitor",
+        "lynis.audit",
+    },
+)
+
+
+class SecurityAudit:
+    def __init__(self, db_path: Path | None = None) -> None:
+        self.db_path = db_path or (data_dir() / "events.db")
+        self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_db(self) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS security_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    success INTEGER NOT NULL,
+                    data TEXT
+                )
+                """,
+            )
+
+    def log(
+        self,
+        kind: str,
+        action: str,
+        *,
+        success: bool = True,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO security_audit (ts, kind, action, success, data)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    datetime.now().isoformat(),
+                    kind,
+                    action,
+                    1 if success else 0,
+                    json.dumps(data or {}),
+                ),
+            )
+
+    def list_entries(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, ts, kind, action, success, data
+                FROM security_audit
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            entry: dict[str, Any] = {
+                "id": row["id"],
+                "ts": row["ts"],
+                "kind": row["kind"],
+                "action": row["action"],
+                "success": bool(row["success"]),
+            }
+            if row["data"]:
+                try:
+                    entry["data"] = json.loads(row["data"])
+                except json.JSONDecodeError:
+                    entry["data"] = {}
+            else:
+                entry["data"] = {}
+            result.append(entry)
+        return result

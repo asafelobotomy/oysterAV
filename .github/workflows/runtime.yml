@@ -1,0 +1,23 @@
+name: Runtime bundle
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/build_runtime.sh"
+      - "oyst_core/runtime/**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zstd
+        run: sudo apt-get update && sudo apt-get install -y zstd curl
+      - name: Build runtime tarball
+        run: bash scripts/build_runtime.sh x86_64
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-x86_64
+          path: dist/runtime-x86_64.tar.zst

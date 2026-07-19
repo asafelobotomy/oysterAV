@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --extra all
+      - run: uv run ruff format --check oyst_core oyst_cli oysterav tests
+      - run: uv run ruff check oyst_core oyst_cli oysterav tests
+      - run: uv run mypy oyst_core oyst_cli oysterav
+      # Coverage sources + fail_under: pyproject.toml. Do not add --cov=oysterav.
+      - run: uv run pytest tests/ --cov=oyst_core --cov=oyst_cli --cov-report=term-missing
+      - run: uv tool run bandit -r oyst_core oyst_cli -ll
+      - run: uv tool run pip-audit
+      - name: GUI must not call security binaries directly
+        run: |
+          ! rg -n "subprocess\.(run|call|Popen).*clam|rkhunter|chkrootkit|lynis|ufw|firewall-cmd" oysterav/ || \
+            (echo "GUI must use OystClient only" && exit 1)

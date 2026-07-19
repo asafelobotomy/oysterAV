@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.runtime-staging/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.log
+.DS_Store
+.idea/
+*.swp
+.cursor/
+
+# Never commit local RPC credentials if copied into the tree by mistake
+oyst.token
+oyst.sock

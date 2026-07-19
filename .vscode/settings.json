@@ -1,0 +1,31 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "ruff.configuration": "${workspaceFolder}/pyproject.toml",
+  "mypy-type-checker.importStrategy": "fromEnvironment",
+  "mypy-type-checker.interpreter": ["${workspaceFolder}/.venv/bin/python"],
+  "mypy-type-checker.args": [
+    "--config-file",
+    "${workspaceFolder}/pyproject.toml"
+  ],
+  "yaml.disableSchemaDetection": [
+    "**/.github/workflows/*.yml",
+    "**/.github/workflows/*.yaml",
+    "**/.gitea/workflows/*.yml",
+    "**/.gitea/workflows/*.yaml",
+    "**/.forgejo/workflows/*.yml",
+    "**/.forgejo/workflows/*.yaml"
+  ],
+  "files.associations": {
+    "*.prf": "ini"
+  }
+}

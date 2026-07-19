@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<policyconfig>
+<action id="io.github.oysterav.helper.systemctl">
+  <description>Control oysterAV system services</description>
+  <message>Authentication is required to start or stop ClamAV and other oysterAV system services</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin_keep</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">systemctl</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.oysterav.helper.run">
+  <description>Run oysterAV privileged tools</description>
+  <message>Authentication is required to run privileged security tools or configure scheduling</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin_keep</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">run</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.oysterav.helper.firewall">
+  <description>Change oysterAV firewall configuration</description>
+  <message>Authentication is required to change firewall rules</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">firewall</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.oysterav.helper.fail2ban">
+  <description>Change fail2ban via oysterAV</description>
+  <message>Authentication is required to manage fail2ban bans and jails</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">fail2ban</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.oysterav.helper.maldet-config">
+  <description>Configure Linux Malware Detect monitor</description>
+  <message>Authentication is required to configure the maldet monitor</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin_keep</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">maldet-config</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.oysterav.helper.rkhunter-whitelist">
+  <description>Update oysterAV rkhunter whitelist overlay</description>
+  <message>Authentication is required to whitelist an rkhunter finding in the oysterAV overlay</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">rkhunter-whitelist</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.oysterav.helper.install-script">
+  <description>Run oysterAV vetted install scripts</description>
+  <message>Authentication is required to install security tools</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">install-script</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+</policyconfig>

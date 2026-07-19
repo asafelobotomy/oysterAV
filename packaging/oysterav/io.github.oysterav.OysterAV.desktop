@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=oysterAV
+Comment=Linux security orchestrator
+Exec=oysterav
+Icon=oysterav
+Terminal=false
+Categories=System;Security;
+StartupWMClass=io.github.oysterav.OysterAV

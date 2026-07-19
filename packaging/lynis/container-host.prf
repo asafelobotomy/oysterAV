@@ -1,0 +1,15 @@
+# oysterAV container-host Lynis profile
+# Host audit with Docker/container checks enabled (CONT-* tests)
+
+[control]
+profile_name=container-host
+
+[lynis]
+skip-test=STRG-1840
+skip-test=STRG-1846
+
+# Keep container tests; skip some bare-metal-only noise on Docker hosts
+skip-test=HRDN-7222
+
+[plugins]
+# Enterprise Docker plugin not required; built-in CONT tests run on host

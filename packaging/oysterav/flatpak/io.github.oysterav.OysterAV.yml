@@ -1,0 +1,34 @@
+app-id: io.github.oysterav.OysterAV
+runtime: org.gnome.Platform
+runtime-version: "48"
+sdk: org.gnome.Sdk
+command: oysterav
+
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --filesystem=home
+  - --filesystem=host
+  - --talk-name=org.freedesktop.Flatpak
+  # Tray (StatusNotifierItem) + optional notification tips
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: oysterav
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app .
+      # Host/menu .desktop (flatpak rewrites Exec on export)
+      - install -Dm644 packaging/oysterav/io.github.oysterav.OysterAV.desktop /app/share/applications/io.github.oysterav.OysterAV.desktop
+      # Tray / theme icons (Icon=oysterav)
+      - install -Dm644 branding/hicolor/16x16/apps/oysterav.png /app/share/icons/hicolor/16x16/apps/oysterav.png
+      - install -Dm644 branding/hicolor/32x32/apps/oysterav.png /app/share/icons/hicolor/32x32/apps/oysterav.png
+      - install -Dm644 branding/hicolor/48x48/apps/oysterav.png /app/share/icons/hicolor/48x48/apps/oysterav.png
+      - install -Dm644 branding/hicolor/128x128/apps/oysterav.png /app/share/icons/hicolor/128x128/apps/oysterav.png
+      - install -Dm644 branding/hicolor/256x256/apps/oysterav.png /app/share/icons/hicolor/256x256/apps/oysterav.png
+      - install -Dm644 branding/oysterAV-icon.png /app/share/icons/hicolor/512x512/apps/oysterav.png
+    sources:
+      - type: dir
+        path: ../../..
