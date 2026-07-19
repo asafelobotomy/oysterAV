@@ -1,6 +1,8 @@
 # Agent guide — oysterAV
 
 Linux security orchestrator: `oyst-cli` (CLI/RPC backend) + thin GTK4 GUI (`oysterav`).
+Repo: https://github.com/asafelobotomy/oysterAV
+
 Shared logic lives in `oyst_core`. See ADRs under `docs/adr/`.
 
 ## Prerequisites

@@ -2,6 +2,8 @@
 
 Linux security orchestrator: **oyst-cli** (CLI-first backend) + **oysterAV** (GTK4 GUI client).
 
+**Repository:** https://github.com/asafelobotomy/oysterAV
+
 ## Prerequisites
 
 - Python ≥ 3.12

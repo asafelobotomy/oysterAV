@@ -2,7 +2,7 @@
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
 <policyconfig>
-<action id="io.github.oysterav.helper.systemctl">
+<action id="io.github.asafelobotomy.helper.systemctl">
   <description>Control oysterAV system services</description>
   <message>Authentication is required to start or stop ClamAV and other oysterAV system services</message>
   <defaults>
@@ -15,7 +15,7 @@
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
-<action id="io.github.oysterav.helper.run">
+<action id="io.github.asafelobotomy.helper.run">
   <description>Run oysterAV privileged tools</description>
   <message>Authentication is required to run privileged security tools or configure scheduling</message>
   <defaults>
@@ -28,7 +28,7 @@
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
-<action id="io.github.oysterav.helper.firewall">
+<action id="io.github.asafelobotomy.helper.firewall">
   <description>Change oysterAV firewall configuration</description>
   <message>Authentication is required to change firewall rules</message>
   <defaults>
@@ -41,7 +41,7 @@
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
-<action id="io.github.oysterav.helper.fail2ban">
+<action id="io.github.asafelobotomy.helper.fail2ban">
   <description>Change fail2ban via oysterAV</description>
   <message>Authentication is required to manage fail2ban bans and jails</message>
   <defaults>
@@ -54,7 +54,7 @@
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
-<action id="io.github.oysterav.helper.maldet-config">
+<action id="io.github.asafelobotomy.helper.maldet-config">
   <description>Configure Linux Malware Detect monitor</description>
   <message>Authentication is required to configure the maldet monitor</message>
   <defaults>
@@ -67,7 +67,7 @@
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
-<action id="io.github.oysterav.helper.rkhunter-whitelist">
+<action id="io.github.asafelobotomy.helper.rkhunter-whitelist">
   <description>Update oysterAV rkhunter whitelist overlay</description>
   <message>Authentication is required to whitelist an rkhunter finding in the oysterAV overlay</message>
   <defaults>
@@ -80,7 +80,7 @@
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
-<action id="io.github.oysterav.helper.install-script">
+<action id="io.github.asafelobotomy.helper.install-script">
   <description>Run oysterAV vetted install scripts</description>
   <message>Authentication is required to install security tools</message>
   <defaults>

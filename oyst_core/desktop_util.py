@@ -6,7 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
-APP_ID = "io.github.oysterav.OysterAV"
+APP_ID = "io.github.asafelobotomy.OysterAV"
 AUTOSTART_FILENAME = f"{APP_ID}.desktop"
 
 

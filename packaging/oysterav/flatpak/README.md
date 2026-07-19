@@ -3,7 +3,7 @@
 Build the GUI Flatpak (requires `flatpak-builder`):
 
 ```bash
-flatpak-builder --repo=repo build-dir packaging/oysterav/flatpak/io.github.oysterav.OysterAV.yml
+flatpak-builder --repo=repo build-dir packaging/oysterav/flatpak/io.github.asafelobotomy.OysterAV.yml
 ```
 
 **Runtime (Full mode):** Tools install to `~/.local/share/oysterav/runtime/`. For Lite/Flatpak with host tools only, set `runtime.mode=lite` and install ClamAV on the host.
@@ -21,7 +21,7 @@ Grant access to the host ClamAV socket if needed via Flatpak permissions.
 
 The manifest allows talking to `org.kde.StatusNotifierWatcher` so the GTK4
 StatusNotifierItem tray works. Autostart uses `flatpak run
-io.github.oysterav.OysterAV [--minimized]` when running inside Flatpak
+io.github.asafelobotomy.OysterAV [--minimized]` when running inside Flatpak
 (`oyst-cli desktop install-autostart`).
 
 App icons ship from `branding/hicolor/*/apps/oysterav.png` into

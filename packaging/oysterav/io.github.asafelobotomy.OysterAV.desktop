@@ -7,4 +7,4 @@ Exec=oysterav
 Icon=oysterav
 Terminal=false
 Categories=System;Security;
-StartupWMClass=io.github.oysterav.OysterAV
+StartupWMClass=io.github.asafelobotomy.OysterAV

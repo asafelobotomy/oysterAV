@@ -1,4 +1,4 @@
-app-id: io.github.oysterav.OysterAV
+app-id: io.github.asafelobotomy.OysterAV
 runtime: org.gnome.Platform
 runtime-version: "48"
 sdk: org.gnome.Sdk
@@ -21,7 +21,7 @@ modules:
     build-commands:
       - pip3 install --prefix=/app .
       # Host/menu .desktop (flatpak rewrites Exec on export)
-      - install -Dm644 packaging/oysterav/io.github.oysterav.OysterAV.desktop /app/share/applications/io.github.oysterav.OysterAV.desktop
+      - install -Dm644 packaging/oysterav/io.github.asafelobotomy.OysterAV.desktop /app/share/applications/io.github.asafelobotomy.OysterAV.desktop
       # Tray / theme icons (Icon=oysterav)
       - install -Dm644 branding/hicolor/16x16/apps/oysterav.png /app/share/icons/hicolor/16x16/apps/oysterav.png
       - install -Dm644 branding/hicolor/32x32/apps/oysterav.png /app/share/icons/hicolor/32x32/apps/oysterav.png

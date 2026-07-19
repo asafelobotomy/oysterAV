@@ -35,12 +35,12 @@ def test_polkit_policy_has_argv1_scoped_actions() -> None:
     assert 'org.freedesktop.policykit.exec.argv1">maldet-config<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">rkhunter-whitelist<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">install-script<' in policy
-    assert "io.github.oysterav.run-helper" not in policy
+    assert "io.github.asafelobotomy.run-helper" not in policy
     assert POLICY_VERSION >= 3
 
 
 def test_packaging_policy_matches_builder() -> None:
-    packaged = Path("packaging/polkit/io.github.oysterav.policy").read_text(encoding="utf-8")
+    packaged = Path("packaging/polkit/io.github.asafelobotomy.policy").read_text(encoding="utf-8")
     built = build_polkit_policy()
     for action_id in POLKIT_ACTION_IDS:
         assert action_id in packaged
@@ -62,12 +62,12 @@ def test_install_privileged_helper_writes_policy(tmp_path: Path) -> None:
     with patch("oyst_core.privileged.install_privileged_helper.os.geteuid", return_value=0):
         result = install_privileged_helper(prefix=tmp_path)
     assert result["ok"] is True
-    policy_path = tmp_path / "share" / "polkit-1" / "actions" / "io.github.oysterav.policy"
+    policy_path = tmp_path / "share" / "polkit-1" / "actions" / "io.github.asafelobotomy.policy"
     helper_path = tmp_path / "lib" / "oysterav" / "oyst-helper"
     assert policy_path.is_file()
     assert helper_path.is_file()
     text = policy_path.read_text(encoding="utf-8")
-    assert "io.github.oysterav.helper.systemctl" in text
+    assert "io.github.asafelobotomy.helper.systemctl" in text
 
 
 def test_freshclam_timer_allowlisted() -> None:

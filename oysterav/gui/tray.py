@@ -168,7 +168,7 @@ class OysterTray:
     ) -> GLib.Variant | None:
         mapping: dict[str, Any] = {
             "Category": GLib.Variant("s", "ApplicationStatus"),
-            "Id": GLib.Variant("s", "io.github.oysterav.OysterAV"),
+            "Id": GLib.Variant("s", "io.github.asafelobotomy.OysterAV"),
             "Title": GLib.Variant("s", self._title),
             "Status": GLib.Variant("s", "Active"),
             "WindowId": GLib.Variant("u", 0),

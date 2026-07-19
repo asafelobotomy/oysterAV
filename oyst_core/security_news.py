@@ -313,7 +313,7 @@ def _parse_feed_xml(source: str, xml_text: str) -> list[dict[str, Any]]:
 def _fetch_url(url: str) -> str:
     req = Request(
         url,
-        headers={"User-Agent": "oysterAV/security-news (+https://github.com/oysterav)"},
+        headers={"User-Agent": "oysterAV/security-news (+https://github.com/asafelobotomy/oysterAV)"},
     )
     with urlopen(req, timeout=FETCH_TIMEOUT_S) as response:  # noqa: S310 — fixed official URLs
         raw = response.read()

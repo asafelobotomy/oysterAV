@@ -47,7 +47,7 @@ def install_default_app_icon() -> None:
 
 class OysterApp(Adw.Application):
     def __init__(self, *, start_minimized: bool = False) -> None:
-        super().__init__(application_id="io.github.oysterav.OysterAV")
+        super().__init__(application_id="io.github.asafelobotomy.OysterAV")
         self.client = OystClient()
         self._start_minimized_flag = start_minimized
         self._window: OysterWindow | None = None

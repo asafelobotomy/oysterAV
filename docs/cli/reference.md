@@ -38,7 +38,7 @@ oyst-cli config set ui.minimize_to_tray true
 oysterav --minimized                         # start GUI hidden (tray)
 ```
 
-Autostart file: `~/.config/autostart/io.github.oysterav.OysterAV.desktop`.
+Autostart file: `~/.config/autostart/io.github.asafelobotomy.OysterAV.desktop`.
 
 ## Health
 
@@ -195,7 +195,7 @@ oyst-cli install-privileged-helper
 oyst-cli helper-status --json
 ```
 
-Installs `oyst-helper` and fine-grained polkit actions (`io.github.oysterav.helper.*` via
+Installs `oyst-helper` and fine-grained polkit actions (`io.github.asafelobotomy.helper.*` via
 `pkexec` argv1). Re-run after upgrades when `helper-status` reports an outdated policy.
 
 ## Services

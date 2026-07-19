@@ -13,25 +13,25 @@ from oyst_core.privileged.runner import run_command
 
 HELPER_DIR = Path("/usr/local/lib/oysterav")
 HELPER_PATH = HELPER_DIR / "oyst-helper"
-POLKIT_PATH = Path("/usr/share/polkit-1/actions/io.github.oysterav.policy")
+POLKIT_PATH = Path("/usr/share/polkit-1/actions/io.github.asafelobotomy.policy")
 
 # Bump when action IDs / argv1 annotations change (helper-status reports this).
 POLICY_VERSION = 3
 
 POLKIT_ACTION_IDS = (
-    "io.github.oysterav.helper.systemctl",
-    "io.github.oysterav.helper.run",
-    "io.github.oysterav.helper.firewall",
-    "io.github.oysterav.helper.fail2ban",
-    "io.github.oysterav.helper.maldet-config",
-    "io.github.oysterav.helper.rkhunter-whitelist",
-    "io.github.oysterav.helper.install-script",
+    "io.github.asafelobotomy.helper.systemctl",
+    "io.github.asafelobotomy.helper.run",
+    "io.github.asafelobotomy.helper.firewall",
+    "io.github.asafelobotomy.helper.fail2ban",
+    "io.github.asafelobotomy.helper.maldet-config",
+    "io.github.asafelobotomy.helper.rkhunter-whitelist",
+    "io.github.asafelobotomy.helper.install-script",
 )
 
 # Actions that auth grant-service-lifecycle may authorize without a password.
 SERVICE_LIFECYCLE_ACTION_IDS = (
-    "io.github.oysterav.helper.systemctl",
-    "io.github.oysterav.helper.maldet-config",
+    "io.github.asafelobotomy.helper.systemctl",
+    "io.github.asafelobotomy.helper.maldet-config",
 )
 
 HELPER_SCRIPT = textwrap.dedent(
@@ -78,7 +78,7 @@ def build_polkit_policy() -> str:
     """Return the shipped polkit policy XML (argv1-scoped actions)."""
     actions = [
         _action_xml(
-            action_id="io.github.oysterav.helper.systemctl",
+            action_id="io.github.asafelobotomy.helper.systemctl",
             description="Control oysterAV system services",
             message=(
                 "Authentication is required to start or stop ClamAV "
@@ -88,7 +88,7 @@ def build_polkit_policy() -> str:
             allow_active="auth_admin_keep",
         ),
         _action_xml(
-            action_id="io.github.oysterav.helper.run",
+            action_id="io.github.asafelobotomy.helper.run",
             description="Run oysterAV privileged tools",
             message=(
                 "Authentication is required to run privileged security tools "
@@ -98,28 +98,28 @@ def build_polkit_policy() -> str:
             allow_active="auth_admin_keep",
         ),
         _action_xml(
-            action_id="io.github.oysterav.helper.firewall",
+            action_id="io.github.asafelobotomy.helper.firewall",
             description="Change oysterAV firewall configuration",
             message="Authentication is required to change firewall rules",
             argv1="firewall",
             allow_active="auth_admin",
         ),
         _action_xml(
-            action_id="io.github.oysterav.helper.fail2ban",
+            action_id="io.github.asafelobotomy.helper.fail2ban",
             description="Change fail2ban via oysterAV",
             message=("Authentication is required to manage fail2ban bans, ignores, and jails"),
             argv1="fail2ban",
             allow_active="auth_admin",
         ),
         _action_xml(
-            action_id="io.github.oysterav.helper.maldet-config",
+            action_id="io.github.asafelobotomy.helper.maldet-config",
             description="Configure Linux Malware Detect monitor",
             message=("Authentication is required to configure or start the maldet monitor"),
             argv1="maldet-config",
             allow_active="auth_admin_keep",
         ),
         _action_xml(
-            action_id="io.github.oysterav.helper.rkhunter-whitelist",
+            action_id="io.github.asafelobotomy.helper.rkhunter-whitelist",
             description="Update oysterAV rkhunter whitelist overlay",
             message=(
                 "Authentication is required to whitelist rkhunter finding(s) "
@@ -129,7 +129,7 @@ def build_polkit_policy() -> str:
             allow_active="auth_admin",
         ),
         _action_xml(
-            action_id="io.github.oysterav.helper.install-script",
+            action_id="io.github.asafelobotomy.helper.install-script",
             description="Run oysterAV vetted install scripts",
             message="Authentication is required to install security tools",
             argv1="install-script",
@@ -165,7 +165,7 @@ def install_privileged_helper(*, prefix: Path | None = None) -> dict[str, object
     helper_dir = prefix / "lib" / "oysterav" if prefix else HELPER_DIR
     helper_path = helper_dir / "oyst-helper"
     polkit_path = (
-        prefix / "share" / "polkit-1" / "actions" / "io.github.oysterav.policy"
+        prefix / "share" / "polkit-1" / "actions" / "io.github.asafelobotomy.policy"
         if prefix
         else POLKIT_PATH
     )
