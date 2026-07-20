@@ -240,6 +240,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: arch-pkgbuild
+          include-hidden-files: true
           path: |
             dist/PKGBUILD
             dist/.SRCINFO
@@ -280,7 +281,11 @@ jobs:
           set -euo pipefail
           mkdir -p staged
           find release-assets -type f -exec cp -t staged {} +
-          # softprops `*` globs skip hidden names; keep Arch filename via explicit path below.
+          if [[ ! -f staged/.SRCINFO ]]; then
+            echo "ERROR: .SRCINFO missing from artifacts (arch upload must set include-hidden-files)" >&2
+            find release-assets -type f | sort >&2
+            exit 1
+          fi
           ls -la staged
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
