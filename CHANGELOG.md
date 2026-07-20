@@ -4,6 +4,11 @@ All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
 ## Unreleased
 
+### Documentation
+
+- *(changelog)* V0.2.0
+
+
 ### Other
 
 - Harden privileged paths, RPC, and quarantine after security audits.
@@ -21,6 +26,10 @@ All notable changes to oysterAV are documented here and on each
 - Fix force release builds to use workflow HEAD and uv pip for fpm staging.
 
 - Fix fpm flag order so architecture and package options precede the path.
+
+- Include .SRCINFO in GitHub Release uploads (dotfile glob fix).
+
+- Upload hidden .SRCINFO via include-hidden-files on the arch artifact.
 
 ## 0.2.0 - 2026-07-20
 
