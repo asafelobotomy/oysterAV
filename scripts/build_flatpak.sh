@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Build a Flatpak bundle for oysterAV (local or CI).
+# Network share is required so pip can fetch hatchling/build deps inside the SDK.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,12 +27,13 @@ if ! command -v flatpak-builder >/dev/null; then
   exit 1
 fi
 
-# Ensure GNOME runtime/SDK (idempotent).
-flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+echo "==> Ensure Flathub remote and GNOME 48 Platform/SDK"
+flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak install -y --user flathub \
   "org.gnome.Platform//48" \
-  "org.gnome.Sdk//48" || true
+  "org.gnome.Sdk//48"
 
+echo "==> flatpak-builder (pip needs --share=network via manifest build-args)"
 flatpak-builder --user --repo="$REPO_DIR" --force-clean "$BUILD_DIR" "$MANIFEST"
 flatpak build-bundle "$REPO_DIR" "$BUNDLE" "$APP_ID"
 

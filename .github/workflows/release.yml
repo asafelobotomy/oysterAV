@@ -5,6 +5,18 @@ on:
     branches: [main, master]
     paths:
       - VERSION
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (empty = VERSION file)"
+        required: false
+        type: string
+        default: ""
+      force:
+        description: "Rebuild and (re)publish even if the tag already exists"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -20,22 +32,46 @@ jobs:
       should_release: ${{ steps.detect.outputs.should_release }}
       version: ${{ steps.detect.outputs.version }}
       tag: ${{ steps.detect.outputs.tag }}
+      force: ${{ steps.detect.outputs.force }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - id: detect
-        name: Detect VERSION bump
+        name: Detect release candidate
         run: |
           set -euo pipefail
-          VERSION="$(tr -d '[:space:]' < VERSION)"
+          FORCE="false"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force }}" == "true" ]]; then
+            FORCE="true"
+          fi
+          echo "force=${FORCE}" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="$(tr -d '[:space:]' < VERSION)"
+          fi
           TAG="v${VERSION}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
+          if [[ "$FORCE" == "true" ]]; then
+            echo "Force republish requested for ${TAG}"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           if git rev-parse "${TAG}" >/dev/null 2>&1; then
-            echo "Tag ${TAG} already exists — skipping release."
+            echo "Tag ${TAG} already exists — skipping release (use workflow_dispatch force=true to republish)."
             echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "Manual dispatch for new tag ${TAG}"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -65,11 +101,24 @@ jobs:
         with:
           enable-cache: true
       - name: Verify VERSION is synced
-        run: uv run python scripts/sync_version.py --check
-      - name: Create and push tag
+        run: |
+          set -euo pipefail
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION)"
+          EXPECTED="${{ needs.detect.outputs.version }}"
+          if [[ "$FILE_VERSION" != "$EXPECTED" ]]; then
+            echo "VERSION file (${FILE_VERSION}) does not match release version (${EXPECTED})" >&2
+            exit 1
+          fi
+          uv run python scripts/sync_version.py --check
+      - name: Create and push tag if missing
         run: |
           set -euo pipefail
           TAG="${{ needs.detect.outputs.tag }}"
+          git fetch --tags origin
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists — leaving in place."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "Release $TAG"
@@ -198,7 +247,8 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.detect.outputs.tag }}
-      - name: Install git-cliff
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate release notes (latest section)
         uses: orhun/git-cliff-action@v4
         id: cliff
         with:
@@ -206,6 +256,12 @@ jobs:
           args: --latest --strip header
         env:
           OUTPUT: CHANGELOG_RELEASE.md
+      - name: Generate full CHANGELOG.md
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+        env:
+          OUTPUT: CHANGELOG_FULL.md
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -213,14 +269,34 @@ jobs:
           merge-multiple: true
       - name: List assets
         run: find release-assets -type f | sort
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.detect.outputs.tag }}
           name: oysterAV ${{ needs.detect.outputs.version }}
-          body: ${{ steps.cliff.outputs.changelog }}
+          body_path: CHANGELOG_RELEASE.md
           files: release-assets/*
           fail_on_unmatched_files: true
           generate_release_notes: false
+          make_latest: true
+          draft: false
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit full CHANGELOG.md to main
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.detect.outputs.version }}"
+          cp CHANGELOG_FULL.md /tmp/CHANGELOG.md
+          git fetch origin main
+          git checkout -B main origin/main
+          cp /tmp/CHANGELOG.md CHANGELOG.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "CHANGELOG.md already up to date."
+            exit 0
+          fi
+          git commit -m "docs(changelog): v${VERSION}"
+          git push origin main

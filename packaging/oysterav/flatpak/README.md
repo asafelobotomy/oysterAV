@@ -8,6 +8,8 @@ bash scripts/build_flatpak.sh x86_64
 flatpak-builder --repo=repo build-dir packaging/oysterav/flatpak/io.github.asafelobotomy.OysterAV.yml
 ```
 
+The oysterav module sets `build-args: [--share=network]` so `pip3 install` can fetch hatchling and other build deps from PyPI inside the SDK.
+
 AppStream metadata: `io.github.asafelobotomy.OysterAV.metainfo.xml` (installed into the Flatpak).
 
 **Runtime (Full mode):** Tools install to `~/.local/share/oysterav/runtime/`. For Lite/Flatpak with host tools only, set `runtime.mode=lite` and install ClamAV on the host.

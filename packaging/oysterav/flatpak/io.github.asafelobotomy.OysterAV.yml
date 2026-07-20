@@ -18,6 +18,10 @@ finish-args:
 modules:
   - name: oysterav
     buildsystem: simple
+    # pip needs PyPI for hatchling/build deps when installing from a dir source.
+    build-options:
+      build-args:
+        - --share=network
     build-commands:
       - pip3 install --prefix=/app .
       # Host/menu .desktop (flatpak rewrites Exec on export)

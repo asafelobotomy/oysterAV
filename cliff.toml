@@ -5,7 +5,8 @@
 header = """
 # Changelog
 
-All notable changes to oysterAV are documented in GitHub Releases.
+All notable changes to oysterAV are documented here and on each
+[GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
 """
 body = """
 {% if version %}\
