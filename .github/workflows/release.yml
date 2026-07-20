@@ -281,8 +281,11 @@ jobs:
           set -euo pipefail
           mkdir -p staged
           find release-assets -type f -exec cp -t staged {} +
-          if [[ ! -f staged/.SRCINFO ]]; then
-            echo "ERROR: .SRCINFO missing from artifacts (arch upload must set include-hidden-files)" >&2
+          # GitHub Release asset names cannot be leading-dot; publish as SRCINFO.
+          if [[ -f staged/.SRCINFO ]]; then
+            mv staged/.SRCINFO staged/SRCINFO
+          elif [[ ! -f staged/SRCINFO ]]; then
+            echo "ERROR: .SRCINFO/SRCINFO missing from arch artifact" >&2
             find release-assets -type f | sort >&2
             exit 1
           fi
@@ -293,9 +296,7 @@ jobs:
           tag_name: ${{ needs.detect.outputs.tag }}
           name: oysterAV ${{ needs.detect.outputs.version }}
           body_path: CHANGELOG_RELEASE.md
-          files: |
-            staged/*
-            staged/.SRCINFO
+          files: staged/*
           fail_on_unmatched_files: true
           generate_release_notes: false
           make_latest: true

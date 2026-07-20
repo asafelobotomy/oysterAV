@@ -48,7 +48,7 @@ If a tag exists but the GitHub Release is missing or assets need rebuilding (e.g
 | `oysterAV-*-x86_64.flatpak` | GTK4 GUI Flatpak bundle |
 | `oysterav_*_amd64.deb` | Debian/Ubuntu package (app + desktop + icons + polkit helper) |
 | `oysterav-*-1.x86_64.rpm` | Fedora/RHEL-style package |
-| `PKGBUILD` + `.SRCINFO` | Arch packaging template for `makepkg` / AUR |
+| `PKGBUILD` + `SRCINFO` | Arch packaging template for `makepkg` / AUR (leading-dot `.SRCINFO` is published as `SRCINFO` because GitHub Release assets cannot start with `.`) |
 
 ## Formats not shipped
 
