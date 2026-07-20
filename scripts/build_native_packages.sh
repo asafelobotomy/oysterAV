@@ -82,7 +82,6 @@ COMMON_ARGS=(
   --maintainer "oysterAV contributors"
   --after-install "$AFTER_INSTALL"
   --depends python3
-  usr
 )
 
 echo "==> Build DEB"
@@ -92,7 +91,8 @@ fpm -t deb -f "${COMMON_ARGS[@]}" \
   --depends python3-gi \
   --depends gir1.2-gtk-4.0 \
   --depends gir1.2-adw-1 \
-  --depends policykit-1
+  --depends policykit-1 \
+  usr
 
 echo "==> Build RPM"
 fpm -t rpm -f "${COMMON_ARGS[@]}" \
@@ -101,7 +101,8 @@ fpm -t rpm -f "${COMMON_ARGS[@]}" \
   --depends python3-gobject \
   --depends gtk4 \
   --depends libadwaita \
-  --depends polkit
+  --depends polkit \
+  usr
 
 echo "Wrote:"
 ls -la "$OUT_DIR"/oysterav*"${VERSION}"* || true
