@@ -29,7 +29,7 @@ def test_client_services_and_auth_local() -> None:
     ):
         assert _client().services_status()["names"] == ["clamd"]
     with patch(
-        "oyst_core.client.set_service",
+        "oyst_core.rpc_handlers.system.set_service",
         return_value={"ok": True},
     ):
         assert _client().services_set("clamd", "on", boot=True)["ok"] is True

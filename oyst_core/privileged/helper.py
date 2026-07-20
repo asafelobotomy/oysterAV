@@ -6,7 +6,7 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from oyst_core.privileged.install_privileged_helper import HELPER_PATH
+from oyst_core.privileged.install_privileged_helper import resolve_installed_helper_path
 from oyst_core.privileged.runner import (
     CommandResult,
     run_install_command,
@@ -19,9 +19,10 @@ def detect_aur_helper() -> str | None:
 
 
 def resolve_helper_path() -> str | None:
-    """Absolute path to oyst-helper (polkit exec.path), preferring the installed location."""
-    if HELPER_PATH.is_file() and os.access(HELPER_PATH, os.X_OK):
-        return str(HELPER_PATH)
+    """Absolute path to oyst-helper (polkit exec.path), preferring /usr/lib then legacy."""
+    installed = resolve_installed_helper_path()
+    if installed is not None and os.access(installed, os.X_OK):
+        return str(installed)
     return which("oyst-helper")
 
 

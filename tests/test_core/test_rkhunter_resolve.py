@@ -84,20 +84,20 @@ def test_path_allowed_known_safe_and_package(tmp_path: Path) -> None:
     stamp = tmp_path / ".updated"
     stamp.write_text("x", encoding="utf-8")
     with patch(
-        "oyst_core.packs.rkhunter_resolve.KNOWN_SAFE_HIDDEN",
+        "oyst_core.packs.rkhunter_resolve_plan.KNOWN_SAFE_HIDDEN",
         frozenset({str(stamp)}),
     ):
         path_allowed_for_resolve(str(stamp), "rkhunter-hidden")
     owned = tmp_path / "owned"
     owned.write_text("x", encoding="utf-8")
     with patch(
-        "oyst_core.packs.rkhunter_resolve.package_owner",
+        "oyst_core.packs.rkhunter_resolve_plan.package_owner",
         return_value="grep 1.0",
     ):
         path_allowed_for_resolve(str(owned), "rkhunter-script-replacement")
     stranger = tmp_path / "stranger"
     stranger.write_text("y", encoding="utf-8")
-    with patch("oyst_core.packs.rkhunter_resolve.package_owner", return_value=None):
+    with patch("oyst_core.packs.rkhunter_resolve_plan.package_owner", return_value=None):
         with pytest.raises(ValueError, match="not package-owned"):
             path_allowed_for_resolve(str(stranger), "rkhunter-script-replacement")
         path_allowed_for_resolve(str(stranger), "rkhunter-script-replacement", force=True)
@@ -106,7 +106,7 @@ def test_path_allowed_known_safe_and_package(tmp_path: Path) -> None:
 def test_helper_rkhunter_whitelist_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     overlay = tmp_path / "oysterav-whitelist.conf"
     monkeypatch.setattr(
-        "oyst_core.packs.rkhunter_resolve.OVERLAY_PATH",
+        "oyst_core.packs.rkhunter_overlay.OVERLAY_PATH",
         overlay,
     )
     assert _build_rkhunter_whitelist_argv(["set", "SCRIPTWHITELIST", "/usr/bin/ldd"]) == ["true"]
@@ -119,7 +119,7 @@ def test_resolve_finding_dry_run(tmp_path: Path) -> None:
     owned = tmp_path / "egrep"
     owned.write_text("#!/bin/sh\n", encoding="utf-8")
     with patch(
-        "oyst_core.packs.rkhunter_resolve.package_owner",
+        "oyst_core.packs.rkhunter_resolve_plan.package_owner",
         return_value="grep",
     ):
         result = resolve_finding(
@@ -135,10 +135,10 @@ def test_resolve_finding_dry_run(tmp_path: Path) -> None:
 def test_resolve_finding_calls_helper() -> None:
     with (
         patch(
-            "oyst_core.packs.rkhunter_resolve.path_allowed_for_resolve",
+            "oyst_core.packs.rkhunter_overlay.path_allowed_for_resolve",
         ),
         patch(
-            "oyst_core.packs.rkhunter_resolve.run_privileged_helper",
+            "oyst_core.packs.rkhunter_overlay.run_privileged_helper",
             return_value=CommandResult(0, "ok", ""),
         ) as helper,
     ):
@@ -160,7 +160,7 @@ def test_helper_rkhunter_whitelist_set_many(
 ) -> None:
     overlay = tmp_path / "oysterav-whitelist.conf"
     monkeypatch.setattr(
-        "oyst_core.packs.rkhunter_resolve.OVERLAY_PATH",
+        "oyst_core.packs.rkhunter_overlay.OVERLAY_PATH",
         overlay,
     )
     assert _build_rkhunter_whitelist_argv(
@@ -185,7 +185,7 @@ def test_helper_rkhunter_set_disable_tests(
 
     overlay = tmp_path / "oysterav-defaults.conf"
     monkeypatch.setattr(
-        "oyst_core.packs.rkhunter_resolve.DEFAULTS_OVERLAY_PATH",
+        "oyst_core.packs.rkhunter_disable_tests.DEFAULTS_OVERLAY_PATH",
         overlay,
     )
     assert _build_rkhunter_whitelist_argv(["set-disable-tests", "suspscan", "apps"]) == ["true"]
@@ -212,7 +212,7 @@ def test_resolve_findings_batch_one_helper_call() -> None:
         },
     ]
     with patch(
-        "oyst_core.packs.rkhunter_resolve.run_privileged_helper",
+        "oyst_core.packs.rkhunter_overlay.run_privileged_helper",
         return_value=CommandResult(0, "ok", ""),
     ) as helper:
         result = resolve_findings_batch(findings)
@@ -227,9 +227,12 @@ def test_resolve_findings_batch_one_helper_call() -> None:
 
 def test_package_owner_uses_pacman() -> None:
     with (
-        patch("oyst_core.packs.rkhunter_resolve.shutil.which", side_effect=lambda c: c == "pacman"),
         patch(
-            "oyst_core.packs.rkhunter_resolve.subprocess.run",
+            "oyst_core.packs.rkhunter_resolve_plan.shutil.which",
+            side_effect=lambda c: c == "pacman",
+        ),
+        patch(
+            "oyst_core.packs.rkhunter_resolve_plan.subprocess.run",
             return_value=CommandResult(0, "/usr/bin/egrep is owned by grep 3.12", ""),
         ) as run,
     ):

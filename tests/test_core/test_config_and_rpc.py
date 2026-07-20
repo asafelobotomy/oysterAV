@@ -239,7 +239,7 @@ def test_oyst_client_pack_install_local() -> None:
 def test_oyst_client_rkhunter_scan_local() -> None:
     from oyst_core.client import OystClient
 
-    with patch("oyst_core.pack_jobs.run_rkhunter_scan") as scan:
+    with patch("oyst_core.rpc_handlers.jobs.run_rkhunter_scan") as scan:
         scan.return_value = {"ok": True, "findings": [], "warnings_count": 0}
         client = OystClient(socket_path=Path("/nonexistent/oyst.sock"))
         result = client.rkhunter_scan()
@@ -268,6 +268,12 @@ def test_ui_theme_default_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
     with pytest.raises(KeyError, match="ui.theme"):
         set_config_value("ui.theme", "not-a-theme")
+
+    set_config_value("schedule.time", "9:05")
+    assert load_config().schedule.time == "09:05"
+
+    with pytest.raises(KeyError, match="schedule.time"):
+        set_config_value("schedule.time", "25:00")
 
     set_config_value("ui.security_news_sources", "fedora,arch,bogus")
     assert load_config().ui.security_news_sources == ["arch", "fedora"]

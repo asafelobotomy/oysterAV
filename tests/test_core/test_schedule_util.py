@@ -22,7 +22,7 @@ def test_resolve_oyst_cli_path_prefers_existing_file(tmp_path: Path, monkeypatch
     cli = tmp_path / "oyst-cli"
     cli.write_text("#!/bin/sh\n", encoding="utf-8")
     cli.chmod(0o755)
-    with patch("oyst_core.schedule_util.which", return_value=str(cli)):
+    with patch("oyst_core.schedule_linger.which", return_value=str(cli)):
         assert resolve_oyst_cli_path() == str(cli)
 
 
@@ -62,7 +62,7 @@ def test_install_user_timer_writes_schedule_run_execstart(
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr("oyst_core.schedule_util.Path.home", lambda: home)
+    monkeypatch.setattr("oyst_core.schedule_units.Path.home", lambda: home)
     cli = tmp_path / "oyst-cli"
     cli.write_text("#!/bin/sh\n", encoding="utf-8")
     cli.chmod(0o755)
@@ -81,18 +81,18 @@ def test_install_user_timer_writes_schedule_run_execstart(
         return CommandResult(1, "", "unexpected")
 
     with (
-        patch("oyst_core.schedule_util.resolve_oyst_cli_path", return_value=str(cli)),
-        patch("oyst_core.schedule_util._run_user_systemctl", side_effect=fake_systemctl),
-        patch("oyst_core.schedule_util.get_linger_status", return_value={"linger": False}),
-        patch("oyst_core.schedule_util.set_config_value"),
+        patch("oyst_core.schedule_units.resolve_oyst_cli_path", return_value=str(cli)),
+        patch("oyst_core.schedule_units._run_user_systemctl", side_effect=fake_systemctl),
+        patch("oyst_core.schedule_units.get_linger_status", return_value={"linger": False}),
+        patch("oyst_core.schedule_units.set_config_value"),
         patch(
-            "oyst_core.schedule_util.load_config",
+            "oyst_core.schedule_units.load_config",
             return_value=MagicMock(
                 schedule=ScheduleConfig(enabled=True, profile="quick", time="02:00"),
             ),
         ),
         patch(
-            "oyst_core.schedule_util.validate_schedule_config",
+            "oyst_core.schedule_units.validate_schedule_config",
             return_value=ScheduleConfig(enabled=True, profile="quick", time="02:00"),
         ),
     ):
@@ -111,7 +111,7 @@ def test_install_user_timer_writes_schedule_run_execstart(
 def test_apply_schedule_writes_units(tmp_path: Path, monkeypatch) -> None:
     home = tmp_path / "home"
     home.mkdir()
-    monkeypatch.setattr("oyst_core.schedule_util.Path.home", lambda: home)
+    monkeypatch.setattr("oyst_core.schedule_units.Path.home", lambda: home)
     cli = tmp_path / "oyst-cli"
     cli.write_text("#!/bin/sh\n", encoding="utf-8")
     cli.chmod(0o755)
@@ -133,10 +133,10 @@ def test_apply_schedule_writes_units(tmp_path: Path, monkeypatch) -> None:
         return CommandResult(1, "", "")
 
     with (
-        patch("oyst_core.schedule_util.resolve_oyst_cli_path", return_value=str(cli)),
-        patch("oyst_core.schedule_util._run_user_systemctl", side_effect=fake_systemctl),
-        patch("oyst_core.schedule_util.get_linger_status", return_value={"linger": True}),
-        patch("oyst_core.schedule_util.validate_schedule_config", return_value=sched),
+        patch("oyst_core.schedule_units.resolve_oyst_cli_path", return_value=str(cli)),
+        patch("oyst_core.schedule_units._run_user_systemctl", side_effect=fake_systemctl),
+        patch("oyst_core.schedule_units.get_linger_status", return_value={"linger": True}),
+        patch("oyst_core.schedule_units.validate_schedule_config", return_value=sched),
     ):
         result = apply_schedule(smoke_test=False)
 
@@ -147,17 +147,17 @@ def test_apply_schedule_writes_units(tmp_path: Path, monkeypatch) -> None:
 
 def test_install_user_timer_missing_cli() -> None:
     with (
-        patch("oyst_core.schedule_util.resolve_oyst_cli_path", return_value=None),
-        patch("oyst_core.schedule_util.set_config_value"),
+        patch("oyst_core.schedule_units.resolve_oyst_cli_path", return_value=None),
+        patch("oyst_core.schedule_units.set_config_value"),
         patch(
-            "oyst_core.schedule_util.load_config",
+            "oyst_core.schedule_units.load_config",
             return_value=MagicMock(schedule=ScheduleConfig()),
         ),
         patch(
-            "oyst_core.schedule_util.validate_schedule_config",
+            "oyst_core.schedule_units.validate_schedule_config",
             return_value=ScheduleConfig(enabled=True),
         ),
-        patch("oyst_core.schedule_util.get_linger_status", return_value={"linger": False}),
+        patch("oyst_core.schedule_units.get_linger_status", return_value={"linger": False}),
     ):
         result = install_user_timer("quick")
     assert result["ok"] is False
@@ -176,7 +176,7 @@ def test_run_scheduled_scan_passes_packs_and_paths() -> None:
     fake_result.model_dump.return_value = {"job_id": "j1", "clean": True}
 
     with (
-        patch("oyst_core.schedule_util.validate_schedule_config", return_value=sched),
+        patch("oyst_core.schedule_units.validate_schedule_config", return_value=sched),
         patch("oyst_core.orchestrator.JobOrchestrator") as orch_cls,
     ):
         orch = orch_cls.return_value

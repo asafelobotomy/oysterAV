@@ -36,7 +36,8 @@ def test_polkit_policy_has_argv1_scoped_actions() -> None:
     assert 'org.freedesktop.policykit.exec.argv1">rkhunter-whitelist<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">install-script<' in policy
     assert "io.github.asafelobotomy.run-helper" not in policy
-    assert POLICY_VERSION >= 3
+    assert POLICY_VERSION >= 4
+    assert "/usr/lib/oysterav/oyst-helper" in policy
 
 
 def test_packaging_policy_matches_builder() -> None:

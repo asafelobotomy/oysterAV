@@ -49,7 +49,7 @@ def test_install_fangfrisch_runtime_creates_venv_link(
         return Result()
 
     with (
-        patch("oyst_core.runtime.bundles.scanners.subprocess.run", side_effect=fake_run),
+        patch("oyst_core.runtime.bundles.fangfrisch_bundle.subprocess.run", side_effect=fake_run),
         patch("oyst_core.runtime.bootstrap._configure_fangfrisch_after_install"),
         patch("oyst_core.packs.fangfrisch.FangfrischPack.ensure_config", return_value=(True, "ok")),
         patch("oyst_core.packs.fangfrisch.FangfrischPack.initdb", return_value=(True, "ok")),

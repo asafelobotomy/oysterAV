@@ -54,11 +54,11 @@ def test_build_fail2ban_unban_flow_runs_compound(monkeypatch: pytest.MonkeyPatch
         calls.append(["persist-ignoreip", jail, ip])
 
     monkeypatch.setattr(
-        "oyst_core.privileged.oyst_helper.subprocess.run",
+        "oyst_core.privileged.helper_fail2ban.subprocess.run",
         fake_run,
     )
     monkeypatch.setattr(
-        "oyst_core.privileged.oyst_helper._persist_fail2ban_ignoreip",
+        "oyst_core.privileged.helper_fail2ban._persist_fail2ban_ignoreip",
         fake_persist,
     )
     assert _build_fail2ban_argv(
@@ -89,11 +89,11 @@ def test_maldet_start_monitor_one_auth(monkeypatch: pytest.MonkeyPatch) -> None:
         return type("P", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
     monkeypatch.setattr(
-        "oyst_core.privileged.oyst_helper._apply_maldet_monitor_mode",
+        "oyst_core.privileged.helper_services._apply_maldet_monitor_mode",
         fake_apply,
     )
     monkeypatch.setattr(
-        "oyst_core.privileged.oyst_helper.subprocess.run",
+        "oyst_core.privileged.helper_services.subprocess.run",
         fake_run,
     )
     assert _build_maldet_config_argv(["start-monitor", "users"]) == ["true"]

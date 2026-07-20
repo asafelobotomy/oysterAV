@@ -62,11 +62,11 @@ def test_install_maldet_runtime_tree(tmp_path: Path, monkeypatch: pytest.MonkeyP
     bin_dir = tmp_path / "runtime" / "bin"
     bin_dir.mkdir(parents=True)
     monkeypatch.setattr(
-        "oyst_core.runtime.bundles.scanners.runtime_maldet_prefix",
+        "oyst_core.runtime.bundles.lynis_bundle.runtime_maldet_prefix",
         lambda: dest_root,
     )
     monkeypatch.setattr(
-        "oyst_core.runtime.bundles.scanners.runtime_bin_dir",
+        "oyst_core.runtime.bundles.lynis_bundle.runtime_bin_dir",
         lambda: bin_dir,
     )
     dest = install_maldet_runtime_tree(source)

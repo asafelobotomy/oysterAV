@@ -38,7 +38,7 @@ def test_rpc_job_cancel(server: RpcServer) -> None:
 
 def test_rpc_services_set(server: RpcServer) -> None:
     with patch(
-        "oyst_core.services.set_service",
+        "oyst_core.rpc_handlers.system.set_service",
         return_value={"ok": True, "name": "fail2ban", "state": "on"},
     ) as setter:
         resp = _call(
@@ -56,7 +56,7 @@ def test_rpc_services_set_unknown_validation(server: RpcServer) -> None:
 
 
 def test_rpc_quarantine_delete(server: RpcServer) -> None:
-    with patch("oyst_core.serve.QuarantineVault") as vault_cls:
+    with patch("oyst_core.rpc_handlers.data.QuarantineVault") as vault_cls:
         vault_cls.return_value.delete = MagicMock()
         resp = _call(server, "quarantine.delete", {"id": 7})
     assert resp["result"] is True
@@ -68,7 +68,7 @@ def test_rpc_quarantine_add(server: RpcServer) -> None:
     entry.model_dump.return_value = {"id": 1, "threat_name": "x"}
     with (
         patch("oyst_core.history_actions.QuarantineVault") as vault_cls,
-        patch("oyst_core.serve.SecurityAudit") as audit_cls,
+        patch("oyst_core.rpc_handlers.SecurityAudit") as audit_cls,
     ):
         vault_cls.return_value.add.return_value = entry
         audit_cls.return_value.log = MagicMock()
@@ -83,7 +83,7 @@ def test_rpc_quarantine_add(server: RpcServer) -> None:
 def test_rpc_fail2ban_unban(server: RpcServer) -> None:
     with (
         patch("oyst_core.packs.fail2ban.Fail2banPack.unban", return_value=(True, "ok")),
-        patch("oyst_core.serve.SecurityAudit") as audit_cls,
+        patch("oyst_core.rpc_handlers.SecurityAudit") as audit_cls,
     ):
         audit_cls.return_value.log = MagicMock()
         resp = _call(server, "fail2ban.unban", {"ip": "1.2.3.4", "jail": "sshd"})
@@ -93,7 +93,7 @@ def test_rpc_fail2ban_unban(server: RpcServer) -> None:
 def test_rpc_clamonacc_enable_disable(server: RpcServer) -> None:
     with (
         patch("oyst_core.packs.clamonacc.ClamonaccPack.enable", return_value=(True, "on")),
-        patch("oyst_core.serve.SecurityAudit") as audit_cls,
+        patch("oyst_core.rpc_handlers.SecurityAudit") as audit_cls,
     ):
         audit_cls.return_value.log = MagicMock()
         resp = _call(server, "clamonacc.enable")
@@ -101,7 +101,7 @@ def test_rpc_clamonacc_enable_disable(server: RpcServer) -> None:
 
     with (
         patch("oyst_core.packs.clamonacc.ClamonaccPack.disable", return_value=(True, "off")),
-        patch("oyst_core.serve.SecurityAudit") as audit_cls,
+        patch("oyst_core.rpc_handlers.SecurityAudit") as audit_cls,
     ):
         audit_cls.return_value.log = MagicMock()
         resp = _call(server, "clamonacc.disable")
@@ -169,7 +169,7 @@ def test_rpc_auth_grant_revoke(server: RpcServer) -> None:
 
 def test_rpc_audit_list(server: RpcServer) -> None:
     with patch(
-        "oyst_core.serve.SecurityAudit.list_entries",
+        "oyst_core.rpc_handlers.SecurityAudit.list_entries",
         return_value=[{"action": "x"}],
     ):
         resp = _call(server, "audit.list", {"limit": 5})
