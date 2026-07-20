@@ -122,6 +122,16 @@ def test_auth_status_uses_stamp_when_rules_unreadable(tmp_path: Path) -> None:
     assert status["granted_user"] == "bob"
 
 
+def test_auth_status_survives_is_file_permission_error(tmp_path: Path) -> None:
+    """CI images may make polkit rules.d unstatable (PermissionError on is_file)."""
+    stamp = tmp_path / "service-lifecycle.grant"
+    rules = tmp_path / "49-oysterav-service-lifecycle.rules"
+    with patch.object(Path, "is_file", side_effect=PermissionError(13, "Permission denied")):
+        status = auth_status(rules_path=rules, stamp_path=stamp)
+    assert status["granted"] is False
+    assert "error" in status
+
+
 def test_set_service_clamd_calls_systemctl_helper() -> None:
     mock_res = MagicMock(returncode=0, stdout="ok", stderr="")
     with (

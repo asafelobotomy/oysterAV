@@ -258,10 +258,15 @@ def resolve_installed_helper_path() -> Path | None:
 
 def helper_status() -> dict[str, object]:
     helper = resolve_installed_helper_path()
-    installed = helper is not None and POLKIT_PATH.is_file()
+    polkit_present = False
+    try:
+        polkit_present = POLKIT_PATH.is_file()
+    except OSError:
+        polkit_present = False
+    installed = helper is not None and polkit_present
     actions_present: list[str] = []
     policy_text = ""
-    if POLKIT_PATH.is_file():
+    if polkit_present:
         try:
             policy_text = POLKIT_PATH.read_text(encoding="utf-8")
         except OSError:

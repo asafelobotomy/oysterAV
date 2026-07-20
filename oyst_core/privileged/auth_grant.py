@@ -83,7 +83,23 @@ def auth_status(
         present = True
         granted_user = stamp_user
 
-    if path.is_file():
+    rules_readable = False
+    try:
+        rules_readable = path.is_file()
+    except OSError as exc:
+        # Parent dir may be unreadable (root:polkitd 750) — rely on stamp.
+        if granted_user is None:
+            return {
+                "granted": False,
+                "rules_path": str(path),
+                "granted_user": None,
+                "actions": list(SERVICE_LIFECYCLE_ACTION_IDS),
+                "current_user": current_username(),
+                "error": str(exc),
+                "stamp_path": str(stamp),
+            }
+
+    if rules_readable:
         present = True
         try:
             text = path.read_text(encoding="utf-8")
