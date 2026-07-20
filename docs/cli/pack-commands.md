@@ -7,7 +7,7 @@ Maps upstream tool commands to `oyst-cli` per-pack groups. Every registered pack
 | **clamav** | required | `status`, `scan`, `backend`, `clamd start/stop/restart/status/ensure` | `clamscan`, `clamdscan`, `systemctl` | Distro-aware unit |
 | **freshclam** | required | `status`, `update` | `freshclam` | Runtime mode uses bundled updater |
 | **fangfrisch** | optional | `status`, `ensure-config [--force]`, `initdb`, `refresh` | `fangfrisch …` | Complements CVD; never replaces freshclam. Providers via `fangfrisch.providers`. Full mode: private pip venv via `runtime install fangfrisch` |
-| **clamonacc** | recommended | `status`, `start`, `stop`, `paths list/add/remove` | `clamonacc` | Paths/excludes in config; `prevention` is preference + doctor (needs host `clamd.conf`) |
+| **clamonacc** | recommended | `status`, `start`, `stop`, `paths list/add/remove` | `clamonacc` | Paths/excludes in config; `prevention` is preference + doctor (host co-control — [ADR-008](../adr/008-clamav-host-cocontrol.md), [operator guide](../user-guide/clamonacc-prevention.md)) |
 | **rkhunter** | recommended | `status`, `scan`, `update`, `propupd --confirm`, `resolve --confirm`, `versioncheck` | `rkhunter --check/update/propupd/versioncheck` + oysterAV `/etc/rkhunter.d/` overlays | propupd/resolve require `--confirm`; `disable_tests` → `oysterav-defaults.conf` |
 | **chkrootkit** | recommended | `status`, `scan` | `chkrootkit` | Full-system scan only |
 | **lynis** | recommended | `status`, `audit`, `profiles list`, `container audit`, `export` | `lynis audit system`, `docker exec ... lynis` | `--scope container-host` profile |
@@ -61,7 +61,7 @@ Tune clamscan efficiency and detection via `oyst-cli config set` (see also [clam
 | `clamav.ignore_sigs` | `[]` | Managed `oysterav.ign2` in the ClamAV DB dir |
 | `fangfrisch.providers` | `sanesecurity,urlhaus` | Rewrites fangfrisch.conf on set |
 | `clamonacc.exclude_paths` | `~/.cache`, Trash | Process-mode `--exclude-list` (on-access; not scan.exclude_dirs) |
-| `clamonacc.prevention` | `false` | Preference only — real blocking needs host `clamd.conf` |
+| `clamonacc.prevention` | `false` | Preference only — real blocking is host co-control ([ADR-008](../adr/008-clamav-host-cocontrol.md), [operator guide](../user-guide/clamonacc-prevention.md)) |
 | `rkhunter.disable_tests` | `suspscan` | `/etc/rkhunter.d/oysterav-defaults.conf` |
 | `lynis.quick` | `true` | Suite/orchestrated Lynis audits |
 | `runtime.mode` | `full` | Install delivery (`full`/`lite`) — unrelated to `scan.clamav_profile` |

@@ -58,3 +58,10 @@ oyst-cli config set scan.clamav_profile linux-only   # clamscan --scan-pe=no
 These apply to **clamscan** only. `clamdscan` limits remain in host `clamd.conf`
 (oysterAV does not manage that file). `runtime.mode` (`full`/`lite`) is install
 delivery and is unrelated to `scan.clamav_profile`.
+
+## On-access prevention
+
+Real fanotify **blocking** (`OnAccessPrevention`) is host-owned; oysterAV
+co-controls intent, response, and (future) probing without rewriting package
+daemon config. See [ADR-008](../adr/008-clamav-host-cocontrol.md) and the
+[clamonacc prevention operator guide](../user-guide/clamonacc-prevention.md).

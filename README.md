@@ -1,68 +1,103 @@
-# oysterAV
+<p align="center">
+  <img src="docs/assets/oysterav-icon-256.png" alt="oysterAV icon" width="128" height="128">
+</p>
 
-Linux security orchestrator: **oyst-cli** (CLI-first backend) + **oysterAV** (GTK4 GUI client).
+<h1 align="center">oysterAV</h1>
 
-**Repository:** https://github.com/asafelobotomy/oysterAV
+<p align="center">
+  <strong>Linux security orchestrator</strong> — CLI-first backend with a thin GTK4 GUI.<br>
+  ClamAV spine, pack adapters, quarantine, scheduling — without reimplementing engines.
+</p>
+
+<p align="center">
+  <a href="https://github.com/asafelobotomy/oysterAV"><img alt="GitHub" src="https://img.shields.io/badge/github-asafelobotomy%2FoysterAV-blue?logo=github"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-green"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A5%203.12-3776AB?logo=python&logoColor=white">
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/dashboard.png" alt="oysterAV Dashboard" width="720">
+</p>
+
+<p align="center"><em>Dashboard — posture cards, security news ticker, recent scans</em></p>
+
+---
+
+## Why oysterAV?
+
+- **Orchestrator, not engine** — wraps ClamAV, rkhunter, Lynis, and friends ([ADR-001](docs/adr/001-orchestrator-not-engine.md))
+- **CLI owns security** — `oyst-cli` is the source of truth; the GUI is a client ([ADR-002](docs/adr/002-cli-first-gui-is-client.md))
+- **Full or Lite runtime** — vendored tools under XDG, or host packages only ([ADR-004](docs/adr/004-pack-runtime-delivery.md))
+- **Host co-control** — on-access blocking stays with ClamAV; oysterAV guides and responds ([ADR-008](docs/adr/008-clamav-host-cocontrol.md))
+
+## Screenshots
+
+| Scan | Reports |
+|:----:|:-------:|
+| <img src="docs/assets/screenshots/scan.png" alt="Scan tab" width="360"> | <img src="docs/assets/screenshots/reports.png" alt="Reports tab" width="360"> |
+| Profiles, paths, multi-pack progress | History, export, quarantine / resolve actions |
+
+<p align="center">
+  <img src="docs/assets/screenshots/settings.png" alt="Settings" width="720"><br>
+  <em>Settings — feeds, scan defaults, services, scheduling, packs</em>
+</p>
 
 ## Prerequisites
 
-- Python ≥ 3.12
-- [uv](https://docs.astral.sh/uv/)
-- For the GUI: system GTK4 + libadwaita (PyGObject introspection)
+- Python ≥ 3.12 and [uv](https://docs.astral.sh/uv/)
+- GUI: system GTK4 + libadwaita (PyGObject introspection)
 
 ## Quick start
 
 ```bash
 uv sync --extra all
-# or: uv sync --extra dev
 uv run oyst-cli setup run --json
 uv run oyst-cli status assess --json
 uv run oyst-cli scan ~/Downloads --json
 ```
 
-`setup run` may take several minutes on a cold machine (signature updates / pack installs). Schedule or rkhunter steps can soft-fail; check `--json` step results.
-
-Validate local changes:
+`setup run` can take several minutes on a cold machine (signatures / packs). Soft-failed steps (schedule, rkhunter) are non-fatal — check `--json` output.
 
 ```bash
-./scripts/check.sh --quick
+./scripts/check.sh --quick   # local validation
 ```
 
-See [docs/cli/reference.md](docs/cli/reference.md) and [ADR-007](docs/adr/007-gui-remapping-phase.md) (GUI remapping; CLI/RPC first).
-
-## GUI (optional; remapping phase)
+## GUI
 
 ```bash
 uv sync --extra gui --extra dev
 uv run oysterav
 ```
 
-The GUI uses `OystClient` only — it never calls security tools directly ([ADR-002](docs/adr/002-cli-first-gui-is-client.md)).
-New GUI features follow the remapping waves in [ADR-007](docs/adr/007-gui-remapping-phase.md).
+The GUI talks only through `OystClient` / `oyst-cli serve` — never runs security tools itself. See [ADR-007](docs/adr/007-gui-remapping-phase.md) and the [GUI↔CLI contract](docs/cli/gui-contract.md).
 
 ## Architecture
 
-- `oyst_core` — pack adapters, orchestrator, quarantine, serve RPC
-- `oyst_cli` — full CLI (`oyst-cli`)
-- `oysterav` — thin GTK4 client via `OystClient` (no direct security subprocess calls)
+| Package | Role |
+|---------|------|
+| `oyst_core` | Packs, orchestrator, quarantine, RPC serve |
+| `oyst_cli` | Full CLI (`oyst-cli`) |
+| `oysterav` | Thin GTK4 / libadwaita client |
+
+Decision log: [docs/adr/README.md](docs/adr/README.md).
 
 ## Pack runtime (Full mode, default)
 
-Full mode installs vendored upstream tools to `~/.local/share/oysterav/runtime/` and manages ClamAV signatures locally:
+Vendored upstream tools live under `~/.local/share/oysterav/runtime/`:
 
 ```bash
 uv run oyst-cli runtime status
 uv run oyst-cli runtime install --all
-uv run oyst-cli runtime update   # ClamAV CDIFF signature updates
+uv run oyst-cli runtime update   # ClamAV CDIFF updates
 ```
 
-Use **Lite mode** for system-package-only installs (see [packaging/lite/README.md](packaging/lite/README.md)):
+**Lite mode** uses host packages only ([packaging/lite/README.md](packaging/lite/README.md)):
 
 ```bash
 uv run oyst-cli config set runtime.mode lite
 ```
 
-## System packs (Lite mode)
+## Packs
 
 | Tier | Packs |
 |------|-------|
@@ -70,35 +105,37 @@ uv run oyst-cli config set runtime.mode lite
 | Recommended | rkhunter, chkrootkit, lynis, clamonacc, firewall |
 | Optional | maldet, unhide, fail2ban, fangfrisch |
 
-Install ClamAV on your host before scanning:
+Host package examples (Lite / clamd on the host):
 
 ```bash
 # Debian/Ubuntu
 sudo apt install clamav clamav-daemon rkhunter chkrootkit lynis
 
-# Arch
+# Arch / CachyOS
 sudo pacman -S clamav rkhunter chkrootkit lynis
 
 # Fedora
 sudo dnf install clamav clamav-update rkhunter chkrootkit lynis
 ```
 
+On-access prevention with the host: [operator guide](docs/user-guide/clamonacc-prevention.md).
+
 ## Health / debug
 
 ```bash
 uv run oyst-cli doctor --json
 uv run oyst-cli status assess --json
-uv run oyst-cli serve --foreground
+uv run oyst-cli serve --foreground   # RPC for the GUI
 ```
 
-## Flatpak
+## Docs
 
-See [packaging/oysterav/flatpak/README.md](packaging/oysterav/flatpak/README.md). Full mode stores runtime under `$HOME/.local/share/oysterav/runtime`.
+- [Getting started](docs/user-guide/getting-started.md)
+- [CLI reference](docs/cli/reference.md)
+- [Pack commands](docs/cli/pack-commands.md)
+- [Release / packaging](docs/packaging/release.md)
+- [Flatpak](packaging/oysterav/flatpak/README.md)
 
 ## License
 
 [GPL-3.0-or-later](LICENSE) — GNU General Public License v3 or later.
-
-## Releasing
-
-See [docs/packaging/release.md](docs/packaging/release.md) for VERSION bumps and release assets.

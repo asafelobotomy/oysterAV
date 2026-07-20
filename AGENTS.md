@@ -3,7 +3,8 @@
 Linux security orchestrator: `oyst-cli` (CLI/RPC backend) + thin GTK4 GUI (`oysterav`).
 Repo: https://github.com/asafelobotomy/oysterAV
 
-Shared logic lives in `oyst_core`. See ADRs under `docs/adr/`.
+Shared logic lives in `oyst_core`. See ADRs under [`docs/adr/`](docs/adr/README.md)
+(index of Accepted / Superseded decisions).
 
 ## Prerequisites
 
@@ -76,6 +77,7 @@ Living map: [docs/cli/gui-contract.md](docs/cli/gui-contract.md).
 - GUI talks to security tools only via `OystClient` (Unix JSON-RPC or in-process fallback). CI greps for forbidden GUI subprocesses.
 - Privileged ops go through polkit `oyst-helper` (`oyst-cli install-privileged-helper`). No raw `pkexec bash` fallback.
 - Runtime modes: **full** (tools under `~/.local/share/oysterav/runtime/`) vs **lite** (host packages). Set with `oyst-cli config set runtime.mode full|lite`.
+- ClamAV on-access **blocking** is host co-control (never wholesale `clamd.conf` rewrite): [ADR-008](docs/adr/008-clamav-host-cocontrol.md), [operator guide](docs/user-guide/clamonacc-prevention.md).
 
 ## Health / debug
 

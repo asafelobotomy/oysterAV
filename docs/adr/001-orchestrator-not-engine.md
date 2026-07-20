@@ -19,3 +19,5 @@ In **Full mode** (ADR-004), we may **vendor upstream** engines and official Clam
 - Depends on distro-packaged security tools in Lite mode; private runtime in Full mode
 - Smaller application codebase, faster delivery
 - Detection quality follows upstream tools
+- Host daemon policy (e.g. ClamAV `OnAccessPrevention`) is co-controlled, not
+  reimplemented — see [ADR-008](008-clamav-host-cocontrol.md)

@@ -81,7 +81,9 @@ Scan tuning keys (`scan.max_filesize`, `fangfrisch.providers`, `clamav.ignore_si
 | Recommended | rkhunter, chkrootkit, lynis, clamonacc, firewall |
 | Optional | maldet, unhide, fail2ban, fangfrisch |
 
-Run `oyst-cli doctor` for distro-specific install commands.
+Run `oyst-cli doctor` for distro-specific install commands. On-access prevention /
+host ClamAV blocking: [clamonacc prevention guide](clamonacc-prevention.md)
+([ADR-008](../adr/008-clamav-host-cocontrol.md)).
 
 ## Shell completion
 

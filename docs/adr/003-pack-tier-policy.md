@@ -21,7 +21,8 @@ Packs are tiered:
 `fangfrisch` refreshes unofficial ClamAV signature providers into the ClamAV DB
 directory **after** official freshclam CVD updates. It never replaces freshclam.
 
-See also [ADR-006](006-dependency-scope.md) for skip/defer policy (YARA, AIDE, HIDS).
+See also [ADR-006](006-dependency-scope.md) for skip/defer policy (YARA, AIDE, HIDS)
+and [ADR-008](008-clamav-host-cocontrol.md) for clamonacc / host ClamAV co-control.
 
 ## Consequences
 
