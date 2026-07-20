@@ -23,9 +23,14 @@ fi
 echo "==> Sync version"
 "$PYTHON_BIN" scripts/sync_version.py
 
-echo "==> Stage wheel install under $STAGE/usr"
-"$PYTHON_BIN" -m pip install --upgrade pip
-"$PYTHON_BIN" -m pip install --prefix="$STAGE/usr" .
+echo "==> Stage install under $STAGE/usr"
+# uv-managed interpreters often lack pip; prefer uv pip when available.
+if command -v uv >/dev/null 2>&1; then
+  uv pip install --python "$PYTHON_BIN" --prefix="$STAGE/usr" .
+else
+  "$PYTHON_BIN" -m pip install --upgrade pip
+  "$PYTHON_BIN" -m pip install --prefix="$STAGE/usr" .
+fi
 
 # Normalize lib path (Debian uses lib/python3.x, some use lib64).
 HELPER_DIR="$STAGE/usr/lib/oysterav"

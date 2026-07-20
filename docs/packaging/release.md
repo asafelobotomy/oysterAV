@@ -36,7 +36,8 @@ If a tag exists but the GitHub Release is missing or assets need rebuilding (e.g
 1. Open **Actions → Release → Run workflow**.
 2. Leave **version** empty (uses the `VERSION` file) or set it to `0.2.0`.
 3. Enable **force** so an existing tag is rebuilt and the release is created/updated.
-4. Confirm assets and a `docs(changelog): v…` commit land on `main`.
+4. Force builds from the **workflow commit** (current `main` tip) so packaging fixes apply, then attaches assets to the existing tag.
+5. Confirm assets and a `docs(changelog): v…` commit land on `main`.
 
 ## Release assets (core set)
 

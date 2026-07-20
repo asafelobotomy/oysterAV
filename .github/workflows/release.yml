@@ -33,6 +33,7 @@ jobs:
       version: ${{ steps.detect.outputs.version }}
       tag: ${{ steps.detect.outputs.tag }}
       force: ${{ steps.detect.outputs.force }}
+      build_ref: ${{ steps.detect.outputs.build_ref }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,11 +58,16 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
+          # Force republish builds from the workflow commit (packaging fixes) while
+          # still attaching assets to the existing tag. Normal cuts build the tag tip.
           if [[ "$FORCE" == "true" ]]; then
-            echo "Force republish requested for ${TAG}"
+            echo "build_ref=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "Force republish requested for ${TAG} from ${{ github.sha }}"
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          echo "build_ref=${TAG}" >> "$GITHUB_OUTPUT"
 
           if git rev-parse "${TAG}" >/dev/null 2>&1; then
             echo "Tag ${TAG} already exists — skipping release (use workflow_dispatch force=true to republish)."
@@ -131,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.detect.outputs.tag }}
+          ref: ${{ needs.detect.outputs.build_ref }}
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -162,7 +168,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.detect.outputs.tag }}
+          ref: ${{ needs.detect.outputs.build_ref }}
       - name: Install zstd
         run: sudo apt-get update && sudo apt-get install -y zstd curl
       - run: bash scripts/build_runtime.sh x86_64
@@ -179,7 +185,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.detect.outputs.tag }}
+          ref: ${{ needs.detect.outputs.build_ref }}
       - name: Install flatpak-builder
         run: |
           sudo apt-get update
@@ -198,7 +204,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.detect.outputs.tag }}
+          ref: ${{ needs.detect.outputs.build_ref }}
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -228,7 +234,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.detect.outputs.tag }}
+          ref: ${{ needs.detect.outputs.build_ref }}
       - name: Render PKGBUILD
         run: bash scripts/render_arch_pkgbuild.sh
       - uses: actions/upload-artifact@v4
@@ -246,7 +252,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ needs.detect.outputs.tag }}
+          ref: ${{ needs.detect.outputs.build_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate release notes (latest section)
         uses: orhun/git-cliff-action@v4
