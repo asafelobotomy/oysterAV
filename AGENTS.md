@@ -29,10 +29,16 @@ Do not commit those paths or any credentials.
 ## Validate changes
 
 ```bash
-./scripts/check.sh           # ruff + mypy + pytest with coverage (CI triad)
+./scripts/check.sh           # version + LOC + ruff + mypy + pytest with coverage (CI triad)
 ./scripts/check.sh --quick   # faster core/cli pytest without coverage
 ./scripts/check.sh --format  # also enforce ruff format
 ```
+
+**400-line hard limit:** production Python under `oyst_core/`, `oyst_cli/`, and
+`oysterav/` must stay ≤ 400 lines. Existing over-limit files are grandfathered
+with frozen ceilings in [`scripts/loc_allowlist.json`](scripts/loc_allowlist.json)
+(they must not grow; remove an entry once split to ≤400). Enforced by
+`uv run python scripts/check_loc.py` in `check.sh` and CI.
 
 Coverage: `pytest` measures `oyst_core` + `oyst_cli` (branch on) with
 `fail_under` in [pyproject.toml](pyproject.toml). `oysterav` is **not** in the
@@ -41,6 +47,7 @@ coverage source list — GUI quality is enforced by parity +
 
 | Gate | What it proves |
 |------|----------------|
+| `scripts/check_loc.py` | Production files ≤400 lines (or within frozen allowlist ceiling) |
 | `test_gui_cli_parity` / `test_rpc_parity` | Every GUI/`RpcServer` method has a CLI command (existence) |
 | `tests/test_core/test_rpc_actions.py` | ADR-007 GUI actions call the right `OystClient` methods |
 | Unit tests under `tests/test_core/` | Behavioral logic (mocks; no real scanners) |
@@ -91,3 +98,8 @@ GUI Install button + passwordless toggle via Polkit RPC (`helper.install` /
 `tests/test_cli/test_gui_cli_parity.py`.
 
 See also [docs/adr/007-gui-remapping-phase.md](docs/adr/007-gui-remapping-phase.md).
+
+## Releasing
+
+Bump [`VERSION`](VERSION), run `python scripts/sync_version.py`, push to `main`.
+See [docs/packaging/release.md](docs/packaging/release.md).

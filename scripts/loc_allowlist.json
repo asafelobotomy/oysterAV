@@ -1,0 +1,5 @@
+{
+  "limit": 400,
+  "comment": "Grandfathered production files over the 400-line hard limit. Ceilings freeze growth; remove an entry once the file is \u2264400.",
+  "files": {}
+}

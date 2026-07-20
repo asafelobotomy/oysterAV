@@ -15,6 +15,10 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --extra all
+      - name: Version files must match VERSION
+        run: uv run python scripts/sync_version.py --check
+      - name: Production files must stay within 400-line hard limit
+        run: uv run python scripts/check_loc.py
       - run: uv run ruff format --check oyst_core oyst_cli oysterav tests
       - run: uv run ruff check oyst_core oyst_cli oysterav tests
       - run: uv run mypy oyst_core oyst_cli oysterav

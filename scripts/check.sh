@@ -15,6 +15,8 @@ Usage: scripts/check.sh [--quick] [--pytest-args ...]
   --quick   Skip coverage and run a faster pytest subset (tests/test_core tests/test_cli)
   --format  Also run ruff format --check
 
+Gates (in order): version sync, 400-line LOC hard limit (ratchet), ruff, mypy, pytest.
+
 Environment:
   Prefer: uv sync --extra all   (or --extra dev; add --extra gui for full GUI tests)
 
@@ -53,6 +55,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+echo "==> version sync"
+uv run python scripts/sync_version.py --check
+
+echo "==> LOC hard limit (400)"
+uv run python scripts/check_loc.py
 
 echo "==> ruff check"
 uv run ruff check "${SCOPE_RUFF[@]}"
