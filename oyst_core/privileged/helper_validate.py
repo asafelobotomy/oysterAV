@@ -158,8 +158,20 @@ def _validate_scanner_argv(base: str, argv: Sequence[str]) -> list[str]:
     raise ValueError(f"scanner not allowlisted: {base}")
 
 
+def _validate_clamonacc_list_path(flag: str, arg: str) -> str:
+    """Validate --include-list= / --exclude-list= absolute file paths."""
+    path = Path(arg.split("=", 1)[1])
+    if not path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"clamonacc {flag} must be an absolute path")
+    if any(ch in str(path) for ch in (";", "|", "&", "$", "`", "\n", "\r")):
+        raise ValueError(f"clamonacc {flag} path contains disallowed characters")
+    if not path.is_file():
+        raise ValueError(f"clamonacc {flag} list not found: {path}")
+    return f"{flag}={path}"
+
+
 def _validate_clamonacc_argv(binary: str, args: Sequence[str]) -> list[str]:
-    """Allow --foreground (required), optional --fdpass and --include-list=ABS_PATH."""
+    """Allow --foreground, optional --fdpass, --include-list=, --exclude-list=."""
     if "--foreground" not in args and "-F" not in args:
         raise ValueError("clamonacc requires --foreground")
     out: list[str] = [binary]
@@ -168,14 +180,10 @@ def _validate_clamonacc_argv(binary: str, args: Sequence[str]) -> list[str]:
             out.append("--foreground" if arg == "-F" else arg)
             continue
         if arg.startswith("--include-list="):
-            path = Path(arg.split("=", 1)[1])
-            if not path.is_absolute() or ".." in path.parts:
-                raise ValueError("clamonacc --include-list must be an absolute path")
-            if any(ch in str(path) for ch in (";", "|", "&", "$", "`", "\n", "\r")):
-                raise ValueError("clamonacc --include-list path contains disallowed characters")
-            if not path.is_file():
-                raise ValueError(f"clamonacc include list not found: {path}")
-            out.append(f"--include-list={path}")
+            out.append(_validate_clamonacc_list_path("--include-list", arg))
+            continue
+        if arg.startswith("--exclude-list="):
+            out.append(_validate_clamonacc_list_path("--exclude-list", arg))
             continue
         raise ValueError(f"clamonacc flag not allowlisted: {arg}")
     return out

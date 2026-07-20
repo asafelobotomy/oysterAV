@@ -141,6 +141,8 @@ def test_oyst_helper_allows_clamonacc_fdpass(tmp_path: Path) -> None:
 
     include = tmp_path / "include.list"
     include.write_text("/home/alice/Downloads\n", encoding="utf-8")
+    exclude = tmp_path / "exclude.list"
+    exclude.write_text("/home/alice/.cache\n", encoding="utf-8")
     argv = _validate_scanner_argv(
         "clamonacc",
         [
@@ -148,12 +150,14 @@ def test_oyst_helper_allows_clamonacc_fdpass(tmp_path: Path) -> None:
             "--foreground",
             "--fdpass",
             f"--include-list={include}",
+            f"--exclude-list={exclude}",
         ],
     )
     assert argv[0] == "clamonacc"
     assert "--foreground" in argv
     assert "--fdpass" in argv
     assert any(a.startswith("--include-list=") for a in argv)
+    assert any(a.startswith("--exclude-list=") for a in argv)
 
 
 def test_oyst_helper_rejects_bad_linger_user() -> None:
