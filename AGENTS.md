@@ -36,10 +36,9 @@ Do not commit those paths or any credentials.
 ```
 
 **400-line hard limit:** production Python under `oyst_core/`, `oyst_cli/`, and
-`oysterav/` must stay ≤ 400 lines. Existing over-limit files are grandfathered
-with frozen ceilings in [`scripts/loc_allowlist.json`](scripts/loc_allowlist.json)
-(they must not grow; remove an entry once split to ≤400). Enforced by
-`uv run python scripts/check_loc.py` in `check.sh` and CI.
+`oysterav/` must stay ≤ 400 lines. Ceilings for intentional exceptions live in
+[`scripts/loc_allowlist.json`](scripts/loc_allowlist.json) (empty when none).
+Enforced by `uv run python scripts/check_loc.py` in `check.sh` and CI.
 
 Coverage: `pytest` measures `oyst_core` + `oyst_cli` (branch on) with
 `fail_under` in [pyproject.toml](pyproject.toml). `oysterav` is **not** in the
@@ -92,12 +91,16 @@ uv run oysterav                      # GUI
 ## GUI remapping (ADR-007)
 
 Waves 1–3 and limited Wave 4 (firewall status + fail2ban unban) are shipped.
-**Intentional CLI-first remainder** (no full GUI DSL): setup check/reset, firewall rule
+**Permanent CLI-first remainder** (no full GUI DSL): setup check/reset, firewall rule
 DSL, fail2ban jail control, deep pack CLIs. Helper install and auth grant/revoke are
 GUI Install button + passwordless toggle via Polkit RPC (`helper.install` /
 `auth.grant_service_lifecycle`). Catalogued in
 [docs/cli/gui-contract.md](docs/cli/gui-contract.md); parity enforced by
 `tests/test_cli/test_gui_cli_parity.py`.
+
+ADR-008 Phase 4–4.1 host co-control (`clamonacc ensure-fdpass` /
+`ensure-prevention`, `virusevent ensure`, `clamav ensure-disable-cache`) are
+CLI/RPC + thin Real-time GUI (DisableCache is CLI/health-driven).
 
 See also [docs/adr/007-gui-remapping-phase.md](docs/adr/007-gui-remapping-phase.md).
 

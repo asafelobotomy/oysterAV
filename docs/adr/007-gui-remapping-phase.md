@@ -27,7 +27,7 @@ UX that already had backend support.
 | 1 | Scan completeness (custom packs, `job.cancel`) | **Shipped** |
 | 2 | Settings Services / Auth (helper install, passwordless grant/revoke) | **Shipped** |
 | 3 | Low-risk CLI mirrors (audit, news refresh, quarantine add, tray/desktop) | **Shipped** |
-| 4 | Advanced: firewall **status** + fail2ban **unban**; setup/deep packs / full firewall DSL remain CLI-first | **Limited shipped**; residual intentional |
+| 4 | Advanced: firewall **status** + fail2ban **unban**; setup/deep packs / full firewall DSL remain **permanent CLI-first** | **Limited shipped**; residual permanent unless a future ADR reopens |
 
 ## Consequences
 
@@ -38,3 +38,5 @@ UX that already had backend support.
   `auth.revoke_service_lifecycle`); CLI equivalents remain for scripting.
 - Host ClamAV prevention UI (if any) must follow [ADR-008](008-clamav-host-cocontrol.md)
   and still obey CLI/RPC-first.
+- Wave 4 residual (firewall rule DSL, fail2ban jail control, setup check/reset, deep
+  pack CLIs) is **permanent CLI-first** — do not build a full GUI DSL without a new ADR.

@@ -2,14 +2,14 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+
 ## Unreleased
 
-### Documentation
+### Added
 
-- *(changelog)* V0.2.0
-
-- *(changelog)* V0.2.0
-
+- ADR-008 Phase 4.1 co-control robustness: preserve vendor `clamonacc` ExecStart when
+  ensuring `--fdpass`; expose package conf sidecars in probe/health; wait for clamd
+  socket before restarting clamonacc; `oyst-cli clamav ensure-disable-cache`.
 
 ### Other
 

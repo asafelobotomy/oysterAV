@@ -178,6 +178,10 @@ Clamonacc under Services is **status-only** (no `services.set` toggle). Paths an
 |-------------|--------------|----------------|
 | Clamonacc enabled switch | `clamonacc.enable` / `clamonacc.disable` | `oyst-cli clamonacc enable` / `disable` |
 | Watched paths | `clamonacc.add_path` / `clamonacc.remove_path` | **`oyst-cli clamonacc paths add/remove <path>`** |
+| On-access probe subtitle | `clamonacc.status` (details.onaccess) | `oyst-cli clamonacc status --json` |
+| Ensure `--fdpass` drop-in | `clamonacc.ensure_fdpass` | `oyst-cli clamonacc ensure-fdpass --confirm` |
+| Ensure host prevention | `clamonacc.ensure_prevention` | `oyst-cli clamonacc ensure-prevention --confirm` |
+| Ensure VirusEvent | `virusevent.ensure` | `oyst-cli virusevent ensure --confirm` |
 
 ### Scheduling
 
@@ -343,17 +347,18 @@ Elevation stays in `oyst_core` (not the GTK process). ADR-002 forbids `pkexec` i
 
 ---
 
-## CLI-first / advanced (intentional — not full GUI)
+## CLI-first / advanced (permanent — not full GUI)
 
-These stay CLI-first by design (ADR-007 Wave 4 residual). GUI may show status or a
-narrow action only; full DSL remains `oyst-cli`.
+These stay **permanent CLI-first** by design (ADR-007 Wave 4 residual). GUI may show
+status or a narrow action only; full DSL remains `oyst-cli` unless a future ADR
+reopens the surface.
 
 | Capability | CLI | GUI surface |
 |------------|-----|-------------|
 | Setup gate / reset | `setup check`, `setup reset` | None (wizard uses `setup.run` / `setup.status`) |
 | Firewall rule DSL | `firewall ufw|firewalld …` | Host security: **status only** (`firewall.status`) |
 | fail2ban unban (+ optional ignore/persist; one auth) | `fail2ban unban … --confirm [--ignore] [--persist]` | Host security: **unban IP** (`fail2ban.unban`) |
-| fail2ban jail control / reload | `fail2ban jail-control`, `reload`, … | CLI-first remainder |
+| fail2ban jail control / reload | `fail2ban jail-control`, `reload`, … | Permanent CLI-first |
 | maldet monitor start (config + enable; one auth) | `maldet monitor start` | Services / pack monitor controls |
 | Deep pack ops | `fangfrisch`, `lynis audit`, `maldet scan`, `chkrootkit`, `unhide`, `freshclam update` | Packs list install/remove; Scan profiles; not full pack CLIs |
 | Privileged helper / auth grant | `install-privileged-helper`, `auth grant/revoke-service-lifecycle` | Services: Install button + passwordless switch (`helper.install` / `auth.grant*` / `auth.revoke*`) |
