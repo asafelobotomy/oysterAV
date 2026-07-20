@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import inspect
-import re
-from typing import Any
 
 import pytest
 from click.testing import CliRunner
 
 from oyst_cli.main import cli
 from oyst_core.client import OystClient
+from oyst_core.rpc_handlers import RPC_METHODS
 from oyst_core.serve import RpcServer
-
-_METHOD_PATTERN = re.compile(r'if method == "([^"]+)"')
 
 # RpcServer method -> CLI argv (use --help for mutating or arg-heavy commands).
 RPC_TO_CLI: dict[str, list[str]] = {
@@ -82,20 +79,15 @@ RPC_TO_CLI: dict[str, list[str]] = {
 }
 
 
-def _methods_from_dispatch(obj: Any, method_name: str) -> set[str]:
-    source = inspect.getsource(getattr(obj, method_name))
-    return set(_METHOD_PATTERN.findall(source))
-
-
 def test_rpc_methods_documented_in_mapping() -> None:
-    serve_methods = _methods_from_dispatch(RpcServer, "_dispatch")
-    assert serve_methods == set(RPC_TO_CLI.keys())
+    assert set(RPC_METHODS) == set(RPC_TO_CLI.keys())
 
 
 def test_client_fallback_matches_rpc_server() -> None:
-    serve_methods = _methods_from_dispatch(RpcServer, "_dispatch")
-    client_methods = _methods_from_dispatch(OystClient, "_local_fallback")
-    assert serve_methods == client_methods
+    # Both sides must delegate to the shared HANDLERS registry (no divergent if-chains).
+    assert "dispatch_rpc" in inspect.getsource(OystClient._local_fallback)
+    assert "dispatch_rpc" in inspect.getsource(RpcServer._dispatch)
+    assert set(RPC_METHODS) == set(RPC_TO_CLI.keys())
 
 
 @pytest.mark.parametrize("rpc_method,cli_argv", list(RPC_TO_CLI.items()))

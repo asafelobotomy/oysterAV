@@ -8,7 +8,7 @@ import click
 
 from oyst_cli.commands.audit_cmd import audit_group
 from oyst_cli.commands.auth_cmd import auth_group
-from oyst_cli.commands.config_cmd import config_group, schedule_group
+from oyst_cli.commands.config_cmd import config_group
 from oyst_cli.commands.desktop_cmd import desktop_group
 from oyst_cli.commands.doctor import doctor_cmd
 from oyst_cli.commands.install_helper_cmd import helper_status_cmd, install_helper_cmd
@@ -32,6 +32,7 @@ from oyst_cli.commands.packs import (
 from oyst_cli.commands.quarantine import quarantine_group
 from oyst_cli.commands.runtime_cmd import runtime_group
 from oyst_cli.commands.scan import scan_cmd
+from oyst_cli.commands.schedule_cmd import schedule_group
 from oyst_cli.commands.services_cmd import services_group
 from oyst_cli.commands.setup_cmd import setup_group
 from oyst_cli.commands.status import history_group, status_group

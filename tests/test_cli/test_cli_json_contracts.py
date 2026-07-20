@@ -12,7 +12,7 @@ from oyst_cli.main import cli
 
 def test_fail2ban_unban_json_success() -> None:
     runner = CliRunner()
-    with patch("oyst_cli.commands.packs.Fail2banPack") as pack_cls:
+    with patch("oyst_cli.commands.packs.fail2ban_cmd.Fail2banPack") as pack_cls:
         pack_cls.return_value.unban.return_value = (True, "unbanned")
         result = runner.invoke(
             cli,
@@ -34,7 +34,7 @@ def test_quarantine_delete_confirm_json() -> None:
 
 def test_rkhunter_propupd_confirm_json() -> None:
     runner = CliRunner()
-    with patch("oyst_cli.commands.packs.RKHunterPack") as pack:
+    with patch("oyst_cli.commands.packs.rkhunter_cmd.RKHunterPack") as pack:
         pack.return_value.propupd.return_value = (True, "props updated")
         result = runner.invoke(cli, ["rkhunter", "propupd", "--confirm", "--json"])
     assert result.exit_code == 0

@@ -18,7 +18,7 @@ def test_ufw_allow_from_works_with_dry_run() -> None:
         def __init__(self) -> None:
             self.__dict__ = {"ok": True, "dry_run": True}
 
-    with patch("oyst_cli.commands.packs.FirewallOps") as ops:
+    with patch("oyst_cli.commands.packs.firewall_cmd.FirewallOps") as ops:
         ops.return_value.ufw_rule.return_value = _Result()
         result = runner.invoke(
             cli,
@@ -41,7 +41,7 @@ def test_ufw_allow_from_works_with_dry_run() -> None:
 
 def test_ufw_allow_requires_confirm() -> None:
     runner = CliRunner()
-    with patch("oyst_cli.commands.packs.FirewallOps") as ops:
+    with patch("oyst_cli.commands.packs.firewall_cmd.FirewallOps") as ops:
         result = runner.invoke(cli, ["firewall", "ufw", "allow", "--port", "22"])
     assert result.exit_code == 4
     ops.return_value.ufw_rule.assert_not_called()
@@ -50,7 +50,7 @@ def test_ufw_allow_requires_confirm() -> None:
 def test_clamav_scan_tool_failure_exits_2() -> None:
     runner = CliRunner()
     res = MagicMock(returncode=2, stdout="", stderr="error")
-    with patch("oyst_cli.commands.packs.ClamAVPack") as pack:
+    with patch("oyst_cli.commands.packs.clamav_cmd.ClamAVPack") as pack:
         pack.return_value.scan.return_value = res
         pack.return_value.parse_findings.return_value = []
         result = runner.invoke(cli, ["clamav", "scan", "/tmp", "--json"])
@@ -59,7 +59,7 @@ def test_clamav_scan_tool_failure_exits_2() -> None:
 
 def test_rkhunter_scan_tool_failure_exits_2() -> None:
     runner = CliRunner()
-    with patch("oyst_cli.commands.packs.RKHunterPack") as pack:
+    with patch("oyst_cli.commands.packs.rkhunter_cmd.RKHunterPack") as pack:
         pack.return_value.scan.return_value = (False, "failed")
         pack.return_value.parse_findings.return_value = []
         result = runner.invoke(cli, ["rkhunter", "scan", "--json"])
@@ -79,7 +79,7 @@ def test_runtime_bootstrap_no_skip_lynis_passes_false() -> None:
 
 def test_fail2ban_reload_unban_requires_confirm() -> None:
     runner = CliRunner()
-    with patch("oyst_cli.commands.packs.Fail2banPack") as pack:
+    with patch("oyst_cli.commands.packs.fail2ban_cmd.Fail2banPack") as pack:
         result = runner.invoke(cli, ["fail2ban", "reload", "--unban", "--json"])
     assert result.exit_code == 4
     pack.return_value.reload.assert_not_called()
