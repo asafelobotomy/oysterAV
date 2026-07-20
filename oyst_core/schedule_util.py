@@ -13,13 +13,12 @@ from oyst_core.schedule_linger import (
     is_flatpak,
     resolve_oyst_cli_path,
 )
-from oyst_core.schedule_time import TIME_RE as _TIME_RE
 from oyst_core.schedule_time import (
+    TIME_RE,
     WEEKDAYS,
     parse_schedule_time,
     sanitize_on_calendar,
 )
-from oyst_core.schedule_time import WEEKDAYS as _WEEKDAYS
 from oyst_core.schedule_units import (
     LEGACY_PROFILES,
     UNIT_SERVICE,
@@ -36,11 +35,10 @@ from oyst_core.schedule_units import (
 
 __all__ = [
     "LEGACY_PROFILES",
+    "TIME_RE",
     "UNIT_SERVICE",
     "UNIT_TIMER",
     "WEEKDAYS",
-    "_TIME_RE",
-    "_WEEKDAYS",
     "apply_schedule",
     "build_on_calendar",
     "disable_linger",

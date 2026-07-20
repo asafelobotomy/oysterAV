@@ -98,7 +98,7 @@ def build_services_group(
             base += "; enabled at boot"
         details = info.get("details") or {}
         if name == "clamonacc":
-            unit_hint = "toggle under Real-time (paths/excludes there too)"
+            unit_hint = "toggle under Real-time (paths there too)"
             if not running:
                 nested = details.get("details") if isinstance(details, dict) else None
                 if isinstance(nested, dict) and not nested.get("clamd_running"):

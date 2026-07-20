@@ -25,10 +25,6 @@ WEEKDAYS = {
 
 TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 
-# Backward-compatible private aliases
-_WEEKDAYS = WEEKDAYS
-_TIME_RE = TIME_RE
-
 
 def parse_schedule_time(value: str) -> tuple[int, int]:
     match = TIME_RE.match(value.strip())

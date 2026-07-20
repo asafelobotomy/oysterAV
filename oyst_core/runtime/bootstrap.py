@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
-import lzma
 import shutil
-import tarfile
 from pathlib import Path
 
 from oyst_core.runtime.bundles.clamav import bootstrap_clamav_runtime, update_clamav_signatures
@@ -13,7 +10,6 @@ from oyst_core.runtime.bundles.scanners import (
     install_chkrootkit_runtime,
     install_fangfrisch_runtime,
     install_lynis_runtime,
-    install_maldet_runtime_tree,
     install_rkhunter_runtime,
     install_unhide_runtime,
 )
@@ -113,12 +109,6 @@ def runtime_status() -> dict[str, object]:
         "packs": packs,
         "artifacts": [a.model_dump() for a in lock.artifacts],
     }
-
-
-def install_maldet_runtime(source_dir: Path) -> Path:
-    dest = install_maldet_runtime_tree(source_dir)
-    record_artifact("maldet", dest, source="tarball")
-    return dest
 
 
 def _configure_fangfrisch_after_install() -> None:
@@ -328,17 +318,3 @@ def bootstrap_runtime(
 def update_runtime() -> dict[str, object]:
     sig = update_clamav_signatures()
     return {"ok": sig.get("ok", False), "clamav": sig, "status": runtime_status()}
-
-
-def extract_zst_archive(archive_path: Path, dest: Path) -> None:
-    dest.mkdir(parents=True, exist_ok=True)
-    with lzma.open(archive_path, "rb") as src:
-        with tarfile.open(fileobj=src, mode="r:") as archive:
-            archive.extractall(dest, filter="data")
-
-
-def verify_sha256(path: Path, expected: str) -> bool:
-    if not expected:
-        return True
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    return digest == expected

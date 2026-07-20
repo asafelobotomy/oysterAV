@@ -204,7 +204,3 @@ def history_export_all_cmd(fmt: str, output: str, limit: int, json_mode: bool) -
     else:
         click.echo(f"Wrote {result.get('count', 0)} report(s) to {result.get('path')}")
     raise SystemExit(0 if result.get("ok") else 2)
-
-
-# Back-compat alias for imports that still expect history_cmd.
-history_cmd = history_group

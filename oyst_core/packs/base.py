@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import platform
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from oyst_core.models import PackStatus, PackTier
 from oyst_core.privileged.runner import version_gte, which
-
-if TYPE_CHECKING:
-    import click
 
 
 def distro_install_hint(pack: str) -> str:
@@ -120,10 +117,6 @@ class Pack(ABC):
     @abstractmethod
     def doctor(self) -> PackStatus:
         raise NotImplementedError
-
-    def register_cli(self, group: click.Group) -> None:
-        """Optional CLI registration hook."""
-        _ = group
 
     def _base_status(
         self,

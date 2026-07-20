@@ -121,14 +121,6 @@ class ScanResult(BaseModel):
             self.state = JobState.COMPLETED
 
 
-class JobProgress(BaseModel):
-    job_id: str
-    state: JobState
-    pack: str = ""
-    message: str = ""
-    percent: float = 0.0
-
-
 class QuarantineEntry(BaseModel):
     id: int
     original_path: str
@@ -136,11 +128,3 @@ class QuarantineEntry(BaseModel):
     sha256: str
     threat_name: str = ""
     quarantined_at: datetime
-
-
-class AggregateStatus(BaseModel):
-    packs: list[PackStatus] = Field(default_factory=list)
-    last_scan_at: datetime | None = None
-    signature_age_hours: float | None = None
-    clamd_running: bool = False
-    active_job: str | None = None

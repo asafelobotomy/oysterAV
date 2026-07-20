@@ -21,25 +21,21 @@ from oyst_core.security_news_fetch import (
 from oyst_core.security_news_parse import parse_feed_xml as _parse_feed_xml
 from oyst_core.security_news_parse import score_severity
 from oyst_core.security_news_sources import (
-    DEFAULT_FEEDS,
     DEFAULT_SOURCE_IDS,
     NEWS_SOURCES,
     SEVERITY_RULES,
     NewsSource,
     normalize_source_ids,
 )
-from oyst_core.security_news_sources import SEVERITY_RULES as _SEVERITY_RULES
 
 __all__ = [
     "CACHE_MAX_AGE",
-    "DEFAULT_FEEDS",
     "DEFAULT_SOURCE_IDS",
     "FETCH_TIMEOUT_S",
     "MAX_ITEMS",
     "NEWS_SOURCES",
     "SEVERITY_RULES",
     "NewsSource",
-    "_SEVERITY_RULES",
     "_merge_items",
     "_parse_feed_xml",
     "cache_dir",

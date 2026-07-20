@@ -279,7 +279,3 @@ Click usage errors (unknown options, missing required args) typically exit **1**
 - **Lite**: system packages only — `oyst-cli config set runtime.mode lite`
 
 See [packaging/lite/README.md](../../packaging/lite/README.md).
-
-## Deferred (historical)
-
-`job.cancel` and `job.status` are implemented (`oyst-cli job cancel` / `oyst-cli job status --json` + Scan progress). See [ADR-007](../adr/007-gui-remapping-phase.md).

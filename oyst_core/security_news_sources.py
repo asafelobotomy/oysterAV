@@ -51,11 +51,6 @@ NEWS_SOURCES: dict[str, NewsSource] = {
     ),
 }
 
-# Backward-compatible alias: (label, url) for older tests/imports.
-DEFAULT_FEEDS: tuple[tuple[str, str], ...] = tuple(
-    (NEWS_SOURCES[sid].label, NEWS_SOURCES[sid].url) for sid in DEFAULT_SOURCE_IDS
-)
-
 # Higher score wins. First matching tier applies (ordered critical → low).
 SEVERITY_RULES: tuple[tuple[int, str, tuple[str, ...]], ...] = (
     (
@@ -112,9 +107,6 @@ SEVERITY_RULES: tuple[tuple[int, str, tuple[str, ...]], ...] = (
         ),
     ),
 )
-
-# Backward-compatible private alias
-_SEVERITY_RULES = SEVERITY_RULES
 
 
 def normalize_source_ids(raw: Sequence[str] | None) -> list[str]:
