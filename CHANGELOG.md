@@ -8,6 +8,8 @@ All notable changes to oysterAV are documented here and on each
 
 - *(changelog)* V0.2.0
 
+- *(changelog)* V0.2.0
+
 
 ### Other
 
@@ -30,6 +32,8 @@ All notable changes to oysterAV are documented here and on each
 - Include .SRCINFO in GitHub Release uploads (dotfile glob fix).
 
 - Upload hidden .SRCINFO via include-hidden-files on the arch artifact.
+
+- Publish Arch SRCINFO without a leading dot for GitHub Releases.
 
 ## 0.2.0 - 2026-07-20
 
