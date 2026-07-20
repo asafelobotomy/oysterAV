@@ -1,4 +1,4 @@
-"""System health assessment for CLI and future GUI mapping."""
+"""System health assessment for CLI and GUI (`status.assess` / Dashboard banner)."""
 
 from __future__ import annotations
 
@@ -121,10 +121,41 @@ def assess_health(status: dict[str, Any]) -> dict[str, Any]:
                     "clamonacc.prevention=true requires OnAccessPrevention yes in host "
                     "clamd.conf; process-mode clamonacc remains detect-only with --fdpass.",
                     "Set OnAccessPrevention yes in clamd.conf "
-                    "(docs/user-guide/clamonacc-prevention.md), or set "
+                    "(docs/user-guide/clamonacc-prevention.md), or run: "
+                    "oyst-cli clamonacc ensure-prevention --confirm — or set "
                     "clamonacc.prevention false",
                 ),
             )
+
+    onaccess = status.get("clamonacc_onaccess")
+    if isinstance(onaccess, dict):
+        sidecars = onaccess.get("conflict_sidecars")
+        if isinstance(sidecars, list) and sidecars:
+            issues.append(
+                _issue(
+                    "clamd_conf_package_conflict",
+                    "medium",
+                    "Host clamd.conf has package upgrade sidecars",
+                    "Found: " + ", ".join(str(s) for s in sidecars) + ". "
+                    "Merge manually before oysterAV surgical ensures.",
+                    "See docs/user-guide/clamonacc-prevention.md "
+                    "(do not auto-merge .rpmnew/.dpkg-dist)",
+                ),
+            )
+        if status.get("clamd_running") and onaccess.get("disable_cache") is not True:
+            # Only warn when conf is readable enough to probe.
+            if onaccess.get("conf_path"):
+                issues.append(
+                    _issue(
+                        "clamd_disable_cache_unset",
+                        "info",
+                        "ClamAV DisableCache is not enabled",
+                        "Daemon result caching may hide freshly written threats "
+                        "(xanadOS lesson). Prefer DisableCache yes when safe.",
+                        "Run: oyst-cli clamav ensure-disable-cache --confirm "
+                        "(or set manually; hand off if admin set DisableCache no)",
+                    ),
+                )
 
     fangfrisch = next((p for p in packs if p.get("name") == "fangfrisch"), None)
     if fangfrisch and fangfrisch.get("installed"):

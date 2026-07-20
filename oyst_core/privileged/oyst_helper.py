@@ -11,6 +11,7 @@ import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
+from oyst_core.privileged.helper_clamd import _build_clamd_cocontrol_argv
 from oyst_core.privileged.helper_fail2ban import (
     _build_fail2ban_argv,
     _persist_fail2ban_ignoreip,
@@ -58,6 +59,7 @@ __all__ = [
     "UNHIDE_MODES",
     "USERNAME_RE",
     "_apply_maldet_monitor_mode",
+    "_build_clamd_cocontrol_argv",
     "_build_fail2ban_argv",
     "_build_firewall_argv",
     "_build_firewalld_argv",
@@ -140,7 +142,7 @@ def run_helper_argv(argv: Sequence[str]) -> int:
     if not argv:
         print(
             "usage: oyst-helper run|install-script|firewall|fail2ban|systemctl|"
-            "maldet-config|rkhunter-whitelist",
+            "maldet-config|rkhunter-whitelist|clamd-cocontrol",
             file=sys.stderr,
         )
         return 2
@@ -171,6 +173,7 @@ def run_helper_argv(argv: Sequence[str]) -> int:
         "systemctl": _build_systemctl_argv,
         "maldet-config": _build_maldet_config_argv,
         "rkhunter-whitelist": _build_rkhunter_whitelist_argv,
+        "clamd-cocontrol": _build_clamd_cocontrol_argv,
     }
     if subcommand in builders:
         try:

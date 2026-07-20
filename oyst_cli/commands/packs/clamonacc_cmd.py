@@ -7,6 +7,7 @@ import click
 from oyst_cli.confirm import require_confirm
 from oyst_cli.options import json_option
 from oyst_cli.output import emit
+from oyst_core.packs.clamd_ensure import ensure_fdpass, ensure_prevention
 from oyst_core.packs.clamonacc import ClamonaccPack
 
 
@@ -116,4 +117,28 @@ def paths_remove(path: str, confirm: bool, json_mode: bool) -> None:
     else:
         click.echo(f"Path not in list: {path}", err=True)
     if not removed:
+        raise SystemExit(2)
+
+
+@clamonacc_group.command("ensure-fdpass")
+@click.option("--confirm", is_flag=True)
+@json_option
+def clamonacc_ensure_fdpass(confirm: bool, json_mode: bool) -> None:
+    """Write systemd drop-in so distro clamonacc uses --fdpass (ADR-008 Phase 4)."""
+    require_confirm(confirm, message="--confirm required to write systemd drop-in")
+    result = ensure_fdpass(confirm=True)
+    emit(result, json_mode=json_mode)
+    if not result.get("ok"):
+        raise SystemExit(2)
+
+
+@clamonacc_group.command("ensure-prevention")
+@click.option("--confirm", is_flag=True)
+@json_option
+def clamonacc_ensure_prevention(confirm: bool, json_mode: bool) -> None:
+    """Surgical OnAccessPrevention ensure in host clamd.conf (ADR-008 Phase 4)."""
+    require_confirm(confirm, message="--confirm required to edit host clamd.conf")
+    result = ensure_prevention(confirm=True)
+    emit(result, json_mode=json_mode)
+    if not result.get("ok"):
         raise SystemExit(2)

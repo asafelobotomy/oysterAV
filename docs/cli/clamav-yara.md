@@ -62,6 +62,8 @@ delivery and is unrelated to `scan.clamav_profile`.
 ## On-access prevention
 
 Real fanotify **blocking** (`OnAccessPrevention`) is host-owned; oysterAV
-co-controls intent, response, and (future) probing without rewriting package
-daemon config. See [ADR-008](../adr/008-clamav-host-cocontrol.md) and the
+co-controls intent, response, and probing without rewriting package daemon
+config. See [ADR-008](../adr/008-clamav-host-cocontrol.md) and the
 [clamonacc prevention operator guide](../user-guide/clamonacc-prevention.md).
+On-access hits can bridge into quarantine/audit via
+`oyst-cli virusevent` (Phase 3).

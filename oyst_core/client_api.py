@@ -262,6 +262,21 @@ class OystClientApi:
     def clamonacc_remove_path(self, path: str) -> None:
         self._call("clamonacc.remove_path", {"path": path})
 
+    def clamonacc_ensure_fdpass(self) -> dict[str, Any]:
+        return self._as_dict("clamonacc.ensure_fdpass")
+
+    def clamonacc_ensure_prevention(self) -> dict[str, Any]:
+        return self._as_dict("clamonacc.ensure_prevention")
+
+    def virusevent_status(self) -> dict[str, Any]:
+        return self._as_dict("virusevent.status")
+
+    def virusevent_ensure(self, *, force_wrapper: bool = False) -> dict[str, Any]:
+        return self._as_dict("virusevent.ensure", {"force_wrapper": force_wrapper})
+
+    def clamav_ensure_disable_cache(self) -> dict[str, Any]:
+        return self._as_dict("clamav.ensure_disable_cache")
+
     def news_list(
         self,
         *,

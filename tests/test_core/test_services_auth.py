@@ -34,9 +34,10 @@ def test_polkit_policy_has_argv1_scoped_actions() -> None:
     assert 'org.freedesktop.policykit.exec.argv1">fail2ban<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">maldet-config<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">rkhunter-whitelist<' in policy
+    assert 'org.freedesktop.policykit.exec.argv1">clamd-cocontrol<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">install-script<' in policy
     assert "io.github.asafelobotomy.run-helper" not in policy
-    assert POLICY_VERSION >= 5
+    assert POLICY_VERSION >= 6
     assert 'allow_active">auth_admin<' in policy or "auth_admin" in policy
     # run action must not use auth_admin_keep
     run_idx = policy.find("helper.run")

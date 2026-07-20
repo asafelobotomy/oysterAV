@@ -21,10 +21,12 @@ from oysterav.gui.widgets import (
 )
 from oysterav.gui.widgets.clamonacc_ui import (
     add_clamonacc_path_from_dialog,
+    build_host_cocontrol_group,
     disable_clamonacc_from_gui,
     enable_clamonacc_from_gui,
     populate_clamonacc_paths,
     refresh_clamonacc_subtitle,
+    refresh_onaccess_probe_row,
     remove_clamonacc_path_from_gui,
 )
 from oysterav.gui.widgets.common import (
@@ -199,7 +201,14 @@ class SettingsPage:
         add_path_row.set_subtitle("Folders for on-access scanning")
         add_path_row.add_suffix(add_path_btn)
         self.realtime_group.add(add_path_row)
+        self.host_group, self.onaccess_probe_row = build_host_cocontrol_group(
+            self.client,
+            get_window=lambda: self._window,
+            on_status=self._set_status,
+            on_complete=self.refresh,
+        )
         page.add(self.realtime_group)
+        page.add(self.host_group)
         self._add_section_page("realtime", page)
 
     def _build_packs_section(self) -> None:
@@ -214,6 +223,7 @@ class SettingsPage:
     def _on_packs_changed(self) -> None:
         """Packs already refreshed in PackListWidget; only refresh pack-dependent rows."""
         refresh_clamonacc_subtitle(self.client, self.clamonacc_row)
+        refresh_onaccess_probe_row(self.client, self.onaccess_probe_row)
 
     def _set_status(self, text: str) -> None:
         if self._on_status:
@@ -224,6 +234,7 @@ class SettingsPage:
         self._refresh_services()
         settings_host_audit_ui.refresh_audit(self)
         settings_host_audit_ui.refresh_host_security(self)
+        refresh_onaccess_probe_row(self.client, self.onaccess_probe_row)
 
     def _load_data(self) -> dict[str, Any]:
         config = self.client.config_get()

@@ -105,6 +105,11 @@ Error:
 | `clamonacc.disable` | `oyst-cli clamonacc disable` | |
 | `clamonacc.add_path` | `oyst-cli clamonacc paths add` | |
 | `clamonacc.remove_path` | `oyst-cli clamonacc paths remove` | |
+| `clamonacc.ensure_fdpass` | `oyst-cli clamonacc ensure-fdpass --confirm` | Polkit `clamd-cocontrol` |
+| `clamonacc.ensure_prevention` | `oyst-cli clamonacc ensure-prevention --confirm` | Polkit `clamd-cocontrol` |
+| `virusevent.status` | `oyst-cli virusevent status --json` | |
+| `virusevent.ensure` | `oyst-cli virusevent ensure --confirm` | Polkit `clamd-cocontrol` |
+| `clamav.ensure_disable_cache` | `oyst-cli clamav ensure-disable-cache --confirm` | Polkit `clamd-cocontrol` |
 
 ## Changelog v1 → v2
 

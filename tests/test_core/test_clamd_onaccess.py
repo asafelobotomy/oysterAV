@@ -17,6 +17,8 @@ def test_parse_clamd_conf_onaccess_keys() -> None:
     text = """
 # comment
 User clamav
+LocalSocket /run/clamav/clamd.ctl
+DisableCache yes
 OnAccessIncludePath /home/u/Downloads
 OnAccessPrevention yes
 OnAccessExcludeUname clamav
@@ -27,6 +29,35 @@ OnAccessExcludeUname clamav
     assert parsed["include_paths"] == ["/home/u/Downloads"]
     assert parsed["exclude_unames"] == ["clamav"]
     assert parsed["mount_paths"] == []
+    assert parsed["disable_cache"] is True
+    assert parsed["local_socket"] == "/run/clamav/clamd.ctl"
+
+
+def test_probe_reports_conflict_sidecars(tmp_path: Path) -> None:
+    conf = tmp_path / "clamd.conf"
+    conf.write_text("OnAccessPrevention yes\n", encoding="utf-8")
+    sidecar = Path(str(conf) + ".rpmnew")
+    sidecar.write_text("OnAccessPrevention no\n", encoding="utf-8")
+    result = probe_onaccess_prevention(conf_paths=[conf], kernel_ok=True)
+    assert str(sidecar) in result["conflict_sidecars"]
+
+
+def test_health_package_conflict_and_disable_cache() -> None:
+    result = assess_health(
+        {
+            "packs": [{"name": "clamav", "tier": PackTier.REQUIRED.value, "installed": True}],
+            "clamd_running": True,
+            "clamonacc_prevention_requested": False,
+            "clamonacc_onaccess": {
+                "conf_path": "/etc/clamav/clamd.conf",
+                "disable_cache": False,
+                "conflict_sidecars": ["/etc/clamav/clamd.conf.rpmnew"],
+            },
+        },
+    )
+    codes = {i["code"] for i in result["issues"]}
+    assert "clamd_conf_package_conflict" in codes
+    assert "clamd_disable_cache_unset" in codes
 
 
 def test_classify_blocking_vs_mountpath_conflict() -> None:

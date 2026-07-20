@@ -225,3 +225,142 @@ def populate_clamonacc_paths(
         action.add_suffix(remove_btn)
         group.add(action)
         path_rows.append(action)
+
+
+def _run_ensure(
+    worker: Callable[[], dict[str, Any]],
+    *,
+    window: Gtk.Window | None,
+    heading: str,
+    copy_text: str,
+    on_status: Callable[[str], None] | None,
+    on_complete: Callable[[], None] | None,
+) -> None:
+    if on_status:
+        on_status(f"{heading}…")
+
+    def done(result: dict[str, Any]) -> bool:
+        ok = bool(result.get("ok"))
+        msg = str(result.get("message") or result.get("error") or ("ok" if ok else "failed"))
+        if on_status:
+            on_status(msg)
+        if not ok and window:
+            show_command_dialog(window, heading=heading, body=msg, copy_text=copy_text)
+        if on_complete:
+            on_complete()
+        return False
+
+    def failed(message: str) -> bool:
+        if on_status:
+            on_status(message)
+        if window:
+            show_command_dialog(window, heading=heading, body=message, copy_text=copy_text)
+        if on_complete:
+            on_complete()
+        return False
+
+    run_in_thread(worker, done, failed)
+
+
+def ensure_fdpass_from_gui(
+    client: OystClient,
+    *,
+    window: Gtk.Window | None = None,
+    on_status: Callable[[str], None] | None = None,
+    on_complete: Callable[[], None] | None = None,
+) -> None:
+    _run_ensure(
+        client.clamonacc_ensure_fdpass,
+        window=window,
+        heading="Ensure clamonacc --fdpass",
+        copy_text="oyst-cli clamonacc ensure-fdpass --confirm",
+        on_status=on_status,
+        on_complete=on_complete,
+    )
+
+
+def ensure_prevention_from_gui(
+    client: OystClient,
+    *,
+    window: Gtk.Window | None = None,
+    on_status: Callable[[str], None] | None = None,
+    on_complete: Callable[[], None] | None = None,
+) -> None:
+    _run_ensure(
+        client.clamonacc_ensure_prevention,
+        window=window,
+        heading="Ensure host OnAccessPrevention",
+        copy_text="oyst-cli clamonacc ensure-prevention --confirm",
+        on_status=on_status,
+        on_complete=on_complete,
+    )
+
+
+def ensure_virusevent_from_gui(
+    client: OystClient,
+    *,
+    window: Gtk.Window | None = None,
+    on_status: Callable[[str], None] | None = None,
+    on_complete: Callable[[], None] | None = None,
+) -> None:
+    _run_ensure(
+        client.virusevent_ensure,
+        window=window,
+        heading="Ensure VirusEvent bridge",
+        copy_text="oyst-cli virusevent ensure --confirm",
+        on_status=on_status,
+        on_complete=on_complete,
+    )
+
+
+def refresh_onaccess_probe_row(client: OystClient, row: Adw.ActionRow) -> None:
+    def done(status: dict[str, Any]) -> bool:
+        details = status.get("details") or {}
+        onaccess = details.get("onaccess") or {}
+        classification = onaccess.get("classification") or "unknown"
+        enforced = bool(onaccess.get("prevention_enforced"))
+        row.set_subtitle(
+            f"{classification}" + (" · blocking" if enforced else " · not blocking"),
+        )
+        return False
+
+    run_in_thread(client.clamonacc_status, done, lambda _m: False)
+
+
+def build_host_cocontrol_group(
+    client: OystClient,
+    *,
+    get_window: Callable[[], Gtk.Window | None],
+    on_status: Callable[[str], None] | None,
+    on_complete: Callable[[], None] | None,
+) -> tuple[Adw.PreferencesGroup, Adw.ActionRow]:
+    """Build Real-time host co-control group; returns (group, probe_row)."""
+    group = Adw.PreferencesGroup(title="Host ClamAV co-control")
+    probe = Adw.ActionRow(title="On-access probe")
+    probe.set_subtitle("Classification from host clamd.conf")
+    group.add(probe)
+    actions: list[tuple[str, str, Callable[..., None]]] = [
+        ("Ensure --fdpass", "oyst-cli clamonacc ensure-fdpass --confirm", ensure_fdpass_from_gui),
+        (
+            "Ensure prevention",
+            "oyst-cli clamonacc ensure-prevention --confirm",
+            ensure_prevention_from_gui,
+        ),
+        ("Ensure VirusEvent", "oyst-cli virusevent ensure --confirm", ensure_virusevent_from_gui),
+    ]
+    for title, copy, fn in actions:
+        row = Adw.ActionRow(title=title)
+        row.set_subtitle(copy)
+        btn = make_button("Ensure…", row_suffix=True)
+        btn.connect(
+            "clicked",
+            lambda _b, call=fn: call(
+                client,
+                window=get_window(),
+                on_status=on_status,
+                on_complete=on_complete,
+            ),
+        )
+        row.add_suffix(btn)
+        group.add(row)
+    return group, probe

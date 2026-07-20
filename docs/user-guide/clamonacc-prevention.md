@@ -147,6 +147,63 @@ If the banner remains after editing conf, restart **clamd** then **clamonacc**,
 and re-run assess. Clearing intent without host blocking: set
 `clamonacc.prevention false`.
 
+## VirusEvent bridge (on-access → quarantine)
+
+Install the wrapper, then ensure host `VirusEvent` **only when unset**
+(or already oysterAV-owned). Do not overwrite a foreign VirusEvent.
+
+```bash
+oyst-cli virusevent install-wrapper
+oyst-cli virusevent status --json
+# Surgical ensure (polkit; refuses foreign VirusEvent):
+oyst-cli virusevent ensure --confirm
+# Or manually add when unset:
+#   VirusEvent /home/YOU/.local/share/oysterav/bin/oyst-virusevent
+# Then restart clamd (and clamonacc).
+```
+
+## Phase 4 host ensures (ADR-008)
+
+```bash
+# Distro unit --fdpass drop-in (no-op when already present / process mode):
+oyst-cli clamonacc ensure-fdpass --confirm
+
+# Surgical OnAccessPrevention (requires clamonacc.prevention=true + safe paths):
+oyst-cli config set clamonacc.prevention true
+oyst-cli clamonacc paths add ~/Downloads
+oyst-cli clamonacc ensure-prevention --confirm
+```
+
+Ensure writes use oysterAV begin/end markers, back up `*.oysterav-bak`, refuse
+`.rpmnew`/`.dpkg-dist` conflicts and foreign VirusEvent / MountPath setups.
+
+### Package upgrade sidecars
+
+After a ClamAV package upgrade, look for:
+
+```bash
+ls /etc/clamav/clamd.conf.* /etc/clamd.d/scan.conf.* 2>/dev/null
+oyst-cli clamonacc status --json   # conflict_sidecars in details.onaccess
+oyst-cli status assess --json      # clamd_conf_package_conflict
+```
+
+Merge sidecars manually (or via distro tools). oysterAV **will not** auto-merge;
+surgical ensures refuse to write while sidecars exist.
+
+### DisableCache (daemon result cache)
+
+```bash
+oyst-cli status assess --json   # clamd_disable_cache_unset when unset
+oyst-cli clamav ensure-disable-cache --confirm
+```
+
+Only when `DisableCache` is unset or already inside the oysterAV Harden markers.
+If an admin set `DisableCache no` outside those markers, oysterAV hands off.
+
+The handler reads `CLAM_VIRUSEVENT_FILENAME` / `CLAM_VIRUSEVENT_VIRUSNAME` only
+(never `%f`), logs audit events, optionally quarantines (`quarantine.auto`),
+and sends a desktop notification when `notify-send` is available.
+
 ## Related
 
 - [ADR-008 Host co-control](../adr/008-clamav-host-cocontrol.md)

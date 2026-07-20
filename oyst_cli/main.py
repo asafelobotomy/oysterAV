@@ -37,6 +37,7 @@ from oyst_cli.commands.services_cmd import services_group
 from oyst_cli.commands.setup_cmd import setup_group
 from oyst_cli.commands.status import history_group, status_group
 from oyst_cli.commands.updates_cmd import updates_group
+from oyst_cli.commands.virusevent_cmd import virusevent_group
 from oyst_core.logging_util import setup_logging
 from oyst_core.serve import SCHEMA_VERSION, RpcServer
 
@@ -93,6 +94,7 @@ def _register_commands() -> None:
     cli.add_command(history_group)
     cli.add_command(scan_cmd)
     cli.add_command(job_group)
+    cli.add_command(virusevent_group)
     cli.add_command(maintenance_group)
     cli.add_command(quarantine_group)
     cli.add_command(config_group)

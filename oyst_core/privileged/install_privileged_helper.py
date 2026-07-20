@@ -18,7 +18,7 @@ HELPER_PATH_LEGACY = Path("/usr/local/lib/oysterav/oyst-helper")
 POLKIT_PATH = Path("/usr/share/polkit-1/actions/io.github.asafelobotomy.policy")
 
 # Bump when action IDs / argv1 annotations / exec.path change (helper-status reports this).
-POLICY_VERSION = 5
+POLICY_VERSION = 6
 
 POLKIT_ACTION_IDS = (
     "io.github.asafelobotomy.helper.systemctl",
@@ -27,6 +27,7 @@ POLKIT_ACTION_IDS = (
     "io.github.asafelobotomy.helper.fail2ban",
     "io.github.asafelobotomy.helper.maldet-config",
     "io.github.asafelobotomy.helper.rkhunter-whitelist",
+    "io.github.asafelobotomy.helper.clamd-cocontrol",
     "io.github.asafelobotomy.helper.install-script",
 )
 
@@ -162,6 +163,16 @@ def build_polkit_policy() -> str:
                 "in the oysterAV overlay"
             ),
             argv1="rkhunter-whitelist",
+            allow_active="auth_admin",
+        ),
+        _action_xml(
+            action_id="io.github.asafelobotomy.helper.clamd-cocontrol",
+            description="Apply oysterAV ClamAV host co-control ensures",
+            message=(
+                "Authentication is required to write ClamAV systemd drop-ins "
+                "or surgical OnAccess / VirusEvent keys"
+            ),
+            argv1="clamd-cocontrol",
             allow_active="auth_admin",
         ),
         _action_xml(

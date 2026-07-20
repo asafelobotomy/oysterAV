@@ -110,3 +110,17 @@ def clamav_clamd_ensure(json_mode: bool) -> None:
 
 
 clamav_group.add_command(clamav_clamd_group, name="clamd")
+
+
+@clamav_group.command("ensure-disable-cache")
+@click.option("--confirm", is_flag=True)
+@json_option
+def clamav_ensure_disable_cache(confirm: bool, json_mode: bool) -> None:
+    """Surgical DisableCache yes in host clamd.conf (ADR-008 Phase 4.1)."""
+    require_confirm(confirm, message="--confirm required to edit host clamd.conf")
+    from oyst_core.packs.clamd_ensure import ensure_disable_cache
+
+    result = ensure_disable_cache(confirm=True)
+    emit(result, json_mode=json_mode)
+    if not result.get("ok"):
+        raise SystemExit(2)

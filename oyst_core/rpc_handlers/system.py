@@ -186,6 +186,47 @@ def handle_clamonacc_remove_path(params: dict[str, Any], _ctx: RpcContext) -> An
     return True
 
 
+def handle_clamonacc_ensure_fdpass(_params: dict[str, Any], ctx: RpcContext) -> Any:
+    from oyst_core.packs.clamd_ensure import ensure_fdpass
+
+    result = ensure_fdpass(confirm=True)
+    ctx.audit.log("clamonacc.ensure_fdpass", "rpc", success=bool(result.get("ok")))
+    return result
+
+
+def handle_clamonacc_ensure_prevention(_params: dict[str, Any], ctx: RpcContext) -> Any:
+    from oyst_core.packs.clamd_ensure import ensure_prevention
+
+    result = ensure_prevention(confirm=True)
+    ctx.audit.log("clamonacc.ensure_prevention", "rpc", success=bool(result.get("ok")))
+    return result
+
+
+def handle_virusevent_status(_params: dict[str, Any], _ctx: RpcContext) -> Any:
+    from oyst_core.virusevent import virusevent_status
+
+    return virusevent_status()
+
+
+def handle_virusevent_ensure(params: dict[str, Any], ctx: RpcContext) -> Any:
+    from oyst_core.packs.clamd_ensure import ensure_virusevent
+
+    result = ensure_virusevent(
+        confirm=True,
+        force_wrapper=bool(params.get("force_wrapper", False)),
+    )
+    ctx.audit.log("clamav.ensure_virusevent", "rpc", success=bool(result.get("ok")))
+    return result
+
+
+def handle_clamav_ensure_disable_cache(_params: dict[str, Any], ctx: RpcContext) -> Any:
+    from oyst_core.packs.clamd_ensure import ensure_disable_cache
+
+    result = ensure_disable_cache(confirm=True)
+    ctx.audit.log("clamav.ensure_disable_cache", "rpc", success=bool(result.get("ok")))
+    return result
+
+
 def handle_news_list(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.security_news import list_security_news
 

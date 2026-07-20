@@ -33,12 +33,14 @@ def _truthy(value: str) -> bool:
 
 
 def parse_clamd_conf(text: str) -> dict[str, object]:
-    """Parse selected OnAccess / User keys from a clamd conf body."""
+    """Parse selected OnAccess / User / Harden keys from a clamd conf body."""
     prevention: bool | None = None
     user: str | None = None
     include_paths: list[str] = []
     mount_paths: list[str] = []
     exclude_unames: list[str] = []
+    disable_cache: bool | None = None
+    local_socket: str | None = None
 
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
@@ -60,6 +62,10 @@ def parse_clamd_conf(text: str) -> dict[str, object]:
             mount_paths.append(value)
         elif key_l == "onaccessexcludeuname":
             exclude_unames.append(value)
+        elif key_l == "disablecache":
+            disable_cache = _truthy(value)
+        elif key_l == "localsocket":
+            local_socket = value
 
     return {
         "prevention": prevention,
@@ -67,7 +73,22 @@ def parse_clamd_conf(text: str) -> dict[str, object]:
         "include_paths": include_paths,
         "mount_paths": mount_paths,
         "exclude_unames": exclude_unames,
+        "disable_cache": disable_cache,
+        "local_socket": local_socket,
     }
+
+
+def list_conf_conflict_sidecars(conf: Path) -> list[str]:
+    """Return package upgrade sidecars next to conf (``.rpmnew``, ``.dpkg-dist``, …)."""
+    found: list[str] = []
+    for suffix in (".rpmnew", ".dpkg-dist", ".ucf-dist", ".dpkg-old"):
+        side = Path(str(conf) + suffix)
+        try:
+            if side.is_file():
+                found.append(str(side))
+        except OSError:
+            continue
+    return found
 
 
 def discover_clamd_conf_paths(*, extra: list[Path] | None = None) -> list[Path]:
@@ -166,10 +187,14 @@ def probe_onaccess_prevention(
             "mount_paths": [],
             "exclude_unames": [],
             "user": None,
+            "disable_cache": None,
+            "local_socket": None,
+            "conflict_sidecars": [],
             "error": "no readable clamd conf among candidates",
         }
 
     if kernel_ok is False:
+        sidecars = list_conf_conflict_sidecars(paths[0])
         return {
             "classification": "impossible",
             "prevention_enforced": False,
@@ -180,6 +205,9 @@ def probe_onaccess_prevention(
             "mount_paths": [],
             "exclude_unames": [],
             "user": None,
+            "disable_cache": None,
+            "local_socket": None,
+            "conflict_sidecars": sidecars,
             "error": None,
         }
 
@@ -191,6 +219,8 @@ def probe_onaccess_prevention(
         "include_paths": [],
         "mount_paths": [],
         "exclude_unames": [],
+        "disable_cache": None,
+        "local_socket": None,
     }
     last_error: str | None = None
     for path in paths:
@@ -217,6 +247,9 @@ def probe_onaccess_prevention(
             "mount_paths": [],
             "exclude_unames": [],
             "user": None,
+            "disable_cache": None,
+            "local_socket": None,
+            "conflict_sidecars": [],
             "error": last_error or "unreadable clamd conf",
         }
 
@@ -237,5 +270,8 @@ def probe_onaccess_prevention(
         "mount_paths": mount_paths,
         "exclude_unames": exclude_unames,
         "user": parsed.get("user"),
+        "disable_cache": parsed.get("disable_cache"),
+        "local_socket": parsed.get("local_socket"),
+        "conflict_sidecars": list_conf_conflict_sidecars(chosen),
         "error": None,
     }

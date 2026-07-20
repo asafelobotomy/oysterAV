@@ -80,6 +80,10 @@ def test_run_elevated_oyst_cli_flatpak_uses_host_pkexec() -> None:
     with (
         patch("oyst_core.privileged.elevate_cli.os.geteuid", return_value=1000),
         patch("oyst_core.privileged.elevate_cli.is_flatpak", return_value=True),
+        patch(
+            "oyst_core.privileged.elevate_cli._host_oyst_cli_for_flatpak",
+            return_value="/usr/bin/oyst-cli",
+        ),
         patch("oyst_core.privileged.elevate_cli.which", return_value="/usr/bin/flatpak-spawn"),
         patch("oyst_core.privileged.elevate_cli.subprocess.run", return_value=mock_proc) as run,
     ):

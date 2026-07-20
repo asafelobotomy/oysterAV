@@ -7,16 +7,17 @@ Accepted
 ## Context
 
 oysterAV orchestrates ClamAV (ADR-001 / ADR-004) but does not replace the host
-daemon. Today:
+daemon. Today (Phases 0–4):
 
 - `clamonacc.prevention` is a **preference** only (`config.toml`).
-- Aggregate status hardcodes `clamonacc_prevention_enforced = false` — oysterAV
-  never writes `OnAccessPrevention` into host `clamd.conf`.
+- Aggregate status **probes** host `OnAccessPrevention` (does not write clamd.conf).
 - Process-mode on-access starts `clamonacc --fdpass` (detect-oriented path lists
   under XDG). Distro-unit mode enables `clamav-clamonacc` and defers watch paths
-  / prevention to **host** ClamAV config.
-- Post-scan findings already have rich response (quarantine vault, rkhunter
-  overlays). On-access hits are not yet bridged into that pipeline.
+  / prevention to **host** ClamAV config; Phase 4 can ensure a `--fdpass` drop-in.
+- Post-scan findings have quarantine/rkhunter overlays; on-access hits bridge via
+  `oyst-cli virusevent handle` when host `VirusEvent` points at the oysterAV wrapper.
+- Phase 4 **surgical ensure** (with `--confirm` + polkit) may write marked OnAccess /
+  VirusEvent blocks or the fdpass drop-in when conflict-free; else hand off.
 
 Desktop users who set `clamonacc.prevention=true` see a health banner that
 honestly says oysterAV does not manage host blocking — but the product goal is
@@ -112,18 +113,21 @@ Do not hardcode a single conf path. Discover via portable probes (see
 | **0** | Document co-control + operator guide | Done |
 | **1** | Multi-distro **probe** + classify: `impossible` \| `notify_only` \| `block_misconfigured` \| `blocking` \| `handoff_required` | Done (`oyst_core/packs/clamd_onaccess.py`) |
 | **2** | Honest health banner from probe (replace hardcoded `prevention_enforced=false`) | Done (`aggregate_status` + `assess_health`) |
-| **3** | Threat-response bridge: VirusEvent → oysterAV quarantine/notify/audit; CLI first (ADR-002); fix process-mode `--exclude-list` helper allowlist debt | Future |
-| **4** (deferred) | Safe concert: systemd `--fdpass` drop-in; optional surgical ensure of whitelisted OnAccess keys when unmarked/conflict-free; else handoff | Future |
+| **3** | Threat-response bridge: VirusEvent → oysterAV quarantine/notify/audit; CLI first (ADR-002); fix process-mode `--exclude-list` helper allowlist debt | Done (`oyst_core/virusevent.py`, helper allowlist) |
+| **4** | Safe concert: systemd `--fdpass` drop-in; surgical ensure of whitelisted OnAccess / VirusEvent keys when unmarked/conflict-free; else handoff | Done (`oyst_core/packs/clamd_ensure.py`, `helper_clamd`, CLI/RPC/GUI) |
+| **4.1** | Robustness: preserve vendor ExecStart for fdpass; sidecar visibility in probe/health; clamd socket wait before clamonacc restart; DisableCache probe + surgical ensure | Done (`helper_clamd_unit.py`, probe fields, `clamav ensure-disable-cache`) |
 
 GUI surfaces for any of the above follow ADR-007 (CLI/RPC first; no silent
 GUI-only host edits).
 
-### Explicit non-goals (Phases 0–2)
+### Explicit non-goals (Phases 0–4.1)
 
-- No helper writers for `OnAccessPrevention` in this change set (Phase 4 deferred).
-- No GUI prevention toggle yet.
+- No wholesale rewrite of package-managed clamd conf.
+- No free-form conf editor in the GUI.
 - No claim that `--fdpass` alone enables blocking (`OnAccessPrevention` is separate).
 - No owning `/` (or equivalent) under prevention.
+- No auto-merge of `.rpmnew` / `.dpkg-dist` (handoff only).
+- No MaxThreads / TCPAddr surgical ensure in 4.1 (tuning, not safety).
 
 ## Consequences
 
