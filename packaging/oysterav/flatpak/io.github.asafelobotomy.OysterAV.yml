@@ -22,6 +22,7 @@ modules:
       - pip3 install --prefix=/app .
       # Host/menu .desktop (flatpak rewrites Exec on export)
       - install -Dm644 packaging/oysterav/io.github.asafelobotomy.OysterAV.desktop /app/share/applications/io.github.asafelobotomy.OysterAV.desktop
+      - install -Dm644 packaging/oysterav/flatpak/io.github.asafelobotomy.OysterAV.metainfo.xml /app/share/metainfo/io.github.asafelobotomy.OysterAV.metainfo.xml
       # Tray / theme icons (Icon=oysterav)
       - install -Dm644 branding/hicolor/16x16/apps/oysterav.png /app/share/icons/hicolor/16x16/apps/oysterav.png
       - install -Dm644 branding/hicolor/32x32/apps/oysterav.png /app/share/icons/hicolor/32x32/apps/oysterav.png

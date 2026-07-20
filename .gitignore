@@ -4,6 +4,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+build-dir/
+repo/
+.fpm-staging/
 .runtime-staging/
 .pytest_cache/
 .mypy_cache/

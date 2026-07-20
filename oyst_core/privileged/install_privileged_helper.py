@@ -11,12 +11,14 @@ from pathlib import Path
 
 from oyst_core.privileged.runner import run_command
 
-HELPER_DIR = Path("/usr/local/lib/oysterav")
+HELPER_DIR = Path("/usr/lib/oysterav")
 HELPER_PATH = HELPER_DIR / "oyst-helper"
+# Legacy path from source installs before packaging alignment.
+HELPER_PATH_LEGACY = Path("/usr/local/lib/oysterav/oyst-helper")
 POLKIT_PATH = Path("/usr/share/polkit-1/actions/io.github.asafelobotomy.policy")
 
-# Bump when action IDs / argv1 annotations change (helper-status reports this).
-POLICY_VERSION = 3
+# Bump when action IDs / argv1 annotations / exec.path change (helper-status reports this).
+POLICY_VERSION = 4
 
 POLKIT_ACTION_IDS = (
     "io.github.asafelobotomy.helper.systemctl",
@@ -175,11 +177,17 @@ def install_privileged_helper(*, prefix: Path | None = None) -> dict[str, object
         helper_path.write_text(_helper_script_text(), encoding="utf-8")
         helper_path.chmod(helper_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         if prefix is None:
-            bin_link = Path("/usr/local/bin/oyst-helper")
+            bin_link = Path("/usr/bin/oyst-helper")
             bin_link.parent.mkdir(parents=True, exist_ok=True)
             if bin_link.is_symlink() or bin_link.exists():
                 bin_link.unlink()
             bin_link.symlink_to(helper_path)
+            legacy_bin = Path("/usr/local/bin/oyst-helper")
+            if legacy_bin.is_symlink() or legacy_bin.exists():
+                try:
+                    legacy_bin.unlink()
+                except OSError:
+                    pass
         polkit_path.parent.mkdir(parents=True, exist_ok=True)
         polkit_path.write_text(build_polkit_policy(), encoding="utf-8")
         if shutil.which("polkitd") and prefix is None:
@@ -203,8 +211,17 @@ def install_privileged_helper(*, prefix: Path | None = None) -> dict[str, object
     }
 
 
+def resolve_installed_helper_path() -> Path | None:
+    """Prefer /usr/lib, then legacy /usr/local/lib, for an installed oyst-helper."""
+    for candidate in (HELPER_PATH, HELPER_PATH_LEGACY):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def helper_status() -> dict[str, object]:
-    installed = HELPER_PATH.is_file() and POLKIT_PATH.is_file()
+    helper = resolve_installed_helper_path()
+    installed = helper is not None and POLKIT_PATH.is_file()
     actions_present: list[str] = []
     policy_text = ""
     if POLKIT_PATH.is_file():
@@ -215,7 +232,7 @@ def helper_status() -> dict[str, object]:
         actions_present = [aid for aid in POLKIT_ACTION_IDS if aid in policy_text]
     return {
         "installed": installed,
-        "helper_path": str(HELPER_PATH),
+        "helper_path": str(helper) if helper else str(HELPER_PATH),
         "polkit_path": str(POLKIT_PATH),
         "policy_version": POLICY_VERSION,
         "actions": list(POLKIT_ACTION_IDS),

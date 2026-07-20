@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.asafelobotomy.OysterAV</id>
+  <name>oysterAV</name>
+  <summary>Linux security orchestrator</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer_name>oysterAV contributors</developer_name>
+  <url type="homepage">https://github.com/asafelobotomy/oysterAV</url>
+  <url type="bugtracker">https://github.com/asafelobotomy/oysterAV/issues</url>
+  <description>
+    <p>
+      oysterAV orchestrates mature Linux security tools (ClamAV, rkhunter, Lynis, and more)
+      via a CLI-first backend and a thin GTK4 GUI client. The GUI talks only to OystClient
+      over local JSON-RPC — it never runs security binaries directly.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.asafelobotomy.OysterAV.desktop</launchable>
+  <provides>
+    <binary>oysterav</binary>
+    <binary>oyst-cli</binary>
+  </provides>
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-07-19"/>
+  </releases>
+</component>

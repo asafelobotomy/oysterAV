@@ -98,3 +98,7 @@ See [packaging/oysterav/flatpak/README.md](packaging/oysterav/flatpak/README.md)
 ## License
 
 [GPL-3.0-or-later](LICENSE) — GNU General Public License v3 or later.
+
+## Releasing
+
+See [docs/packaging/release.md](docs/packaging/release.md) for VERSION bumps and release assets.
