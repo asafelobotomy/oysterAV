@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from oyst_cli.confirm import require_confirm
 from oyst_cli.options import json_option
 from oyst_cli.output import emit
 from oyst_core.config import set_config_value
@@ -71,18 +72,22 @@ def clamav_clamd_start(json_mode: bool) -> None:
 
 
 @clamav_clamd_group.command("stop")
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def clamav_clamd_stop(json_mode: bool) -> None:
+def clamav_clamd_stop(confirm: bool, json_mode: bool) -> None:
     """Stop clamd."""
+    require_confirm(confirm, message="--confirm required to stop clamd")
     ok, msg = ClamAVPack().clamd_stop()
     emit({"ok": ok, "message": msg}, json_mode=json_mode)
     raise SystemExit(0 if ok else 2)
 
 
 @clamav_clamd_group.command("restart")
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def clamav_clamd_restart(json_mode: bool) -> None:
+def clamav_clamd_restart(confirm: bool, json_mode: bool) -> None:
     """Restart clamd."""
+    require_confirm(confirm, message="--confirm required to restart clamd")
     ok, msg = ClamAVPack().clamd_restart()
     emit({"ok": ok, "message": msg}, json_mode=json_mode)
     raise SystemExit(0 if ok else 2)

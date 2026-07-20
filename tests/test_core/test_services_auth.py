@@ -36,7 +36,13 @@ def test_polkit_policy_has_argv1_scoped_actions() -> None:
     assert 'org.freedesktop.policykit.exec.argv1">rkhunter-whitelist<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">install-script<' in policy
     assert "io.github.asafelobotomy.run-helper" not in policy
-    assert POLICY_VERSION >= 4
+    assert POLICY_VERSION >= 5
+    assert 'allow_active">auth_admin<' in policy or "auth_admin" in policy
+    # run action must not use auth_admin_keep
+    run_idx = policy.find("helper.run")
+    assert run_idx != -1
+    run_slice = policy[run_idx : run_idx + 500]
+    assert "auth_admin_keep" not in run_slice
     assert "/usr/lib/oysterav/oyst-helper" in policy
 
 

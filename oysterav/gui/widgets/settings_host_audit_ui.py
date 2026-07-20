@@ -108,20 +108,38 @@ def on_fail2ban_unban(page: SettingsPage, row: Adw.EntryRow, *_args: object) -> 
     if not ip:
         return
 
-    def worker() -> dict[str, Any]:
-        return request_fail2ban_unban(page.client, ip)
+    dialog = Adw.MessageDialog(
+        transient_for=page._window,
+        heading="Unban IP in fail2ban?",
+        body=f"This will unban {ip} (requires polkit authentication).",
+    )
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("unban", "Unban")
+    dialog.set_response_appearance("unban", Adw.ResponseAppearance.DESTRUCTIVE)
+    dialog.set_default_response("cancel")
+    dialog.set_close_response("cancel")
 
-    def done(result: dict[str, Any]) -> bool:
-        if result.get("ok"):
-            page._set_status(f"Unbanned {ip}")
-            row.set_text("")
-        else:
-            show_command_dialog(
-                page._window,
-                heading="fail2ban unban failed",
-                body=str(result.get("message") or "failed"),
-                copy_text=f"oyst-cli fail2ban unban {ip}",
-            )
-        return False
+    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
+        if response != "unban":
+            return
 
-    run_in_thread(worker, done, page._apply_error)
+        def worker() -> dict[str, Any]:
+            return request_fail2ban_unban(page.client, ip)
+
+        def done(result: dict[str, Any]) -> bool:
+            if result.get("ok"):
+                page._set_status(f"Unbanned {ip}")
+                row.set_text("")
+            else:
+                show_command_dialog(
+                    page._window,
+                    heading="fail2ban unban failed",
+                    body=str(result.get("message") or "failed"),
+                    copy_text=f"oyst-cli fail2ban unban {ip} --confirm",
+                )
+            return False
+
+        run_in_thread(worker, done, page._apply_error)
+
+    dialog.connect("response", on_response)
+    dialog.present()

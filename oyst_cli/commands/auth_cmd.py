@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from oyst_cli.confirm import require_confirm
 from oyst_cli.output import emit
 from oyst_core.privileged.auth_grant import (
     auth_status,
@@ -36,9 +37,11 @@ def auth_status_cmd(json_mode: bool) -> None:
     default=None,
     help="Unix username to grant (default: current user). Requires root.",
 )
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def auth_grant_cmd(username: str | None, json_mode: bool) -> None:
+def auth_grant_cmd(username: str | None, confirm: bool, json_mode: bool) -> None:
     """Allow service start/stop without password (polkit rules.d; requires root)."""
+    require_confirm(confirm, message="--confirm required to grant passwordless service lifecycle")
     result = grant_service_lifecycle(username)
     emit(result, json_mode=json_mode)
     if not result.get("ok"):
@@ -46,9 +49,11 @@ def auth_grant_cmd(username: str | None, json_mode: bool) -> None:
 
 
 @auth_group.command("revoke-service-lifecycle")
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def auth_revoke_cmd(json_mode: bool) -> None:
+def auth_revoke_cmd(confirm: bool, json_mode: bool) -> None:
     """Remove passwordless service-lifecycle grant (requires root)."""
+    require_confirm(confirm, message="--confirm required to revoke passwordless service lifecycle")
     result = revoke_service_lifecycle()
     emit(result, json_mode=json_mode)
     if not result.get("ok"):

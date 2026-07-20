@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import getpass
 import os
 import re
 import textwrap
@@ -10,6 +9,8 @@ from pathlib import Path
 
 from oyst_core.privileged.install_privileged_helper import SERVICE_LIFECYCLE_ACTION_IDS
 from oyst_core.privileged.runner import run_command
+from oyst_core.privileged.safe_write import write_text_nofollow
+from oyst_core.schedule_linger import current_username
 
 RULES_PATH = Path("/etc/polkit-1/rules.d/49-oysterav-service-lifecycle.rules")
 # World-readable stamp: rules.d is typically root:polkitd mode 750, so unprivileged
@@ -50,8 +51,7 @@ def build_service_lifecycle_rules(user: str) -> str:
 
 def _write_grant_stamp(user: str, stamp_path: Path) -> None:
     stamp_path.parent.mkdir(parents=True, exist_ok=True)
-    stamp_path.write_text(f"user={user}\n", encoding="utf-8")
-    stamp_path.chmod(0o644)
+    write_text_nofollow(stamp_path, f"user={user}\n", mode=0o644)
 
 
 def _read_grant_stamp(stamp_path: Path) -> str | None:
@@ -95,7 +95,7 @@ def auth_status(
                     "rules_path": str(path),
                     "granted_user": None,
                     "actions": list(SERVICE_LIFECYCLE_ACTION_IDS),
-                    "current_user": getpass.getuser(),
+                    "current_user": current_username(),
                     "error": str(exc),
                     "stamp_path": str(stamp),
                 }
@@ -109,7 +109,7 @@ def auth_status(
         "rules_path": str(path),
         "granted_user": granted_user,
         "actions": list(SERVICE_LIFECYCLE_ACTION_IDS),
-        "current_user": getpass.getuser(),
+        "current_user": current_username(),
         "stamp_path": str(stamp),
     }
 
@@ -127,7 +127,7 @@ def grant_service_lifecycle(
             "rules_path": str(RULES_PATH),
         }
 
-    target_user = _validate_username(user or getpass.getuser())
+    target_user = _validate_username(user or current_username())
     path = (
         prefix / "etc" / "polkit-1" / "rules.d" / "49-oysterav-service-lifecycle.rules"
         if prefix
@@ -140,7 +140,7 @@ def grant_service_lifecycle(
     )
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(build_service_lifecycle_rules(target_user), encoding="utf-8")
+        write_text_nofollow(path, build_service_lifecycle_rules(target_user), mode=0o644)
         _write_grant_stamp(target_user, stamp)
         if prefix is None:
             run_command(["systemctl", "reload", "polkit"], timeout=15)

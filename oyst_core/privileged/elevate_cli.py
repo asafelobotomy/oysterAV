@@ -6,15 +6,15 @@ tools from oysterav/. Does not use oyst-helper (chicken-and-egg for install).
 
 from __future__ import annotations
 
-import getpass
 import json
 import os
 import re
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 
 from oyst_core.privileged.runner import CommandResult, which
-from oyst_core.schedule_util import resolve_oyst_cli_path
+from oyst_core.schedule_linger import is_flatpak, resolve_oyst_cli_path
 
 _USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 
@@ -33,11 +33,12 @@ def _validate_elevated_argv(argv: Sequence[str]) -> list[str]:
     parts = [str(a) for a in argv]
     if not parts:
         raise ValueError("empty elevated argv")
-    # Strip trailing --json for base matching; re-append after validation.
+    # Strip trailing --json / optional --confirm for base matching.
     want_json = False
     if parts[-1] == "--json":
         want_json = True
         parts = parts[:-1]
+    parts = [p for p in parts if p != "--confirm"]
     user: str | None = None
     if len(parts) >= 4 and parts[0:2] == ["auth", "grant-service-lifecycle"]:
         if parts[2] != "--user" or len(parts) != 4:
@@ -53,9 +54,22 @@ def _validate_elevated_argv(argv: Sequence[str]) -> list[str]:
     out = list(base)
     if user is not None:
         out.extend(["--user", user])
+    if base in {
+        ("auth", "grant-service-lifecycle"),
+        ("auth", "revoke-service-lifecycle"),
+    }:
+        out.append("--confirm")
     if want_json:
         out.append("--json")
     return out
+
+
+def _host_oyst_cli_for_flatpak() -> str:
+    """Prefer host package path when elevating from inside Flatpak."""
+    for path in ("/usr/bin/oyst-cli", "/usr/local/bin/oyst-cli"):
+        if Path(path).is_file():
+            return path
+    return "/usr/bin/oyst-cli"
 
 
 def run_elevated_oyst_cli(
@@ -63,14 +77,37 @@ def run_elevated_oyst_cli(
     *,
     timeout: int = 300,
 ) -> CommandResult:
-    """Run ``pkexec <oyst-cli> <allowlisted argv>`` (or direct if already root)."""
+    """Run ``pkexec <oyst-cli> <allowlisted argv>`` (or direct if already root).
+
+    Inside Flatpak, uses ``flatpak-spawn --host pkexec …`` so Polkit runs on the host.
+    Host ``oyst-cli`` must be installed (distro package) for chicken-egg bootstrap.
+    """
     sanitized = _validate_elevated_argv(argv)
-    cli = resolve_oyst_cli_path()
-    if not cli:
-        return CommandResult(1, "", "oyst-cli not found on PATH or in venv")
     if os.geteuid() == 0:
+        cli = resolve_oyst_cli_path(for_elevation=True)
+        if not cli:
+            return CommandResult(
+                1,
+                "",
+                "oyst-cli not found under root-owned /usr/bin or /usr/local/bin "
+                "(required for elevation)",
+            )
         cmd = [cli, *sanitized]
+    elif is_flatpak():
+        spawn = which("flatpak-spawn")
+        if not spawn:
+            return CommandResult(1, "", "flatpak-spawn required for Flatpak elevation")
+        host_cli = _host_oyst_cli_for_flatpak()
+        cmd = [spawn, "--host", "pkexec", host_cli, *sanitized]
     else:
+        cli = resolve_oyst_cli_path(for_elevation=True)
+        if not cli:
+            return CommandResult(
+                1,
+                "",
+                "oyst-cli not found under root-owned /usr/bin or /usr/local/bin "
+                "(required for pkexec elevation)",
+            )
         pkexec = which("pkexec")
         if not pkexec:
             return CommandResult(1, "", "pkexec required for privileged operation")
@@ -133,8 +170,11 @@ def grant_service_lifecycle_elevated(user: str | None = None) -> dict[str, objec
     """Grant passwordless service-lifecycle via Polkit (or directly if root)."""
     from oyst_core.audit import SecurityAudit
     from oyst_core.privileged.auth_grant import auth_status, grant_service_lifecycle
+    from oyst_core.schedule_linger import current_username
 
-    target = user or getpass.getuser()
+    # Ignore caller-supplied user (confused-deputy); always grant for this UID.
+    _ = user
+    target = current_username()
     if os.geteuid() == 0:
         result = grant_service_lifecycle(target)
     else:

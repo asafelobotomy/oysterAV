@@ -18,12 +18,50 @@ from oyst_core.schedule_util import (
 )
 
 
-def test_resolve_oyst_cli_path_prefers_existing_file(tmp_path: Path, monkeypatch) -> None:
-    cli = tmp_path / "oyst-cli"
+def test_resolve_oyst_cli_path_falls_back_when_no_system_binary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").write_text("", encoding="utf-8")
+    monkeypatch.setattr("oyst_core.schedule_linger.sys.executable", str(venv_bin / "python"))
+    cli = tmp_path / "bin" / "oyst-cli"
+    cli.parent.mkdir()
     cli.write_text("#!/bin/sh\n", encoding="utf-8")
     cli.chmod(0o755)
     with patch("oyst_core.schedule_linger.which", return_value=str(cli)):
-        assert resolve_oyst_cli_path() == str(cli)
+        # System paths win when present; otherwise which() is used after venv/home.
+        result = resolve_oyst_cli_path()
+        if Path("/usr/bin/oyst-cli").is_file():
+            assert result == "/usr/bin/oyst-cli"
+        elif Path("/usr/local/bin/oyst-cli").is_file():
+            assert result == "/usr/local/bin/oyst-cli"
+        else:
+            assert result == str(cli)
+
+
+def test_resolve_oyst_cli_path_for_elevation_skips_user_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").write_text("", encoding="utf-8")
+    (venv_bin / "oyst-cli").write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr("oyst_core.schedule_linger.sys.executable", str(venv_bin / "python"))
+    with patch("oyst_core.schedule_linger.which", return_value=str(venv_bin / "oyst-cli")):
+        elevated = resolve_oyst_cli_path(for_elevation=True)
+    if elevated is not None:
+        assert elevated in ("/usr/bin/oyst-cli", "/usr/local/bin/oyst-cli")
+    else:
+        assert resolve_oyst_cli_path() is not None
 
 
 @pytest.mark.parametrize(

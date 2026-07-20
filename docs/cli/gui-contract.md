@@ -370,6 +370,11 @@ See [pack-commands.md](pack-commands.md) for the full pack inventory.
 | Setup | 5-page wizard with granular RPC calls | Single `setup run` batch workflow |
 | Failure UX | Copy-to-clipboard command dialogs | Commands are run directly; use `--json` for scripting |
 | AUR installs | Per-pack modal confirm | `--confirm-aur` on install/setup |
+| fail2ban unban | MessageDialog before RPC | `--confirm` required |
+| Update all | MessageDialog (notes rkhunter propupd) | `updates apply --confirm` |
+| Quarantine add | File picker (findings use dialog) | `quarantine add --confirm` |
+| RPC confirms | UX dialogs in GUI; not an RPC auth flag | `--confirm` is CLI footgun prevention only |
+| data paths | Uses `~/.local/share/oysterav` (hardcoded; ignores `XDG_DATA_HOME`) | Same |
 
 ---
 

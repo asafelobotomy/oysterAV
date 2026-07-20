@@ -25,16 +25,22 @@ def autostart_path() -> Path:
 
 
 def resolve_oysterav_exec() -> str:
-    """Resolve command used in .desktop Exec= lines."""
+    """Resolve command used in .desktop Exec= lines (system-first, not PATH-first)."""
     if is_flatpak():
         return f"flatpak run {APP_ID}"
-    found = shutil.which("oysterav")
-    if found:
-        return found
-    # Prefer the interpreter's sibling if installed in a venv
+    for path in ("/usr/bin/oysterav", "/usr/local/bin/oysterav"):
+        candidate = Path(path)
+        if candidate.is_file():
+            return str(candidate.resolve())
     sibling = Path(sys.executable).resolve().parent / "oysterav"
     if sibling.is_file():
         return str(sibling)
+    home_local = Path.home() / ".local" / "bin" / "oysterav"
+    if home_local.is_file():
+        return str(home_local.resolve())
+    found = shutil.which("oysterav")
+    if found:
+        return found
     return "oysterav"
 
 
@@ -95,8 +101,16 @@ def probe_tray_library() -> dict[str, object]:
     }
 
 
+def _quote_desktop_exec(command: str) -> str:
+    """Quote Exec= per Desktop Entry rules; escape % as %%."""
+    escaped = command.replace("%", "%%")
+    if any(ch in escaped for ch in (" ", "\t", '"', "\\")):
+        return '"' + escaped.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return escaped
+
+
 def build_desktop_entry(*, minimized: bool = False, for_autostart: bool = True) -> str:
-    exec_cmd = resolve_oysterav_exec()
+    exec_cmd = _quote_desktop_exec(resolve_oysterav_exec())
     if minimized:
         exec_cmd = f"{exec_cmd} --minimized"
     lines = [

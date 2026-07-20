@@ -14,7 +14,9 @@ from oyst_core.runtime.manifest import record_artifact, runtime_bin_dir, runtime
 from oyst_core.runtime.progress import ProgressCallback, emit_progress
 from oyst_core.runtime.resolver import copy_system_tool, resolve_tool
 
-CHKROOTKIT_TARBALL = "ftp://ftp.chkrootkit.org/pub/seg/pac/chkrootkit.tar.gz"
+CHKROOTKIT_TARBALL = (
+    "https://deb.debian.org/debian/pool/main/c/chkrootkit/chkrootkit_0.58b.orig.tar.gz"
+)
 RKHUNTER_TARBALL = (
     "https://downloads.sourceforge.net/project/rkhunter/rkhunter/1.4.6/rkhunter-1.4.6.tar.gz"
 )

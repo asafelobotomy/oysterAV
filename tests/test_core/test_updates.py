@@ -199,7 +199,7 @@ def test_updates_apply_cli_json() -> None:
         "message": "done",
     }
     with patch("oyst_cli.commands.updates_cmd.apply_all_updates", return_value=payload):
-        result = runner.invoke(cli, ["updates", "apply", "--json"])
+        result = runner.invoke(cli, ["updates", "apply", "--confirm", "--json"])
     assert result.exit_code == 0
     assert '"ok": true' in result.output
 
@@ -214,5 +214,11 @@ def test_updates_apply_cli_failure_exits_2() -> None:
         "message": "failed",
     }
     with patch("oyst_cli.commands.updates_cmd.apply_all_updates", return_value=payload):
-        result = runner.invoke(cli, ["updates", "apply", "--json"])
+        result = runner.invoke(cli, ["updates", "apply", "--confirm", "--json"])
     assert result.exit_code == 2
+
+
+def test_updates_apply_requires_confirm() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["updates", "apply", "--json"])
+    assert result.exit_code == 4

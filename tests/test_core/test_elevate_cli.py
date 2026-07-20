@@ -26,7 +26,20 @@ def test_validate_elevated_argv_allows_install() -> None:
 def test_validate_elevated_argv_allows_grant_with_user() -> None:
     assert _validate_elevated_argv(
         ["auth", "grant-service-lifecycle", "--user", "alice", "--json"],
-    ) == ["auth", "grant-service-lifecycle", "--user", "alice", "--json"]
+    ) == [
+        "auth",
+        "grant-service-lifecycle",
+        "--user",
+        "alice",
+        "--confirm",
+        "--json",
+    ]
+    assert _validate_elevated_argv(["auth", "revoke-service-lifecycle", "--json"]) == [
+        "auth",
+        "revoke-service-lifecycle",
+        "--confirm",
+        "--json",
+    ]
 
 
 def test_validate_elevated_argv_rejects_shell() -> None:
@@ -42,9 +55,10 @@ def test_run_elevated_oyst_cli_uses_pkexec_when_not_root() -> None:
     mock_proc = MagicMock(returncode=0, stdout='{"ok": true}', stderr="")
     with (
         patch("oyst_core.privileged.elevate_cli.os.geteuid", return_value=1000),
+        patch("oyst_core.privileged.elevate_cli.is_flatpak", return_value=False),
         patch(
             "oyst_core.privileged.elevate_cli.resolve_oyst_cli_path",
-            return_value="/opt/oyst-cli",
+            return_value="/usr/bin/oyst-cli",
         ),
         patch("oyst_core.privileged.elevate_cli.which", return_value="/usr/bin/pkexec"),
         patch("oyst_core.privileged.elevate_cli.subprocess.run", return_value=mock_proc) as run,
@@ -55,9 +69,28 @@ def test_run_elevated_oyst_cli_uses_pkexec_when_not_root() -> None:
     cmd = run.call_args[0][0]
     assert cmd == [
         "/usr/bin/pkexec",
-        "/opt/oyst-cli",
+        "/usr/bin/oyst-cli",
         "install-privileged-helper",
         "--json",
+    ]
+
+
+def test_run_elevated_oyst_cli_flatpak_uses_host_pkexec() -> None:
+    mock_proc = MagicMock(returncode=0, stdout='{"ok": true}', stderr="")
+    with (
+        patch("oyst_core.privileged.elevate_cli.os.geteuid", return_value=1000),
+        patch("oyst_core.privileged.elevate_cli.is_flatpak", return_value=True),
+        patch("oyst_core.privileged.elevate_cli.which", return_value="/usr/bin/flatpak-spawn"),
+        patch("oyst_core.privileged.elevate_cli.subprocess.run", return_value=mock_proc) as run,
+    ):
+        res = run_elevated_oyst_cli(["install-privileged-helper", "--json"])
+    assert res.returncode == 0
+    cmd = run.call_args[0][0]
+    assert cmd[:4] == [
+        "/usr/bin/flatpak-spawn",
+        "--host",
+        "pkexec",
+        "/usr/bin/oyst-cli",
     ]
 
 

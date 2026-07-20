@@ -166,3 +166,32 @@ def test_contained_vault_path_allows_nested(
     nested.parent.mkdir(parents=True)
     nested.write_bytes(b"1")
     assert vault._contained_vault_path(nested) == nested.resolve()
+
+
+def test_quarantine_add_rejects_symlink_and_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = _vault(tmp_path, monkeypatch)
+    target = tmp_path / "real.bin"
+    target.write_bytes(b"x")
+    link = tmp_path / "link.bin"
+    link.symlink_to(target)
+    with pytest.raises(ValueError, match="symlink"):
+        vault.add(str(link), "t")
+    directory = tmp_path / "adir"
+    directory.mkdir()
+    with pytest.raises(ValueError, match="regular file"):
+        vault.add(str(directory), "t")
+
+
+def test_quarantine_restore_refuses_existing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = _vault(tmp_path, monkeypatch)
+    sample = tmp_path / "sample.bin"
+    sample.write_bytes(b"payload")
+    entry = vault.add(str(sample), "t")
+    # Recreate original path so restore hits O_EXCL
+    sample.write_bytes(b"occupied")
+    with pytest.raises(ValueError, match="overwrite"):
+        vault.restore(entry.id)

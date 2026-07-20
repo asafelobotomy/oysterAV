@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from oyst_cli.confirm import require_confirm
 from oyst_cli.output import emit
 from oyst_core.services import SERVICE_NAMES, services_status, set_service
 
@@ -28,9 +29,11 @@ def services_status_cmd(json_mode: bool) -> None:
     default=False,
     help="Also enable/disable at boot (systemctl enable-now / disable-now).",
 )
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def services_set_cmd(name: str, state: str, boot: bool, json_mode: bool) -> None:
+def services_set_cmd(name: str, state: str, boot: bool, confirm: bool, json_mode: bool) -> None:
     """Turn a service on or off (prompts via polkit / oyst-helper)."""
+    require_confirm(confirm, message="--confirm required to change service state")
     result = set_service(name, state, boot=boot)  # type: ignore[arg-type]
     emit(result, json_mode=json_mode)
     if not result.get("ok"):

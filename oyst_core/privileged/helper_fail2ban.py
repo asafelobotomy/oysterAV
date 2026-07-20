@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from oyst_core.privileged.helper_firewall import _has_flag, _parse_flag
+from oyst_core.privileged.safe_write import write_text_nofollow
 from oyst_core.privileged.validators import validate_ip, validate_jail
 
 
@@ -22,7 +23,7 @@ def _persist_fail2ban_ignoreip(jail: str, ip: str) -> None:
     dropin_dir = Path("/etc/fail2ban/jail.d")
     dropin_dir.mkdir(parents=True, exist_ok=True)
     dropin = dropin_dir / f"oysterav-{jail}-ignore.conf"
-    dropin.write_text(f"[{jail}]\nignoreip = {ip}\n", encoding="utf-8")
+    write_text_nofollow(dropin, f"[{jail}]\nignoreip = {ip}\n", mode=0o644)
     _run_fail2ban_client(["fail2ban-client", "reload"])
 
 

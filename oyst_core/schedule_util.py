@@ -8,6 +8,7 @@ from __future__ import annotations
 from oyst_core.schedule_linger import (
     disable_linger,
     enable_linger,
+    escape_systemd_exec_arg,
     get_linger_status,
     is_flatpak,
     resolve_oyst_cli_path,
@@ -44,6 +45,7 @@ __all__ = [
     "build_on_calendar",
     "disable_linger",
     "enable_linger",
+    "escape_systemd_exec_arg",
     "get_linger_status",
     "get_schedule_status",
     "get_timer_status",

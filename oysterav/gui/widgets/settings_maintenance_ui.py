@@ -255,32 +255,54 @@ def on_setup_wizard(page: SettingsPage, *_args: object) -> None:
 
 
 def on_update_all(page: SettingsPage, *_args: object) -> None:
-    page.update_all_btn.set_sensitive(False)
-    page.maintenance_status_row.set_subtitle("Running Update all…")
-    page._set_status("Running Update all…")
+    dialog = Adw.MessageDialog(
+        transient_for=page._window,
+        heading="Run Update all?",
+        body=(
+            "This refreshes pack definitions and may run rkhunter --propupd "
+            "(updates the file property baseline). Continue?"
+        ),
+    )
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("run", "Update all")
+    dialog.set_response_appearance("run", Adw.ResponseAppearance.SUGGESTED)
+    dialog.set_default_response("cancel")
+    dialog.set_close_response("cancel")
 
-    def done(result: dict[str, Any]) -> bool:
-        page.update_all_btn.set_sensitive(True)
-        raw_steps = result.get("steps")
-        steps: list[Any] = list(raw_steps) if isinstance(raw_steps, list) else []
-        ok_count = sum(1 for s in steps if isinstance(s, dict) and s.get("ok"))
-        msg = str(result.get("message") or f"Update all finished ({ok_count}/{len(steps)} OK)")
-        page.maintenance_status_row.set_subtitle(msg)
-        page._set_status(msg)
-        if page._on_updates_changed:
-            page._on_updates_changed()
-        reload_security_packs(page)
-        return False
+    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
+        if response != "run":
+            return
+        page.update_all_btn.set_sensitive(False)
+        page.maintenance_status_row.set_subtitle("Running Update all…")
+        page._set_status("Running Update all…")
 
-    def fail(message: str) -> bool:
-        page.update_all_btn.set_sensitive(True)
-        page.maintenance_status_row.set_subtitle(f"Update all failed: {message}")
-        page._set_status(f"Update all failed: {message}")
-        if page._on_updates_changed:
-            page._on_updates_changed()
-        return False
+        def done(result: dict[str, Any]) -> bool:
+            page.update_all_btn.set_sensitive(True)
+            raw_steps = result.get("steps")
+            steps: list[Any] = list(raw_steps) if isinstance(raw_steps, list) else []
+            ok_count = sum(1 for s in steps if isinstance(s, dict) and s.get("ok"))
+            msg = str(
+                result.get("message") or f"Update all finished ({ok_count}/{len(steps)} OK)",
+            )
+            page.maintenance_status_row.set_subtitle(msg)
+            page._set_status(msg)
+            if page._on_updates_changed:
+                page._on_updates_changed()
+            reload_security_packs(page)
+            return False
 
-    run_in_thread(lambda: request_updates_apply(page.client), done, fail)
+        def fail(message: str) -> bool:
+            page.update_all_btn.set_sensitive(True)
+            page.maintenance_status_row.set_subtitle(f"Update all failed: {message}")
+            page._set_status(f"Update all failed: {message}")
+            if page._on_updates_changed:
+                page._on_updates_changed()
+            return False
+
+        run_in_thread(lambda: request_updates_apply(page.client), done, fail)
+
+    dialog.connect("response", on_response)
+    dialog.present()
 
 
 def on_post_update(page: SettingsPage, *_args: object) -> None:

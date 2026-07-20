@@ -18,7 +18,7 @@ HELPER_PATH_LEGACY = Path("/usr/local/lib/oysterav/oyst-helper")
 POLKIT_PATH = Path("/usr/share/polkit-1/actions/io.github.asafelobotomy.policy")
 
 # Bump when action IDs / argv1 annotations / exec.path change (helper-status reports this).
-POLICY_VERSION = 4
+POLICY_VERSION = 5
 
 POLKIT_ACTION_IDS = (
     "io.github.asafelobotomy.helper.systemctl",
@@ -44,10 +44,44 @@ HELPER_SCRIPT = textwrap.dedent(
     """,
 )
 
+_TRUSTED_BIN_PREFIXES = ("/usr/bin/", "/usr/local/bin/")
 
-def _helper_script_text() -> str:
-    """Bind the helper to the interpreter that has oyst_core installed."""
-    return HELPER_SCRIPT.format(python=sys.executable)
+
+def _is_root_owned_system_bin(path: Path) -> bool:
+    try:
+        resolved = path.resolve()
+        st = resolved.stat()
+    except OSError:
+        return False
+    if st.st_uid != 0:
+        return False
+    text = str(resolved)
+    return text.startswith(_TRUSTED_BIN_PREFIXES)
+
+
+def _resolve_trusted_helper_python(*, allow_untrusted: bool) -> str:
+    """Prefer a root-owned system interpreter; refuse user/venv shebangs for real installs."""
+    for candidate in ("/usr/bin/python3", "/usr/bin/python"):
+        path = Path(candidate)
+        if path.is_file() and _is_root_owned_system_bin(path):
+            return str(path.resolve())
+    exe = Path(sys.executable).resolve()
+    if _is_root_owned_system_bin(exe):
+        return str(exe)
+    if allow_untrusted:
+        return str(exe)
+    raise OSError(
+        "Refusing to install oyst-helper with a user-writable interpreter "
+        f"({sys.executable}). Install oysterAV via a distro package so "
+        "/usr/bin/python3 can import oyst_core.",
+    )
+
+
+def _helper_script_text(*, allow_untrusted_python: bool = False) -> str:
+    """Bind the helper to a trusted system interpreter when possible."""
+    return HELPER_SCRIPT.format(
+        python=_resolve_trusted_helper_python(allow_untrusted=allow_untrusted_python),
+    )
 
 
 def _action_xml(
@@ -97,7 +131,7 @@ def build_polkit_policy() -> str:
                 "or configure scheduling"
             ),
             argv1="run",
-            allow_active="auth_admin_keep",
+            allow_active="auth_admin",
         ),
         _action_xml(
             action_id="io.github.asafelobotomy.helper.firewall",
@@ -174,7 +208,10 @@ def install_privileged_helper(*, prefix: Path | None = None) -> dict[str, object
 
     try:
         helper_dir.mkdir(parents=True, exist_ok=True)
-        helper_path.write_text(_helper_script_text(), encoding="utf-8")
+        helper_path.write_text(
+            _helper_script_text(allow_untrusted_python=prefix is not None),
+            encoding="utf-8",
+        )
         helper_path.chmod(helper_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         if prefix is None:
             bin_link = Path("/usr/bin/oyst-helper")

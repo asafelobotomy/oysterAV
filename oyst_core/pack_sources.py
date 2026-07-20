@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import getpass
 import hashlib
 import os
 import shutil
@@ -13,6 +12,8 @@ from urllib.request import urlopen
 
 from oyst_core.privileged.helper import run_privileged_install_script
 from oyst_core.privileged.runner import CommandResult
+from oyst_core.privileged.safe_write import write_text_nofollow
+from oyst_core.schedule_linger import current_username
 
 MALDET_URL = "https://www.rfxn.com/downloads/maldetect-current.tar.gz"
 # In-repo pin (fail-closed). Update via PR after reviewing a new upstream release.
@@ -60,7 +61,11 @@ def install_maldet_tarball() -> CommandResult:
 
         if is_full_mode():
             return _install_maldet_to_runtime(install_dirs[0])
-        res = run_privileged_install_script(str(install_sh))
+        script_digest = hashlib.sha256(install_sh.read_bytes()).hexdigest()
+        res = run_privileged_install_script(
+            str(install_sh),
+            expected_sha256=script_digest,
+        )
         if res.returncode == 0:
             _configure_maldet_clamav(None)
         return res
@@ -103,7 +108,7 @@ def configure_maldet_clamav(prefix: Path | None = None) -> bool:
         text = text.replace('scan_user_access="0"', 'scan_user_access="1"')
         text = text.replace("scan_user_access=0", "scan_user_access=1")
         if text != original:
-            conf.write_text(text, encoding="utf-8")
+            write_text_nofollow(conf, text, mode=0o644)
             return True
     except OSError:
         return False
@@ -119,7 +124,7 @@ def ensure_maldet_pub_paths(binary: str) -> tuple[bool, str]:
     """
     inspath = Path(binary).resolve().parent
     pub = inspath / "pub"
-    user = getpass.getuser()
+    user = current_username()
     user_dir = pub / user
     try:
         pub.mkdir(parents=True, exist_ok=True)

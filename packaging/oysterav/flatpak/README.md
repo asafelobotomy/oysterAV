@@ -16,8 +16,15 @@ AppStream metadata: `io.github.asafelobotomy.OysterAV.metainfo.xml` (installed i
 
 Flatpak is **host-tool integration**, not a confinement boundary. The manifest grants
 `--filesystem=home`, `--filesystem=host`, and `org.freedesktop.Flatpak` talk so the
-app can reach host scanners and `flatpak-spawn --host systemctl` for user timers.
+app can reach host scanners and `flatpak-spawn --host` for user timers and Polkit
+elevation (`pkexec oyst-cli …` on the host).
 Do not treat the Flatpak as a security sandbox for untrusted files.
+
+**Privileged helper bootstrap:** Install a host package (or copy `oyst-cli` to
+root-owned `/usr/bin/oyst-cli`) before using GUI Install helper / passwordless auth
+from Flatpak. Elevation runs `flatpak-spawn --host pkexec /usr/bin/oyst-cli …` —
+a Flatpak-only install cannot satisfy the chicken-and-egg pkexec path by itself.
+Alternatively run `sudo oyst-cli install-privileged-helper` on the host terminal.
 
 Grant access to the host ClamAV socket if needed via Flatpak permissions.
 

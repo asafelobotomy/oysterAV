@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
+import stat
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -23,6 +25,43 @@ USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 RKHUNTER_FLAGS = frozenset({"--update", "--propupd", "--versioncheck", "--check", "--sk", "--rwo"})
 UNHIDE_MODES = frozenset({"sys", "brute", "quick", "check", "fork", "proc", "reverse"})
 CLAMONACC_FLAGS = frozenset({"--foreground", "-F", "--fdpass"})
+_TRUSTED_PROFILE_PREFIXES = ("/usr/", "/etc/")
+_SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+_TRUSTED_BIN_DIRS = (
+    "/usr/bin",
+    "/usr/sbin",
+    "/bin",
+    "/sbin",
+    "/usr/local/bin",
+    "/usr/local/sbin",
+)
+
+
+def _is_root_owned_file(path: Path) -> bool:
+    try:
+        st = path.stat()
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and st.st_uid == 0 and not (st.st_mode & 0o002)
+
+
+def resolve_trusted_binary(name: str) -> str:
+    """Map a basename to a root-owned absolute path under trusted prefixes."""
+    base = os.path.basename(name)
+    if not base or base in (".", ".."):
+        raise ValueError(f"invalid binary name: {name!r}")
+    for directory in _TRUSTED_BIN_DIRS:
+        candidate = Path(directory) / base
+        if candidate.is_file() and _is_root_owned_file(candidate):
+            return str(candidate.resolve())
+    raise ValueError(f"trusted binary not found for {base!r}")
+
+
+def resolve_trusted_argv(argv: list[str]) -> list[str]:
+    """Rewrite argv[0] to a trusted absolute path."""
+    if not argv:
+        return argv
+    return [resolve_trusted_binary(argv[0]), *argv[1:]]
 
 
 def _validate_package_name(name: str) -> str:
@@ -71,9 +110,7 @@ def _validate_package_manager_argv(base: str, argv: Sequence[str]) -> list[str]:
 
 
 def _validate_scanner_argv(base: str, argv: Sequence[str]) -> list[str]:
-    """Allow constrained privileged scanner invocations (basename + known flags)."""
-    # Preserve caller path (runtime private binaries) but validate by basename.
-    binary = argv[0]
+    """Allow constrained privileged scanner invocations (basename only, like PMs)."""
     args = list(argv[1:])
     if base == "rkhunter":
         if not args:
@@ -83,17 +120,17 @@ def _validate_scanner_argv(base: str, argv: Sequence[str]) -> list[str]:
                 raise ValueError(f"rkhunter flag not allowlisted: {flag}")
         if args[0] not in ("--update", "--propupd", "--versioncheck", "--check"):
             raise ValueError("rkhunter action not allowlisted")
-        return [binary, *args]
+        return [base, *args]
     if base == "chkrootkit":
         if args:
             raise ValueError("chkrootkit takes no arguments")
-        return [binary]
+        return [base]
     if base == "lynis":
         if len(args) < 2 or args[0] != "audit" or args[1] != "system":
             raise ValueError("lynis only allows: audit system ...")
         allowed_opts = {"--no-colors", "--quick", "--profile"}
         i = 2
-        out = [binary, "audit", "system"]
+        out = [base, "audit", "system"]
         while i < len(args):
             opt = args[i]
             if opt not in allowed_opts:
@@ -106,15 +143,18 @@ def _validate_scanner_argv(base: str, argv: Sequence[str]) -> list[str]:
                 profile = Path(args[i])
                 if not profile.is_absolute() or ".." in profile.parts:
                     raise ValueError("lynis profile must be an absolute path")
-                out.append(str(profile))
+                resolved = str(profile)
+                if not resolved.startswith(_TRUSTED_PROFILE_PREFIXES):
+                    raise ValueError("lynis profile must be under /usr or /etc")
+                out.append(resolved)
             i += 1
         return out
     if base in ("unhide", "unhide-linux"):
         if len(args) != 1 or args[0] not in UNHIDE_MODES:
             raise ValueError("unhide requires a single allowlisted mode")
-        return [binary, args[0]]
+        return [base, args[0]]
     if base == "clamonacc":
-        return _validate_clamonacc_argv(binary, args)
+        return _validate_clamonacc_argv(base, args)
     raise ValueError(f"scanner not allowlisted: {base}")
 
 
@@ -156,12 +196,9 @@ def _validate_run_argv(argv: Sequence[str]) -> list[str]:
     raise ValueError(f"command not allowlisted: {base}")
 
 
-def _validate_install_script(path: str) -> Path:
-    script = Path(path).resolve()
+def _install_script_path_ok(script: Path) -> None:
     if script.name != "install.sh":
         raise ValueError("only install.sh scripts are allowed")
-    if not script.is_file():
-        raise ValueError(f"install script not found: {script}")
     parent_name = script.parent.name
     if not parent_name.startswith("maldetect-"):
         raise ValueError("install.sh must live in a maldetect-* directory")
@@ -177,4 +214,45 @@ def _validate_install_script(path: str) -> Path:
             continue
     if not under_tmp:
         raise ValueError("install.sh must be under /tmp or /var/tmp")
+
+
+def open_install_script_fd(path: str, expected_sha256: str) -> int:
+    """Open install.sh with O_NOFOLLOW and verify SHA-256; return a seekable fd."""
+    if not _SHA256_HEX_RE.fullmatch(expected_sha256 or ""):
+        raise ValueError("install-script requires a 64-char sha256 hex digest")
+    script = Path(path).resolve()
+    _install_script_path_ok(script)
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(str(script), flags)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError("install.sh must be a regular file")
+        if st.st_mode & 0o002:
+            raise ValueError("world-writable install.sh refused")
+        digest = hashlib.sha256()
+        while True:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            digest.update(chunk)
+        if digest.hexdigest() != expected_sha256.lower():
+            raise ValueError("install.sh sha256 mismatch")
+        os.lseek(fd, 0, os.SEEK_SET)
+    except Exception:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _validate_install_script(path: str, expected_sha256: str | None = None) -> Path:
+    """Path-shape validation (tests); production exec uses open_install_script_fd."""
+    script = Path(path).resolve()
+    _install_script_path_ok(script)
+    if not script.is_file():
+        raise ValueError(f"install script not found: {script}")
+    if expected_sha256 is not None and not _SHA256_HEX_RE.fullmatch(expected_sha256):
+        raise ValueError("install-script requires a 64-char sha256 hex digest")
     return script

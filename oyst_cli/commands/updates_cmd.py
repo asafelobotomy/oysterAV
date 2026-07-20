@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from oyst_cli.confirm import require_confirm
 from oyst_cli.options import json_option
 from oyst_cli.output import emit
 from oyst_core.updates import apply_all_updates, check_available_updates
@@ -36,9 +37,14 @@ def updates_check_cmd(json_mode: bool) -> None:
 
 
 @updates_group.command("apply")
+@click.option("--confirm", is_flag=True)
 @json_option
-def updates_apply_cmd(json_mode: bool) -> None:
+def updates_apply_cmd(confirm: bool, json_mode: bool) -> None:
     """Upgrade tracked packages, refresh definitions, and run post-update baseline."""
+    require_confirm(
+        confirm,
+        message="--confirm required (includes rkhunter --propupd baseline refresh)",
+    )
     result = apply_all_updates()
     if json_mode:
         emit(result, json_mode=True)

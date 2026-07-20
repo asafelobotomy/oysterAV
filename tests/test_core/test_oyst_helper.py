@@ -150,7 +150,7 @@ def test_oyst_helper_allows_clamonacc_fdpass(tmp_path: Path) -> None:
             f"--include-list={include}",
         ],
     )
-    assert argv[0] == "/usr/bin/clamonacc"
+    assert argv[0] == "clamonacc"
     assert "--foreground" in argv
     assert "--fdpass" in argv
     assert any(a.startswith("--include-list=") for a in argv)

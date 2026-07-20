@@ -275,6 +275,11 @@ def test_ui_theme_default_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     with pytest.raises(KeyError, match="schedule.time"):
         set_config_value("schedule.time", "25:00")
 
+    set_config_value("schedule.packs", "clamav")
+    assert load_config().schedule.packs == ["clamav"]
+    with pytest.raises(KeyError, match="unknown schedule packs"):
+        set_config_value("schedule.packs", "not-a-real-pack")
+
     set_config_value("ui.security_news_sources", "fedora,arch,bogus")
     assert load_config().ui.security_news_sources == ["arch", "fedora"]
 

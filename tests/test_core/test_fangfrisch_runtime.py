@@ -42,7 +42,7 @@ def test_install_fangfrisch_runtime_creates_venv_link(
             pip.write_text("#!/bin/sh\n", encoding="utf-8")
             pip.chmod(0o755)
             return Result()
-        if "fangfrisch" in argv:
+        if any("fangfrisch" in str(a) for a in argv):
             venv_bin.write_text("#!/bin/sh\necho fangfrisch\n", encoding="utf-8")
             venv_bin.chmod(0o755)
             return Result()

@@ -155,7 +155,13 @@ def history_delete_all_cmd(confirm: bool, json_mode: bool) -> None:
     default="json",
     show_default=True,
 )
-@click.option("--output", "-o", required=True, type=click.Path(path_type=str), help="Output file")
+@click.option(
+    "--output",
+    "-o",
+    required=True,
+    type=click.Path(path_type=str),
+    help="Output file under ~/.local/share/oysterav/exports/",
+)
 @json_option
 def history_export_cmd(job_id: str, fmt: str, output: str, json_mode: bool) -> None:
     """Export one scan report to JSON or Markdown."""
@@ -179,7 +185,13 @@ def history_export_cmd(job_id: str, fmt: str, output: str, json_mode: bool) -> N
     default="json",
     show_default=True,
 )
-@click.option("--output", "-o", required=True, type=click.Path(path_type=str), help="Output file")
+@click.option(
+    "--output",
+    "-o",
+    required=True,
+    type=click.Path(path_type=str),
+    help="Output file under ~/.local/share/oysterav/exports/",
+)
 @click.option("--limit", default=500, type=int, show_default=True)
 @json_option
 def history_export_all_cmd(fmt: str, output: str, limit: int, json_mode: bool) -> None:

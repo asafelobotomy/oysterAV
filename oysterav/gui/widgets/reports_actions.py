@@ -10,9 +10,10 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
+from oyst_core.config import data_dir
 from oyst_core.finding_status import MALWARE_PACKS, finding_is_open
 from oysterav.gui.finding_present import is_resolvable_finding
 from oysterav.gui.rpc_actions import (
@@ -304,8 +305,11 @@ def save_export_dialog(
     initial_name: str,
     export_fn: Callable[[str, str], dict[str, Any]],
 ) -> None:
+    exports = data_dir() / "exports"
+    exports.mkdir(parents=True, exist_ok=True)
     dialog = Gtk.FileDialog(title="Save export")
     dialog.set_initial_name(initial_name)
+    dialog.set_initial_folder(Gio.File.new_for_path(str(exports)))
 
     def on_saved(_dlg: Gtk.FileDialog, result: object) -> None:
         try:

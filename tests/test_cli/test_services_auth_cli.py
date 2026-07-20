@@ -48,7 +48,10 @@ def test_services_set_failure_exits_2() -> None:
         "oyst_cli.commands.services_cmd.set_service",
         return_value={"ok": False, "name": "fail2ban", "message": "helper missing"},
     ):
-        result = runner.invoke(cli, ["services", "set", "fail2ban", "on", "--json"])
+        result = runner.invoke(
+            cli,
+            ["services", "set", "fail2ban", "on", "--confirm", "--json"],
+        )
     assert result.exit_code == 2
 
 
@@ -58,9 +61,18 @@ def test_services_set_success() -> None:
         "oyst_cli.commands.services_cmd.set_service",
         return_value={"ok": True, "name": "fail2ban", "state": "off", "message": "ok"},
     ):
-        result = runner.invoke(cli, ["services", "set", "fail2ban", "off", "--json"])
+        result = runner.invoke(
+            cli,
+            ["services", "set", "fail2ban", "off", "--confirm", "--json"],
+        )
     assert result.exit_code == 0
     assert json.loads(result.output)["ok"] is True
+
+
+def test_services_set_requires_confirm() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["services", "set", "fail2ban", "off", "--json"])
+    assert result.exit_code == 4
 
 
 def test_auth_status_json() -> None:
@@ -88,8 +100,17 @@ def test_auth_grant_non_root_exits_2() -> None:
         "oyst_cli.commands.auth_cmd.grant_service_lifecycle",
         return_value={"ok": False, "message": "must be root"},
     ):
-        result = runner.invoke(cli, ["auth", "grant-service-lifecycle", "--json"])
+        result = runner.invoke(
+            cli,
+            ["auth", "grant-service-lifecycle", "--confirm", "--json"],
+        )
     assert result.exit_code == 2
+
+
+def test_auth_grant_requires_confirm() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["auth", "grant-service-lifecycle", "--json"])
+    assert result.exit_code == 4
 
 
 def test_auth_revoke_non_root_exits_2() -> None:
@@ -98,5 +119,14 @@ def test_auth_revoke_non_root_exits_2() -> None:
         "oyst_cli.commands.auth_cmd.revoke_service_lifecycle",
         return_value={"ok": False, "message": "must be root"},
     ):
-        result = runner.invoke(cli, ["auth", "revoke-service-lifecycle", "--json"])
+        result = runner.invoke(
+            cli,
+            ["auth", "revoke-service-lifecycle", "--confirm", "--json"],
+        )
     assert result.exit_code == 2
+
+
+def test_auth_revoke_requires_confirm() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["auth", "revoke-service-lifecycle", "--json"])
+    assert result.exit_code == 4

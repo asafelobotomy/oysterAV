@@ -9,11 +9,13 @@ from oyst_core.config import ScheduleConfig, load_config, save_config, set_confi
 from oyst_core.models import ScanProfile
 from oyst_core.privileged.runner import CommandResult, run_command, which
 from oyst_core.schedule_linger import (
+    escape_systemd_exec_arg,
     get_linger_status,
     is_flatpak,
     resolve_oyst_cli_path,
 )
 from oyst_core.schedule_time import build_on_calendar as _build_on_calendar
+from oyst_core.schedule_validate import validate_schedule_config
 
 UNIT_SERVICE = "oyst-scan.service"
 UNIT_TIMER = "oyst-scan.timer"
@@ -37,36 +39,6 @@ def _user_systemd_dir() -> Path:
 def build_on_calendar(cfg: ScheduleConfig | None = None) -> str:
     """Map ScheduleConfig to a systemd OnCalendar expression."""
     return _build_on_calendar(cfg or load_config().schedule)
-
-
-def _validate_packs(packs: list[str]) -> list[str]:
-    from oyst_core.registry import get_registry
-
-    registry = get_registry()
-    cleaned = [p.strip() for p in packs if p.strip()]
-    unknown = [p for p in cleaned if registry.get(p) is None]
-    if unknown:
-        msg = f"unknown schedule packs: {', '.join(unknown)}"
-        raise ValueError(msg)
-    return cleaned
-
-
-def validate_schedule_config(cfg: ScheduleConfig | None = None) -> ScheduleConfig:
-    sched = (cfg or load_config().schedule).model_copy(deep=True)
-    try:
-        ScanProfile(sched.profile)
-    except ValueError as exc:
-        msg = f"invalid schedule.profile: {sched.profile}"
-        raise ValueError(msg) from exc
-    if sched.profile == ScanProfile.CUSTOM.value and not sched.packs:
-        msg = "schedule.packs required when schedule.profile=custom"
-        raise ValueError(msg)
-    sched.packs = _validate_packs(sched.packs)
-    build_on_calendar(sched)
-    if sched.backend not in ("inherit", "auto", "clamd", "clamscan"):
-        msg = "schedule.backend must be inherit|auto|clamd|clamscan"
-        raise ValueError(msg)
-    return sched
 
 
 def _remove_legacy_units() -> list[str]:
@@ -118,13 +90,26 @@ def apply_schedule(*, smoke_test: bool = False) -> dict[str, object]:
     service = base / UNIT_SERVICE
     timer = base / UNIT_TIMER
     persistent = "true" if sched.persistent else "false"
+    try:
+        exec_cli = escape_systemd_exec_arg(cli_path)
+    except ValueError as exc:
+        return {
+            "ok": False,
+            "service": "",
+            "timer": "",
+            "enabled": False,
+            "active": False,
+            "cli_path": cli_path,
+            "message": str(exc),
+            "linger": get_linger_status(),
+        }
     service.write_text(
         f"""[Unit]
 Description=oysterAV scheduled scan
 
 [Service]
 Type=oneshot
-ExecStart={cli_path} schedule run --json
+ExecStart={exec_cli} schedule run --json
 """,
         encoding="utf-8",
     )
@@ -357,11 +342,14 @@ def update_schedule_settings(**kwargs: object) -> ScheduleConfig:
         elif isinstance(raw, list):
             sched.packs = [str(s).strip() for s in raw if str(s).strip()]
     if "paths" in kwargs and kwargs["paths"] is not None:
+        from oyst_core.config_access import _parse_path_csv
+
         raw = kwargs["paths"]
         if isinstance(raw, str):
-            sched.paths = [s.strip() for s in raw.split(",") if s.strip()]
+            sched.paths = _parse_path_csv(raw, key="schedule.paths")
         elif isinstance(raw, list):
-            sched.paths = [str(s).strip() for s in raw if str(s).strip()]
+            joined = ",".join(str(s) for s in raw)
+            sched.paths = _parse_path_csv(joined, key="schedule.paths")
     if "frequency" in kwargs and kwargs["frequency"] is not None:
         sched.frequency = kwargs["frequency"]  # type: ignore[assignment]
     if "time" in kwargs and kwargs["time"] is not None:

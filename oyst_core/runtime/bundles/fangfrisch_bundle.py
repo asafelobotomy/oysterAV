@@ -44,7 +44,7 @@ def install_fangfrisch_runtime(*, on_progress: ProgressCallback | None = None) -
 
     emit_progress(on_progress, "pip", 40)
     install = subprocess.run(
-        [str(pip), "install", "--upgrade", "pip", "fangfrisch"],
+        [str(pip), "install", "--disable-pip-version-check", "fangfrisch==1.9.2"],
         capture_output=True,
         text=True,
         timeout=900,

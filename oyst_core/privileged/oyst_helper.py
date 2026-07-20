@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Sequence
+from pathlib import Path
 
 from oyst_core.privileged.helper_fail2ban import (
     _build_fail2ban_argv,
@@ -39,6 +44,9 @@ from oyst_core.privileged.helper_validate import (
     _validate_run_argv,
     _validate_scanner_argv,
     _validate_username,
+    open_install_script_fd,
+    resolve_trusted_argv,
+    resolve_trusted_binary,
 )
 
 __all__ = [
@@ -76,11 +84,55 @@ __all__ = [
 def _run_validated(cmd: list[str]) -> int:
     if cmd == ["true"]:
         return 0
-    proc = subprocess.run(cmd, check=False)
-    if cmd[0] == "firewall-cmd" and "--permanent" in cmd and proc.returncode == 0:
-        reload_proc = subprocess.run(["firewall-cmd", "--reload"], check=False)
-        return reload_proc.returncode
+    resolved = resolve_trusted_argv(cmd)
+    proc = subprocess.run(resolved, check=False, env=_secure_exec_env())
+    if os.path.basename(resolved[0]) == "firewall-cmd" and "--permanent" in resolved:
+        if proc.returncode == 0:
+            reload_bin = resolve_trusted_binary("firewall-cmd")
+            reload_proc = subprocess.run(
+                [reload_bin, "--reload"],
+                check=False,
+                env=_secure_exec_env(),
+            )
+            return reload_proc.returncode
     return proc.returncode
+
+
+def _secure_exec_env() -> dict[str, str]:
+    """Minimal env for root helper exec (fixed PATH)."""
+    env = {k: v for k, v in os.environ.items() if k in ("LANG", "LC_ALL", "TZ")}
+    env["PATH"] = "/usr/bin:/usr/sbin:/bin:/sbin"
+    env["HOME"] = "/root"
+    return env
+
+
+def _seal_and_run_install_script(script_path: str, expected_sha256: str) -> int:
+    """Copy extract tree to a root-owned seal dir, re-verify install.sh, then exec."""
+    script = _validate_install_script(script_path, expected_sha256)
+    fd = open_install_script_fd(script_path, expected_sha256)
+    os.close(fd)
+
+    seal_dir = "/var/tmp" if Path("/var/tmp").is_dir() else None
+    seal_root = Path(tempfile.mkdtemp(prefix="oyst-seal-", dir=seal_dir))
+    try:
+        os.chmod(seal_root, 0o700)
+        dest_dir = seal_root / script.parent.name
+        shutil.copytree(script.parent, dest_dir, symlinks=False)
+        sealed_script = dest_dir / "install.sh"
+        digest = hashlib.sha256(sealed_script.read_bytes()).hexdigest()
+        if digest != expected_sha256.lower():
+            print("sealed install.sh sha256 mismatch", file=sys.stderr)
+            return 2
+        bash = resolve_trusted_binary("bash")
+        proc = subprocess.run(
+            [bash, str(sealed_script)],
+            cwd=str(dest_dir),
+            check=False,
+            env=_secure_exec_env(),
+        )
+        return proc.returncode
+    finally:
+        shutil.rmtree(seal_root, ignore_errors=True)
 
 
 def run_helper_argv(argv: Sequence[str]) -> int:
@@ -94,27 +146,24 @@ def run_helper_argv(argv: Sequence[str]) -> int:
     subcommand = argv[0]
     if subcommand == "run":
         try:
-            cmd = _validate_run_argv(argv[1:])
+            cmd = resolve_trusted_argv(_validate_run_argv(argv[1:]))
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        proc = subprocess.run(cmd, check=False)
+        proc = subprocess.run(cmd, check=False, env=_secure_exec_env())
         return proc.returncode
     if subcommand == "install-script":
-        if len(argv) < 2:
-            print("usage: oyst-helper install-script /path/to/install.sh", file=sys.stderr)
+        if len(argv) < 3:
+            print(
+                "usage: oyst-helper install-script /path/to/install.sh <sha256>",
+                file=sys.stderr,
+            )
             return 2
         try:
-            script = _validate_install_script(argv[1])
-        except ValueError as exc:
+            return _seal_and_run_install_script(argv[1], argv[2])
+        except (ValueError, OSError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        proc = subprocess.run(
-            ["bash", str(script)],
-            cwd=str(script.parent),
-            check=False,
-        )
-        return proc.returncode
     builders = {
         "firewall": _build_firewall_argv,
         "fail2ban": _build_fail2ban_argv,

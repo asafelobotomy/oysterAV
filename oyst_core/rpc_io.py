@@ -30,6 +30,16 @@ LONG_RPC_METHODS = frozenset(
         "auth.grant_service_lifecycle",
         "auth.revoke_service_lifecycle",
         "lynis.audit",
+        "fail2ban.unban",
+        "clamonacc.enable",
+        "clamonacc.disable",
+        "clamonacc.start",
+        "clamonacc.stop",
+        "clamonacc.add_path",
+        "clamonacc.remove_path",
+        "schedule.apply",
+        "schedule.enable_linger",
+        "schedule.disable_linger",
     }
 )
 

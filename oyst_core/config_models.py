@@ -199,9 +199,15 @@ class OysterConfig(BaseModel):
     ui: UiConfig = Field(default_factory=UiConfig)
 
     def vault_path(self) -> Path:
-        if self.quarantine.vault_dir:
-            return Path(self.quarantine.vault_dir).expanduser()
         # Lazy import via façade so monkeypatches on oyst_core.config.data_dir apply.
         from oyst_core import config as cfg_facade
 
-        return cfg_facade.data_dir() / "quarantine"
+        base = (cfg_facade.data_dir() / "quarantine").resolve()
+        if not self.quarantine.vault_dir:
+            return base
+        candidate = Path(self.quarantine.vault_dir).expanduser().resolve()
+        try:
+            candidate.relative_to(cfg_facade.data_dir().resolve())
+        except ValueError:
+            return base
+        return candidate

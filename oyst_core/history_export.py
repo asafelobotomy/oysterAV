@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
+from oyst_core.config import data_dir
 from oyst_core.events import EventLog
 from oyst_core.finding_status import handled_findings_count, open_findings_count
 
@@ -17,6 +18,20 @@ def _normalize_format(fmt: str) -> ExportFormat:
     if cleaned in {"json", "md", "markdown"}:
         return "json" if cleaned == "json" else "md"
     raise ValueError(f"unsupported export format: {fmt} (use json or md)")
+
+
+def _validate_export_target(path: str | Path) -> Path:
+    """Restrict exports to data_dir()/exports only."""
+    target = Path(path).expanduser().resolve()
+    if any(ch in str(target) for ch in ("\n", "\r", "\0")):
+        raise ValueError("export path contains control characters")
+    exports = (data_dir() / "exports").resolve()
+    exports.mkdir(parents=True, exist_ok=True)
+    try:
+        target.relative_to(exports)
+    except ValueError as exc:
+        raise ValueError(f"export path must be under {exports}") from exc
+    return target
 
 
 def format_scan_markdown(scan: dict[str, Any]) -> str:
@@ -113,8 +128,13 @@ def export_scan_to_path(
     scan = EventLog().get_scan(job_id)
     if scan is None:
         return {"ok": False, "error": f"scan not found: {job_id}"}
-    target = Path(path).expanduser()
+    try:
+        target = _validate_export_target(path)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
     target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        return {"ok": False, "error": f"refusing to overwrite existing file: {target}"}
     if export_fmt == "json":
         target.write_text(json.dumps(scan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     else:
@@ -136,8 +156,13 @@ def export_all_scans_to_path(
 ) -> dict[str, Any]:
     export_fmt = _normalize_format(fmt)
     scans = EventLog().list_full_scans(limit=limit)
-    target = Path(path).expanduser()
+    try:
+        target = _validate_export_target(path)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
     target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        return {"ok": False, "error": f"refusing to overwrite existing file: {target}"}
     if export_fmt == "json":
         target.write_text(json.dumps(scans, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     else:

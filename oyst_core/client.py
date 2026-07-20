@@ -28,30 +28,35 @@ class OystClient(OystClientApi):
 
     def _request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         params = params or {}
-        if self.socket_path.exists():
-            try:
-                payload = (
-                    json.dumps(
-                        {
-                            "method": method,
-                            "params": params,
-                            "id": 1,
-                            "auth": self._auth_token(),
-                        },
-                    )
-                    + "\n"
-                )
-                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-                    sock.settimeout(timeout_for_method(method))
-                    sock.connect(str(self.socket_path))
-                    sock.sendall(payload.encode())
-                    data = recv_framed(sock).decode()
-                if not data.strip():
-                    raise OSError("empty RPC response")
-                return json.loads(data)  # type: ignore[no-any-return]
-            except (OSError, json.JSONDecodeError):
-                pass
-        return self._local_fallback(method, params)
+        if not self.socket_path.exists():
+            return self._local_fallback(method, params)
+        try:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(timeout_for_method(method))
+            sock.connect(str(self.socket_path))
+        except OSError:
+            return self._local_fallback(method, params)
+        payload = (
+            json.dumps(
+                {
+                    "method": method,
+                    "params": params,
+                    "id": 1,
+                    "auth": self._auth_token(),
+                },
+            )
+            + "\n"
+        )
+        try:
+            with sock:
+                sock.sendall(payload.encode())
+                data = recv_framed(sock).decode()
+            if not data.strip():
+                raise RuntimeError("empty RPC response")
+            return json.loads(data)  # type: ignore[no-any-return]
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            # Never re-dispatch after send — server may already be executing.
+            raise RuntimeError(f"RPC failed after send ({method}): {exc}") from exc
 
     def _local_fallback(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         try:

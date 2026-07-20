@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from oyst_core.privileged.helper import run_privileged_helper
+from oyst_core.privileged.safe_write import write_text_nofollow
 
 DEFAULTS_OVERLAY_PATH = Path("/etc/rkhunter.d/oysterav-defaults.conf")
 DEFAULTS_OVERLAY_HEADER = (
@@ -55,8 +56,7 @@ def apply_disable_tests_overlay(
     changed = existing != text
     if changed:
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
-        target.chmod(0o644)
+        write_text_nofollow(target, text, mode=0o644)
     return {
         "ok": True,
         "changed": changed,

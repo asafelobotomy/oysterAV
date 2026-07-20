@@ -102,9 +102,10 @@ def apply_overlay_lines(
             changed_any = True
         applied.append({"option": opt, "value": val, "changed": changed})
     if changed_any:
+        from oyst_core.privileged.safe_write import write_text_nofollow
+
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
-        target.chmod(0o644)
+        write_text_nofollow(target, text, mode=0o644)
     return {
         "ok": True,
         "changed": changed_any,

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -19,16 +21,16 @@ class QuarantineVault:
         cfg = load_config()
         self.vault_dir = (vault_dir or cfg.vault_path()).expanduser().resolve()
         self.vault_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            self.vault_dir.chmod(0o700)
-        except OSError:
-            pass
+        self.vault_dir.chmod(0o700)
+        mode = self.vault_dir.stat().st_mode & 0o777
+        if mode != 0o700:
+            raise RuntimeError(f"quarantine vault must be mode 0700 (got {oct(mode)})")
         self.db_path = self.vault_dir / "vault.db"
         self._init_db()
-        try:
-            self.db_path.chmod(0o600)
-        except OSError:
-            pass
+        self.db_path.chmod(0o600)
+        db_mode = self.db_path.stat().st_mode & 0o777
+        if db_mode != 0o600:
+            raise RuntimeError(f"vault.db must be mode 0600 (got {oct(db_mode)})")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -68,13 +70,20 @@ class QuarantineVault:
         return h.hexdigest()
 
     def add(self, source: str, threat_name: str = "") -> QuarantineEntry:
-        src = Path(source).expanduser().resolve()
+        src = Path(source).expanduser()
+        if src.is_symlink():
+            raise ValueError("refuse to quarantine through symlink")
         if not src.exists():
             raise FileNotFoundError(source)
+        if not src.is_file():
+            raise ValueError("quarantine add requires a regular file")
+        src = src.resolve(strict=True)
         digest = self._sha256(src)
         ts = datetime.now().strftime("%Y%m%d%H%M%S")
-        dest_name = f"{ts}_{src.name}"
+        dest_name = f"{ts}_{uuid.uuid4().hex[:8]}_{src.name}"
         dest = self.vault_dir / dest_name
+        if dest.exists():
+            raise RuntimeError(f"quarantine destination collision: {dest}")
         shutil.move(str(src), str(dest))
         with self._connect() as conn:
             cur = conn.execute(
@@ -146,17 +155,40 @@ class QuarantineVault:
         if current != entry.sha256:
             raise ValueError("vault file hash mismatch — possible tampering")
         dest = Path(entry.original_path).expanduser()
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(vault), str(dest))
+        if dest.is_symlink():
+            raise ValueError("refuse restore through symlink")
+        dest_resolved = dest.expanduser()
+        # Do not follow dest symlink: create with O_EXCL|O_NOFOLLOW then copy.
+        parent = dest_resolved.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        if parent.stat().st_uid != os.getuid():
+            raise ValueError("restore parent directory not owned by current user")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            dest_fd = os.open(str(dest_resolved), flags, 0o600)
+        except FileExistsError as exc:
+            raise ValueError(f"refuse overwrite of existing path: {dest_resolved}") from exc
+        try:
+            with open(vault, "rb") as src_f:
+                while True:
+                    chunk = src_f.read(65536)
+                    if not chunk:
+                        break
+                    os.write(dest_fd, chunk)
+        finally:
+            os.close(dest_fd)
+        vault.unlink()
         with self._connect() as conn:
             conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
         SecurityAudit().log(
             "quarantine.restore",
             str(entry_id),
             success=True,
-            data={"dest": str(dest)},
+            data={"dest": str(dest_resolved.resolve())},
         )
-        return dest
+        return dest_resolved.resolve()
 
     def delete(self, entry_id: int) -> None:
         entry = self.get(entry_id)

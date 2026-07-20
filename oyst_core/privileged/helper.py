@@ -19,11 +19,11 @@ def detect_aur_helper() -> str | None:
 
 
 def resolve_helper_path() -> str | None:
-    """Absolute path to oyst-helper (polkit exec.path), preferring /usr/lib then legacy."""
+    """Absolute path to oyst-helper matching polkit exec.path (no PATH fallback)."""
     installed = resolve_installed_helper_path()
     if installed is not None and os.access(installed, os.X_OK):
         return str(installed)
-    return which("oyst-helper")
+    return None
 
 
 def run_privileged(
@@ -67,7 +67,11 @@ def run_privileged_helper(
     return CommandResult(1, "", "pkexec and oyst-helper required for privileged operation")
 
 
-def run_privileged_install_script(script_path: str) -> CommandResult:
+def run_privileged_install_script(
+    script_path: str,
+    *,
+    expected_sha256: str,
+) -> CommandResult:
     """Run a vetted install.sh via oyst-helper only (no raw pkexec bash)."""
     helper = resolve_helper_path()
     pkexec = which("pkexec")
@@ -76,7 +80,7 @@ def run_privileged_install_script(script_path: str) -> CommandResult:
         return CommandResult(1, "", "pkexec and oyst-helper required for install script")
     try:
         return run_install_command(
-            ["pkexec", helper, "install-script", script],
+            ["pkexec", helper, "install-script", script, expected_sha256],
             timeout=1800,
         )
     except (ValueError, OSError) as exc:

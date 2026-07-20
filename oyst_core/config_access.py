@@ -68,6 +68,34 @@ def _parse_csv(value: str) -> list[str]:
     return [s.strip() for s in value.split(",") if s.strip()]
 
 
+def _parse_path_csv(value: str, *, key: str) -> list[str]:
+    """Parse comma-separated paths; reject control chars and leading dashes."""
+    paths: list[str] = []
+    for raw in value.split(","):
+        item = raw.strip()
+        if not item:
+            continue
+        if any(ch in item for ch in ("\n", "\r", "\0")):
+            raise ValueError(f"{key}: path entries must not contain control characters")
+        if item.startswith("-"):
+            raise ValueError(f"{key}: path entries must not start with '-'")
+        paths.append(item)
+    return paths
+
+
+def _parse_exclude_dirs_csv(value: str) -> list[str]:
+    """Parse scan.exclude_dirs as fixed path prefixes (no regex operators)."""
+    paths = _parse_path_csv(value, key="scan.exclude_dirs")
+    # Allow '.' in paths (e.g. ~/.cache); block regex operators.
+    forbidden = set("*+?[](){}|^$\\")
+    for item in paths:
+        if any(ch in forbidden for ch in item):
+            raise ValueError(
+                "scan.exclude_dirs entries must be literal path prefixes (no regex metacharacters)",
+            )
+    return paths
+
+
 def set_config_value(key: str, value: str) -> None:
     cfg = load_config()
     old: str | None = None
@@ -111,7 +139,7 @@ def set_config_value(key: str, value: str) -> None:
             raise KeyError("scan.max_files must be >= 1")
         cfg.scan.max_files = parsed
     elif key == "scan.exclude_dirs":
-        cfg.scan.exclude_dirs = _parse_csv(value)
+        cfg.scan.exclude_dirs = _parse_exclude_dirs_csv(value)
     elif key == "scan.apply_limits_to":
         if value not in ("quick", "all"):
             raise KeyError("scan.apply_limits_to must be 'quick' or 'all'")
@@ -136,9 +164,9 @@ def set_config_value(key: str, value: str) -> None:
     elif key == "clamonacc.prevention":
         cfg.clamonacc.prevention = _parse_bool(value)
     elif key == "clamonacc.paths":
-        cfg.clamonacc.paths = _parse_csv(value)
+        cfg.clamonacc.paths = _parse_path_csv(value, key=key)
     elif key == "clamonacc.exclude_paths":
-        cfg.clamonacc.exclude_paths = _parse_csv(value)
+        cfg.clamonacc.exclude_paths = _parse_path_csv(value, key=key)
     elif key == "maldet_monitor.enabled":
         cfg.maldet_monitor.enabled = _parse_bool(value)
     elif key == "maldet_monitor.mode":
@@ -146,7 +174,7 @@ def set_config_value(key: str, value: str) -> None:
             raise KeyError("maldet_monitor.mode must be 'users' or 'paths'")
         cfg.maldet_monitor.mode = value
     elif key == "maldet_monitor.paths":
-        cfg.maldet_monitor.paths = _parse_csv(value)
+        cfg.maldet_monitor.paths = _parse_path_csv(value, key=key)
     elif key == "setup.completed":
         cfg.setup.completed = _parse_bool(value)
         if cfg.setup.completed and not cfg.setup.completed_at:
@@ -174,9 +202,14 @@ def set_config_value(key: str, value: str) -> None:
     elif key == "schedule.profile":
         cfg.schedule.profile = value
     elif key == "schedule.packs":
-        cfg.schedule.packs = _parse_csv(value)
+        from oyst_core.schedule_validate import validate_packs
+
+        try:
+            cfg.schedule.packs = validate_packs(_parse_csv(value))
+        except ValueError as exc:
+            raise KeyError(str(exc)) from exc
     elif key == "schedule.paths":
-        cfg.schedule.paths = _parse_csv(value)
+        cfg.schedule.paths = _parse_path_csv(value, key=key)
     elif key == "schedule.frequency":
         if value not in ("hourly", "daily", "weekly", "custom"):
             raise KeyError("schedule.frequency must be hourly|daily|weekly|custom")

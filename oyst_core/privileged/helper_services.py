@@ -11,6 +11,7 @@ from oyst_core.packs.rkhunter_resolve import (
     apply_overlay_line,
     apply_overlay_lines,
 )
+from oyst_core.privileged.safe_write import write_text_nofollow
 from oyst_core.privileged.validators import (
     validate_monitor_mode,
     validate_systemctl_action,
@@ -47,7 +48,7 @@ def _apply_maldet_monitor_mode(mode: str) -> None:
             updated.append(line)
     if not found:
         updated.append(new_line)
-    conf_path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+    write_text_nofollow(conf_path, "\n".join(updated) + "\n", mode=0o644)
 
 
 def _build_maldet_config_argv(argv: Sequence[str]) -> list[str]:

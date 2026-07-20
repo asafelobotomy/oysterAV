@@ -114,6 +114,7 @@ def delete_cmd(entry_id: int, confirm: bool, dry_run: bool, json_mode: bool) -> 
 @click.option("--job-id", "job_id", default="", help="Patch this history job on success")
 @click.option("--pack", default="", help="Finding pack when patching history")
 @click.option("--message", default="", help="Finding message when patching history")
+@click.option("--confirm", is_flag=True)
 @json_option
 def add_cmd(
     path: str,
@@ -121,10 +122,12 @@ def add_cmd(
     job_id: str,
     pack: str,
     message: str,
+    confirm: bool,
     json_mode: bool,
 ) -> None:
     from oyst_core.history_actions import quarantine_and_patch
 
+    require_confirm(confirm, message="--confirm required to quarantine a file")
     payload = quarantine_and_patch(
         path,
         threat,

@@ -191,12 +191,17 @@ definitions, then runs rkhunter propupd.
 ## Helper
 
 ```bash
-oyst-cli install-privileged-helper
+# Prefer a distro/package install so /usr/bin/oyst-cli is root-owned (required for
+# Polkit elevation). Dev venv paths cannot be used with pkexec.
+sudo oyst-cli install-privileged-helper
+# or: oyst-cli install-privileged-helper  # prompts via Polkit when packaged
 oyst-cli helper-status --json
 ```
 
 Installs `oyst-helper` and fine-grained polkit actions (`io.github.asafelobotomy.helper.*` via
 `pkexec` argv1). Re-run after upgrades when `helper-status` reports an outdated policy.
+From Flatpak GUI, elevation uses `flatpak-spawn --host pkexec` against the host
+`oyst-cli` — see `packaging/oysterav/flatpak/README.md`.
 
 ## Services
 
@@ -216,8 +221,8 @@ Logical services wrap pack/helper paths (polkit prompts unless a grant is instal
 
 ```bash
 oyst-cli auth status --json
-sudo oyst-cli auth grant-service-lifecycle [--user "$USER"]
-sudo oyst-cli auth revoke-service-lifecycle
+sudo oyst-cli auth grant-service-lifecycle --confirm [--user "$USER"]
+sudo oyst-cli auth revoke-service-lifecycle --confirm
 ```
 
 Grant installs `/etc/polkit-1/rules.d/49-oysterav-service-lifecycle.rules` so

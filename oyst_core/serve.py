@@ -19,7 +19,10 @@ from oyst_core.rpc_io import recv_framed
 
 SCHEMA_VERSION = 2
 DEFAULT_SOCKET = data_dir() / "oyst.sock"
+_CONN_TIMEOUT_SEC = 120.0
+_MAX_CONCURRENT_CONNS = 8
 _logger = logging.getLogger("oyst.rpc")
+_accept_semaphore = threading.BoundedSemaphore(_MAX_CONCURRENT_CONNS)
 
 
 def socket_is_live(socket_path: Path) -> bool:
@@ -103,11 +106,28 @@ class RpcServer:
         self._running = True
         while self._running:
             conn, _ = server.accept()
-            threading.Thread(target=self._handle_conn, args=(conn,), daemon=True).start()
+            if not _accept_semaphore.acquire(blocking=False):
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+                continue
+            threading.Thread(
+                target=self._handle_conn_guarded,
+                args=(conn,),
+                daemon=True,
+            ).start()
+
+    def _handle_conn_guarded(self, conn: socket.socket) -> None:
+        try:
+            self._handle_conn(conn)
+        finally:
+            _accept_semaphore.release()
 
     def _handle_conn(self, conn: socket.socket) -> None:
         with conn:
             try:
+                conn.settimeout(_CONN_TIMEOUT_SEC)
                 verify_peer_credentials(conn)
             except RpcError as exc:
                 response = {
@@ -115,14 +135,35 @@ class RpcServer:
                     "schema_version": SCHEMA_VERSION,
                     "error": exc.to_dict(),
                 }
-                conn.sendall((json.dumps(response) + "\n").encode())
+                try:
+                    conn.sendall((json.dumps(response) + "\n").encode())
+                except OSError:
+                    pass
                 return
-            data = recv_framed(conn).decode()
-            if not data.strip():
+            try:
+                data = recv_framed(conn).decode()
+                if not data.strip():
+                    return
+                request = json.loads(data)
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                response = {
+                    "id": 0,
+                    "schema_version": SCHEMA_VERSION,
+                    "error": {
+                        "code": "invalid_request",
+                        "message": f"malformed RPC frame: {exc}",
+                    },
+                }
+                try:
+                    conn.sendall((json.dumps(response) + "\n").encode())
+                except OSError:
+                    pass
                 return
-            request = json.loads(data)
             response = self.handle(request)
-            conn.sendall((json.dumps(response) + "\n").encode())
+            try:
+                conn.sendall((json.dumps(response) + "\n").encode())
+            except OSError:
+                pass
 
     def stop(self) -> None:
         self._running = False
