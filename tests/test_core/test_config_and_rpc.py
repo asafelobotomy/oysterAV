@@ -101,6 +101,7 @@ def test_scan_tuning_config_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
             "oyst_core.packs.fangfrisch.FangfrischPack.ensure_config",
             return_value=(True, "ok"),
         ),
+        pytest.warns(DeprecationWarning, match="runtime.clamav_profile"),
     ):
         set_config_value("runtime.clamav_profile", "full")
     assert load_config().scan.clamav_profile == "full"
@@ -177,7 +178,8 @@ def test_migrate_runtime_clamav_profile(tmp_path: Path, monkeypatch: pytest.Monk
     )
     monkeypatch.setattr("oyst_core.config.config_dir", lambda: cfg_dir)
     monkeypatch.setattr("oyst_core.config.config_path", lambda: path)
-    cfg = load_config()
+    with pytest.warns(DeprecationWarning, match="clamav_profile"):
+        cfg = load_config()
     assert cfg.scan.clamav_profile == "linux-only"
     assert "clamav_profile" not in cfg.runtime.model_dump()
 

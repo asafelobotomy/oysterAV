@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import tomllib
+import warnings
 from pathlib import Path
 from typing import Any
 
 from oyst_core.config_models import OysterConfig
+
+_log = logging.getLogger(__name__)
 
 
 def config_dir() -> Path:
@@ -41,6 +45,16 @@ def _migrate_raw_config(raw: dict[str, Any]) -> dict[str, Any]:
         raw["scan"] = scan
     if isinstance(runtime, dict) and "clamav_profile" in runtime:
         # Formerly under [runtime] — collided with runtime.mode naming.
+        warnings.warn(
+            "config.toml [runtime].clamav_profile migrated to [scan]; "
+            "alias removed in oysterAV 0.3.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        _log.warning(
+            "Migrated deprecated [runtime].clamav_profile → [scan].clamav_profile "
+            "(removed in 0.3.0)",
+        )
         if "clamav_profile" not in scan:
             scan["clamav_profile"] = runtime["clamav_profile"]
         del runtime["clamav_profile"]

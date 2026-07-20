@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -41,8 +42,15 @@ def effective_schedule_backend(
     return sched.backend
 
 
+_CLAMAV_PROFILE_ALIAS_MSG = (
+    "runtime.clamav_profile is deprecated; use scan.clamav_profile "
+    "(alias removed in oysterAV 0.3.0)"
+)
+
+
 def get_config_value(key: str) -> str | None:
     if key == "runtime.clamav_profile":
+        warnings.warn(_CLAMAV_PROFILE_ALIAS_MSG, DeprecationWarning, stacklevel=2)
         # Deprecated alias for scan.clamav_profile
         key = "scan.clamav_profile"
     cfg = load_config()
@@ -114,6 +122,7 @@ def set_config_value(key: str, value: str) -> None:
             raise KeyError("scan.clamav_profile must be 'full' or 'linux-only'")
         cfg.scan.clamav_profile = cast(ClamavProfile, value)
     elif key == "runtime.clamav_profile":
+        warnings.warn(_CLAMAV_PROFILE_ALIAS_MSG, DeprecationWarning, stacklevel=2)
         # Deprecated alias — PE mode lives under scan (not runtime.mode).
         if value not in ("full", "linux-only"):
             raise KeyError("scan.clamav_profile must be 'full' or 'linux-only'")

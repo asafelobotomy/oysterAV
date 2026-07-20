@@ -73,3 +73,15 @@ PYTHON_BIN="$(uv run which python)" bash scripts/build_native_packages.sh x86_64
 ## Privileged helper path
 
 Distro packages and `oyst-cli install-privileged-helper` install `oyst-helper` to `/usr/lib/oysterav/oyst-helper` (polkit `exec.path`). Legacy `/usr/local/lib/oysterav/oyst-helper` is still detected for status/resolution.
+
+## Compatibility sunsets (0.3.0)
+
+Warn throughout **0.2.x**; remove in **0.3.0**:
+
+| Legacy | 0.2.x behavior | 0.3.0 plan |
+|--------|----------------|------------|
+| `runtime.clamav_profile` config key / CLI alias | Maps to `scan.clamav_profile`; emits `DeprecationWarning` on get/set and on TOML migrate | Remove alias + `[runtime].clamav_profile` migrate in `config_access` / `config_io` |
+| `HELPER_PATH_LEGACY` (`/usr/local/lib/oysterav/oyst-helper`) | Still resolved after `/usr/lib` for status/reinstall cleanup | Drop detection if unused; keep `/usr/lib` only |
+| `LEGACY_PROFILES` schedule units (`oyst-scan-{profile}.*`) | `_remove_legacy_units()` migrates old timers on schedule install | Delete migration once changelog notes “legacy timers unsupported” |
+
+Prefer `scan.clamav_profile` and the packaged helper path for all new installs.
