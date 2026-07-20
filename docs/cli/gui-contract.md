@@ -152,14 +152,13 @@ Dashboard “Open Settings” (missing required packs) deep-links to **Security 
 | Auto-quarantine threats | `config.set quarantine.auto` | `oyst-cli config set quarantine.auto true` |
 | Scan backend | `config.set scan.backend` | `oyst-cli config set scan.backend auto\|clamd\|clamscan` |
 | Default scan profile | `config.set scan.profile` | `oyst-cli config set scan.profile quick\|…` (Scan tab + CLI default) |
-| Schedule backend | `config.set schedule.backend` | `inherit` follows General scan backend; or `auto\|clamd\|clamscan` |
 | Clamonacc enable | Real-time switch → `clamonacc.enable/disable` | Services shows status only (no duplicate toggle) |
 | Theme | `config.set ui.theme` | `oyst-cli config set ui.theme gruvbox-dark-hard\|…\|system` (default: Gruvbox Dark Hard) |
 | Run at startup | `config.set ui.run_at_startup` | `oyst-cli desktop install-autostart` / `remove-autostart` or `config set ui.run_at_startup` |
 | Start minimized | `config.set ui.start_minimized` | `oyst-cli config set ui.start_minimized true` (+ `oysterav --minimized`) |
 | Minimize to tray on close | `config.set ui.minimize_to_tray` | `oyst-cli config set ui.minimize_to_tray true` |
 
-Probe tray + autostart: `oyst-cli desktop status --json`.
+Probe tray + autostart: `oyst-cli desktop status --json`. Theme and desktop launch prefs live under **Appearance & desktop** in the General section (scan defaults are a separate group).
 
 ### Services
 
@@ -167,9 +166,10 @@ Probe tray + autostart: `oyst-cli desktop status --json`.
 |-------------|--------------|----------------|
 | Privileged helper Install/Reinstall/Update | `helper.install` | `oyst-cli install-privileged-helper` (via Polkit) |
 | Passwordless service control | `auth.grant_service_lifecycle` / `auth.revoke_service_lifecycle` | `oyst-cli auth grant/revoke-service-lifecycle` |
-| Per-service on/off (clamd, clamonacc unit, freshclam-timer, fail2ban, maldet-monitor, schedule-linger) | `services.set` | `oyst-cli services set <name> on\|off` |
+| Per-service on/off (clamd, freshclam-timer, fail2ban, maldet-monitor, schedule-linger) | `services.set` | `oyst-cli services set <name> on\|off` |
+| Clamonacc unit status (read-only) | `services.status` | Status only — enable/disable under **Real-time** |
 
-Clamonacc under Services toggles the **systemd unit**; paths and on-access config live under **Real-time** (`clamonacc.*`). See also [Settings Services / Auth](#settings-services--auth-adr-007-wave-2).
+Clamonacc under Services is **status-only** (no `services.set` toggle). Paths and on-access enable live under **Real-time** (`clamonacc.*`). See also [Settings Services / Auth](#settings-services--auth-adr-007-wave-2).
 
 ### Real-time monitoring
 
@@ -184,8 +184,10 @@ Clamonacc under Services toggles the **systemd unit**; paths and on-access confi
 |-------------|--------------|----------------|
 | Timer status subtitle | `schedule.status` | `oyst-cli schedule status --json` (merged config + systemd + next + linger) |
 | Schedule prefs (enabled, profile, frequency, time, weekday, OnCalendar, packs, paths, quarantine, backend, persistent) | `config.set schedule.*` then auto `schedule.apply` | `oyst-cli schedule set …` / `config set schedule.*` then `schedule apply` |
+| Schedule backend (timer override) | `config.set schedule.backend` | `inherit` follows General scan backend; or `auto\|clamd\|clamscan` |
+| Schedule time (HH:MM) | `config.set schedule.time` | Validated as 24-hour `HH:MM` in GUI and `config set` |
 | **Run now** | `schedule.run` | `oyst-cli schedule run [--json]` |
-| Pre-apply validation (Custom OnCalendar / Custom packs) | — (GUI) | Same rules as `schedule.apply` validation |
+| Pre-apply validation (Custom OnCalendar / Custom packs / HH:MM) | — (GUI) | Same rules as `schedule.apply` validation |
 | Linger advisory dialog (once per session when needed) | `schedule.linger` + `schedule.enable_linger` | `oyst-cli schedule linger --json` then `oyst-cli schedule enable-linger` |
 | Timer failure hint dialog | — | stderr from `schedule apply`; see `schedule status --json` |
 

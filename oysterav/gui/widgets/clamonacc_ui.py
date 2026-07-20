@@ -13,7 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
-from oysterav.gui.widgets.common import run_in_thread, show_command_dialog
+from oysterav.gui.widgets.common import make_button, run_in_thread, show_command_dialog
 
 
 def enable_clamonacc_from_gui(
@@ -43,31 +43,66 @@ def enable_clamonacc_from_gui(
             on_complete()
         return False
 
-    run_in_thread(
-        client.clamonacc_enable,
-        done,
-        lambda m: on_status(f"Clamonacc: {m}") if on_status else False,
-    )
+    def failed(message: str) -> bool:
+        if on_status:
+            on_status(f"Clamonacc: {message}")
+        if window:
+            show_command_dialog(
+                window,
+                heading="Could not start clamonacc",
+                body=message,
+                copy_text="oyst-cli clamonacc enable",
+            )
+        if on_complete:
+            on_complete()
+        return False
+
+    run_in_thread(client.clamonacc_enable, done, failed)
 
 
 def disable_clamonacc_from_gui(
     client: OystClient,
     *,
+    window: Gtk.Window | None = None,
     on_status: Callable[[str], None] | None = None,
     on_complete: Callable[[], None] | None = None,
 ) -> None:
-    def done(_result: dict[str, Any]) -> bool:
-        if on_status:
-            on_status("Clamonacc monitoring disabled")
+    if on_status:
+        on_status("Stopping clamonacc…")
+
+    def done(result: dict[str, Any]) -> bool:
+        if result.get("ok"):
+            if on_status:
+                on_status("Clamonacc monitoring disabled")
+        else:
+            if on_status:
+                on_status(f"Clamonacc: {result.get('message', 'failed')}")
+            if window:
+                show_command_dialog(
+                    window,
+                    heading="Could not stop clamonacc",
+                    body=str(result.get("message", "unknown error")),
+                    copy_text="oyst-cli clamonacc disable",
+                )
         if on_complete:
             on_complete()
         return False
 
-    run_in_thread(
-        client.clamonacc_disable,
-        done,
-        lambda m: on_status(f"Clamonacc: {m}") if on_status else False,
-    )
+    def failed(message: str) -> bool:
+        if on_status:
+            on_status(f"Clamonacc: {message}")
+        if window:
+            show_command_dialog(
+                window,
+                heading="Could not stop clamonacc",
+                body=message,
+                copy_text="oyst-cli clamonacc disable",
+            )
+        if on_complete:
+            on_complete()
+        return False
+
+    run_in_thread(client.clamonacc_disable, done, failed)
 
 
 def refresh_clamonacc_subtitle(client: OystClient, row: Adw.ActionRow) -> None:
@@ -101,8 +136,8 @@ def add_clamonacc_path_from_dialog(
     dialog.select_folder(
         window,
         None,
-        None,
-        lambda _source, res, _data: _on_folder_selected(
+        lambda _source, res: _on_folder_selected(
+            dialog,
             client,
             res,
             on_status=on_status,
@@ -112,6 +147,7 @@ def add_clamonacc_path_from_dialog(
 
 
 def _on_folder_selected(
+    dialog: Gtk.FileDialog,
     client: OystClient,
     result: object,
     *,
@@ -119,26 +155,28 @@ def _on_folder_selected(
     on_complete: Callable[[], None] | None,
 ) -> None:
     try:
-        folder = Gtk.FileDialog.select_folder_finish(result)
-        path = folder.get_path()
-        if path is None:
-            return
-        path_str = str(path)
-
-        def worker() -> str:
-            client.clamonacc_add_path(path_str)
-            return path_str
-
-        def done(added: str) -> bool:
-            if on_status:
-                on_status(f"Added watch path: {added}")
-            if on_complete:
-                on_complete()
-            return False
-
-        run_in_thread(worker, done, lambda m: on_status(f"Path error: {m}") if on_status else False)
+        folder = dialog.select_folder_finish(result)
     except GLib.Error:
         return
+    if folder is None:
+        return
+    path = folder.get_path()
+    if path is None:
+        return
+    path_str = str(path)
+
+    def worker() -> str:
+        client.clamonacc_add_path(path_str)
+        return path_str
+
+    def done(added: str) -> bool:
+        if on_status:
+            on_status(f"Added watch path: {added}")
+        if on_complete:
+            on_complete()
+        return False
+
+    run_in_thread(worker, done, lambda m: on_status(f"Path error: {m}") if on_status else False)
 
 
 def remove_clamonacc_path_from_gui(
@@ -160,3 +198,30 @@ def remove_clamonacc_path_from_gui(
         return False
 
     run_in_thread(worker, done, lambda m: on_status(f"Path error: {m}") if on_status else False)
+
+
+def populate_clamonacc_paths(
+    group: Adw.PreferencesGroup,
+    path_rows: list[Adw.ActionRow],
+    paths: list[str],
+    *,
+    on_remove: Callable[[str], None],
+) -> None:
+    """Replace watched-path rows under a preferences group."""
+    for row in path_rows:
+        group.remove(row)
+    path_rows.clear()
+    if not paths:
+        empty = Adw.ActionRow(title="No watched paths configured")
+        empty.set_subtitle("Add folders for on-access scanning")
+        group.add(empty)
+        path_rows.append(empty)
+        return
+    for path in paths:
+        action = Adw.ActionRow()
+        action.set_title(str(path))
+        remove_btn = make_button("Remove", destructive=True, row_suffix=True)
+        remove_btn.connect("clicked", lambda _btn, p=str(path): on_remove(p))
+        action.add_suffix(remove_btn)
+        group.add(action)
+        path_rows.append(action)

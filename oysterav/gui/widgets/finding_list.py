@@ -9,11 +9,10 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-gi.require_version("Gdk", "4.0")
 
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Gtk  # noqa: E402
 
-from oyst_core.packs.rkhunter_resolve import OVERLAY_PATH, plan_resolve
+from oyst_core.packs.rkhunter_resolve import OVERLAY_PATH
 from oysterav.gui.finding_present import (
     DisplayFinding,
     apply_finding_cap,
@@ -31,18 +30,20 @@ from oysterav.gui.finding_present import (
     path_exists_for_copy,
     severity_counts,
 )
-from oysterav.gui.rpc_actions import (
-    request_quarantine_add,
-    request_rkhunter_propupd,
-    request_rkhunter_resolve,
-)
 from oysterav.gui.widgets.common import (
     clear_list_box,
     make_button,
     make_section_heading,
     make_status_badge,
-    run_in_thread,
     severity_css_class,
+)
+from oysterav.gui.widgets.finding_actions_ui import (
+    action_button,
+    confirm_propupd,
+    confirm_quarantine,
+    confirm_resolve,
+    copy_text,
+    disabled_label_button,
 )
 
 _REVIEW_MANUAL_PACKS = frozenset({"chkrootkit", "unhide", "lynis", "rkhunter"})
@@ -197,47 +198,43 @@ def _finding_row(
     pack = row.pack
 
     def on_copy_message() -> None:
-        _copy_text(msg, on_status)
+        copy_text(msg, on_status)
 
-    actions.append(_action_button("Copy message", on_copy_message))
+    actions.append(action_button("Copy message", on_copy_message))
     if path_exists_for_copy(path):
 
         def on_copy_path() -> None:
-            _copy_text(path, on_status)
+            copy_text(path, on_status)
 
-        actions.append(_action_button("Copy path", on_copy_path))
+        actions.append(action_button("Copy path", on_copy_path))
 
     quarantined = finding_display_quarantined(row, vault_paths=vault_paths)
     resolved = finding_display_resolved(row, overlay_text=overlay_text)
 
     if quarantined:
-        actions.append(_disabled_label_button("Quarantined"))
+        actions.append(disabled_label_button("Quarantined"))
     elif client is not None and is_quarantinable_path(path, pack):
 
         def on_quarantine() -> None:
-            _confirm_quarantine(
-                window, client, row, on_status, job_id=job_id, on_refresh=on_refresh
-            )
+            confirm_quarantine(window, client, row, on_status, job_id=job_id, on_refresh=on_refresh)
 
-        actions.append(_action_button("Quarantine", on_quarantine))
+        actions.append(action_button("Quarantine", on_quarantine))
 
     if client is not None and is_propupd_advisory(row):
 
         def on_propupd() -> None:
-            _confirm_propupd(window, client, on_status)
+            confirm_propupd(window, client, on_status)
 
-        actions.append(_action_button("Refresh baseline", on_propupd))
+        actions.append(action_button("Refresh baseline", on_propupd))
 
     if resolved:
-        actions.append(_disabled_label_button("Resolved"))
+        actions.append(disabled_label_button("Resolved"))
     elif client is not None and is_resolvable_finding(row):
 
         def on_resolve() -> None:
-            _confirm_resolve(
-                window, client, row, on_status, job_id=job_id, on_refresh=on_refresh
-            )
+            confirm_resolve(window, client, row, on_status, job_id=job_id, on_refresh=on_refresh)
 
-        actions.append(_action_button("Resolve", on_resolve))
+        actions.append(action_button("Resolve", on_resolve))
     elif pack in _REVIEW_MANUAL_PACKS and not quarantined and not is_quarantinable_path(path, pack):
         if not is_propupd_advisory(row) and not is_resolvable_finding(row):
             hint = Gtk.Label(label="Review manually", xalign=0)
@@ -248,199 +245,3 @@ def _finding_row(
 
     frow.set_child(outer)
     return frow
-
-
-def _action_button(label: str, callback: Callable[[], None]) -> Gtk.Button:
-    btn = make_button(label)
-    btn.set_halign(Gtk.Align.START)
-    btn.connect("clicked", lambda *_: callback())
-    return btn
-
-
-def _disabled_label_button(label: str) -> Gtk.Button:
-    btn = make_button(label)
-    btn.set_halign(Gtk.Align.START)
-    btn.set_sensitive(False)
-    return btn
-
-
-def _copy_text(text: str, on_status: Callable[[str], None] | None) -> None:
-    display = Gdk.Display.get_default()
-    if display is None:
-        return
-    display.get_clipboard().set(Gdk.ContentProvider.new_for_value(text))
-    if on_status:
-        on_status("Copied to clipboard")
-
-
-def _confirm_quarantine(
-    window: Gtk.Window | None,
-    client: Any,
-    row: DisplayFinding,
-    on_status: Callable[[str], None] | None,
-    *,
-    job_id: str | None,
-    on_refresh: Callable[[], None] | None,
-) -> None:
-    path = row.path
-    dialog = Adw.MessageDialog(
-        transient_for=window,
-        heading="Quarantine file?",
-        body=f"Move this file into the oysterAV quarantine vault:\n{path}",
-    )
-    dialog.add_response("cancel", "Cancel")
-    dialog.add_response("confirm", "Quarantine")
-    dialog.set_default_response("cancel")
-    dialog.set_close_response("cancel")
-    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
-
-    threat = row.threat_name
-    pack = row.pack
-    message = row.message
-
-    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
-        if response != "confirm":
-            return
-
-        def worker() -> dict[str, Any]:
-            return request_quarantine_add(
-                client,
-                path,
-                threat,
-                job_id=job_id,
-                pack=pack,
-                message=message,
-            )
-
-        def done(_: dict[str, Any]) -> bool:
-            row.raw["quarantined"] = True
-            if on_status:
-                on_status(f"Quarantined {path}")
-            if on_refresh:
-                on_refresh()
-            return False
-
-        def failed(err: str) -> bool:
-            if on_status:
-                on_status(f"Quarantine failed: {err}")
-            return False
-
-        run_in_thread(worker, done, failed)
-
-    dialog.connect("response", on_response)
-    dialog.present()
-
-
-def _confirm_propupd(
-    window: Gtk.Window | None,
-    client: Any,
-    on_status: Callable[[str], None] | None,
-) -> None:
-    dialog = Adw.MessageDialog(
-        transient_for=window,
-        heading="Refresh rkhunter baseline?",
-        body=(
-            "Only run propupd on a trusted system. "
-            "This rewrites the property database (rkhunter --propupd)."
-        ),
-    )
-    dialog.add_response("cancel", "Cancel")
-    dialog.add_response("confirm", "Update baseline")
-    dialog.set_default_response("cancel")
-    dialog.set_close_response("cancel")
-    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
-
-    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
-        if response != "confirm":
-            return
-
-        def done(result: dict[str, Any]) -> bool:
-            msg = result.get("message", "propupd finished")
-            if on_status:
-                on_status(str(msg))
-            return False
-
-        def failed(err: str) -> bool:
-            if on_status:
-                on_status(f"rkhunter propupd failed: {err}")
-            return False
-
-        run_in_thread(lambda: request_rkhunter_propupd(client), done, failed)
-
-    dialog.connect("response", on_response)
-    dialog.present()
-
-
-def _confirm_resolve(
-    window: Gtk.Window | None,
-    client: Any,
-    row: DisplayFinding,
-    on_status: Callable[[str], None] | None,
-    *,
-    job_id: str | None,
-    on_refresh: Callable[[], None] | None,
-) -> None:
-    try:
-        plan = plan_resolve(row.threat_name, path=row.path, message=row.message)
-    except ValueError as exc:
-        if on_status:
-            on_status(f"Resolve unavailable: {exc}")
-        return
-
-    dialog = Adw.MessageDialog(
-        transient_for=window,
-        heading="Resolve rkhunter finding?",
-        body=(
-            f"{plan.explanation}\n\n"
-            f"Writes {plan.option}={plan.value} to "
-            "/etc/rkhunter.d/oysterav-whitelist.conf. "
-            "Does not delete files or edit sshd_config. "
-            "Re-scan afterward to verify."
-        ),
-    )
-    dialog.add_response("cancel", "Cancel")
-    dialog.add_response("confirm", "Resolve")
-    dialog.set_default_response("cancel")
-    dialog.set_close_response("cancel")
-    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
-
-    threat = row.threat_name
-    path = row.path
-    message = row.message
-
-    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
-        if response != "confirm":
-            return
-
-        def worker() -> dict[str, Any]:
-            return request_rkhunter_resolve(
-                client,
-                threat,
-                path=path,
-                message=message,
-                job_id=job_id,
-            )
-
-        def done(result: dict[str, Any]) -> bool:
-            if result.get("ok"):
-                row.raw["resolved"] = True
-                if on_status:
-                    on_status(
-                        f"Resolved: {result.get('option')}={result.get('value')} "
-                        "(re-scan to verify)"
-                    )
-                if on_refresh:
-                    on_refresh()
-            elif on_status:
-                on_status(f"Resolve failed: {result.get('error') or 'unknown'}")
-            return False
-
-        def failed(err: str) -> bool:
-            if on_status:
-                on_status(f"Resolve failed: {err}")
-            return False
-
-        run_in_thread(worker, done, failed)
-
-    dialog.connect("response", on_response)
-    dialog.present()
