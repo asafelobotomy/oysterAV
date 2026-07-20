@@ -24,6 +24,7 @@ from oyst_core.models import (
     ScanProfile,
     ScanResult,
 )
+from oyst_core.packs.clamd_onaccess import probe_onaccess_prevention
 from oyst_core.quarantine import QuarantineVault
 from oyst_core.registry import get_registry
 
@@ -309,8 +310,30 @@ class JobOrchestrator:
                 except (OSError, FileNotFoundError):
                     pass
 
-    def cancel_job(self, job_id: str | None = None) -> dict[str, object]:
-        """Request cooperative cancel of the active scan job."""
+    def cancel_job(
+        self,
+        job_id: str | None = None,
+        *,
+        force: bool = False,
+    ) -> dict[str, object]:
+        """Request cooperative cancel, or force-clear a zombie lock."""
+        if force:
+            prev = self.events.force_release_job_lock()
+            if not prev:
+                return {
+                    "ok": False,
+                    "cancelled": False,
+                    "cleared": False,
+                    "message": "no active job",
+                    "job_id": None,
+                }
+            return {
+                "ok": True,
+                "cancelled": True,
+                "cleared": True,
+                "message": "job lock cleared",
+                "job_id": prev,
+            }
         active = self.events.active_job()
         if not active:
             return {"ok": False, "cancelled": False, "message": "no active job", "job_id": None}
@@ -321,12 +344,32 @@ class JobOrchestrator:
                 "message": f"active job is {active}, not {job_id}",
                 "job_id": active,
             }
+        # Second cancel on an already-flagged zombie clears the lock.
+        if self.events.cancel_requested():
+            prev = self.events.force_release_job_lock()
+            return {
+                "ok": True,
+                "cancelled": True,
+                "cleared": True,
+                "message": "job lock cleared (cancel was already pending)",
+                "job_id": prev,
+            }
         requested = self.events.request_cancel(active)
         return {
             "ok": requested,
             "cancelled": requested,
             "message": "cancel requested" if requested else "failed to request cancel",
             "job_id": active,
+        }
+
+    def clear_job(self) -> dict[str, object]:
+        """Force-clear the job lock (recovery for zombie 'scan in progress' banners)."""
+        prev = self.events.force_release_job_lock()
+        return {
+            "ok": True,
+            "cleared": prev is not None,
+            "job_id": prev,
+            "message": "job lock cleared" if prev else "no active job",
         }
 
     def job_status(self) -> dict[str, object]:
@@ -344,8 +387,8 @@ class JobOrchestrator:
         fresh = FreshclamPack()
         cfg = load_config()
         clamonacc = ClamonaccPack()
-        # oysterAV never writes OnAccessPrevention into clamd.conf.
-        prevention_enforced = False
+        onaccess = probe_onaccess_prevention()
+        prevention_enforced = bool(onaccess.get("prevention_enforced"))
         history = self.events.history(limit=1)
         last = history[0]["started_at"] if history else None
         return {
@@ -356,6 +399,7 @@ class JobOrchestrator:
             "active_job": self.events.active_job(),
             "clamonacc_prevention_requested": cfg.clamonacc.prevention,
             "clamonacc_prevention_enforced": prevention_enforced,
+            "clamonacc_onaccess": onaccess,
             "clamonacc_uses_distro_unit": clamonacc._systemd_unit() is not None,
             "fangfrisch_providers": list(cfg.fangfrisch.providers),
             "scan_backend": cfg.scan.backend,

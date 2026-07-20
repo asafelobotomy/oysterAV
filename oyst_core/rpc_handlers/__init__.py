@@ -36,6 +36,7 @@ HANDLERS: dict[str, Handler] = {
     "setup.run": status_pack.handle_setup_run,
     "job.start": jobs.handle_job_start,
     "job.cancel": jobs.handle_job_cancel,
+    "job.clear": jobs.handle_job_clear,
     "job.status": jobs.handle_job_status,
     "rkhunter.scan": jobs.handle_rkhunter_scan,
     "rkhunter.update": jobs.handle_rkhunter_update,

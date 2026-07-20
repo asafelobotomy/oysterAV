@@ -75,16 +75,56 @@ def assess_health(status: dict[str, Any]) -> dict[str, Any]:
         "clamonacc_prevention_enforced",
         False,
     ):
-        issues.append(
-            _issue(
-                "clamonacc_prevention_unmanaged",
-                "medium",
-                "On-access prevention is requested but not managed by oysterAV",
-                "clamonacc.prevention=true requires OnAccessPrevention in host clamd.conf; "
-                "process-mode clamonacc remains detect-only with --fdpass.",
-                "Set OnAccessPrevention yes in clamd.conf, or set clamonacc.prevention false",
-            ),
-        )
+        onaccess = status.get("clamonacc_onaccess")
+        classification = ""
+        if isinstance(onaccess, dict):
+            classification = str(onaccess.get("classification") or "")
+        if classification == "impossible":
+            issues.append(
+                _issue(
+                    "clamonacc_prevention_impossible",
+                    "medium",
+                    "On-access prevention not possible on this kernel",
+                    "Kernel lacks CONFIG_FANOTIFY_ACCESS_PERMISSIONS; blocking cannot work.",
+                    "Set clamonacc.prevention false, or use a kernel with "
+                    "fanotify access permissions",
+                ),
+            )
+        elif classification == "block_misconfigured":
+            issues.append(
+                _issue(
+                    "clamonacc_prevention_misconfigured",
+                    "medium",
+                    "On-access prevention is misconfigured on the host",
+                    "OnAccessPrevention is set but OnAccessMountPath is also present "
+                    "(incompatible). Use OnAccessIncludePath only.",
+                    "See docs/user-guide/clamonacc-prevention.md",
+                ),
+            )
+        elif classification == "handoff_required":
+            issues.append(
+                _issue(
+                    "clamonacc_prevention_unmanaged",
+                    "medium",
+                    "On-access prevention is requested but host conf was not readable",
+                    "clamonacc.prevention=true but no readable clamd.conf was found to verify "
+                    "OnAccessPrevention.",
+                    "Install/configure host ClamAV, or set clamonacc.prevention false",
+                ),
+            )
+        else:
+            issues.append(
+                _issue(
+                    "clamonacc_prevention_unmanaged",
+                    "medium",
+                    "On-access prevention is requested but not enabled on the host",
+                    "clamonacc.prevention=true requires OnAccessPrevention yes in host "
+                    "clamd.conf; process-mode clamonacc remains detect-only with --fdpass.",
+                    "Set OnAccessPrevention yes in clamd.conf "
+                    "(docs/user-guide/clamonacc-prevention.md), or set "
+                    "clamonacc.prevention false",
+                ),
+            )
 
     fangfrisch = next((p for p in packs if p.get("name") == "fangfrisch"), None)
     if fangfrisch and fangfrisch.get("installed"):

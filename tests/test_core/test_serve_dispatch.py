@@ -33,7 +33,7 @@ def test_rpc_job_cancel(server: RpcServer) -> None:
     ) as cancel:
         resp = _call(server, "job.cancel", {"job_id": "j1"})
     assert resp["result"]["cancelled"] is True
-    cancel.assert_called_once_with("j1")
+    cancel.assert_called_once_with("j1", force=False)
 
 
 def test_rpc_services_set(server: RpcServer) -> None:

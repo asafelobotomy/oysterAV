@@ -32,7 +32,14 @@ def handle_job_start(params: dict[str, Any], ctx: RpcContext) -> Any:
 
 
 def handle_job_cancel(params: dict[str, Any], ctx: RpcContext) -> Any:
-    return ctx.orchestrator.cancel_job(params.get("job_id"))
+    return ctx.orchestrator.cancel_job(
+        params.get("job_id"),
+        force=bool(params.get("force", False)),
+    )
+
+
+def handle_job_clear(_params: dict[str, Any], ctx: RpcContext) -> Any:
+    return ctx.orchestrator.clear_job()
 
 
 def handle_job_status(_params: dict[str, Any], ctx: RpcContext) -> Any:

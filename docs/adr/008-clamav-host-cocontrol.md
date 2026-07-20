@@ -109,18 +109,18 @@ Do not hardcode a single conf path. Discover via portable probes (see
 
 | Phase | Goal |
 |-------|------|
-| **0** (this ADR) | Document co-control + operator guide |
-| **1** | Multi-distro **probe** + classify: `impossible` \| `notify_only` \| `block_misconfigured` \| `blocking` \| `handoff_required` |
-| **2** | Honest health banner from probe (replace hardcoded `prevention_enforced=false`) |
-| **3** | Threat-response bridge: VirusEvent → oysterAV quarantine/notify/audit; CLI first (ADR-002); fix process-mode `--exclude-list` helper allowlist debt |
-| **4** (deferred) | Safe concert: systemd `--fdpass` drop-in; optional surgical ensure of whitelisted OnAccess keys when unmarked/conflict-free; else handoff |
+| **0** | Document co-control + operator guide | Done |
+| **1** | Multi-distro **probe** + classify: `impossible` \| `notify_only` \| `block_misconfigured` \| `blocking` \| `handoff_required` | Done (`oyst_core/packs/clamd_onaccess.py`) |
+| **2** | Honest health banner from probe (replace hardcoded `prevention_enforced=false`) | Done (`aggregate_status` + `assess_health`) |
+| **3** | Threat-response bridge: VirusEvent → oysterAV quarantine/notify/audit; CLI first (ADR-002); fix process-mode `--exclude-list` helper allowlist debt | Future |
+| **4** (deferred) | Safe concert: systemd `--fdpass` drop-in; optional surgical ensure of whitelisted OnAccess keys when unmarked/conflict-free; else handoff | Future |
 
 GUI surfaces for any of the above follow ADR-007 (CLI/RPC first; no silent
 GUI-only host edits).
 
-### Explicit non-goals (Phase 0)
+### Explicit non-goals (Phases 0–2)
 
-- No runtime probe or helper writers in this change set.
+- No helper writers for `OnAccessPrevention` in this change set (Phase 4 deferred).
 - No GUI prevention toggle yet.
 - No claim that `--fdpass` alone enables blocking (`OnAccessPrevention` is separate).
 - No owning `/` (or equivalent) under prevention.
@@ -129,8 +129,8 @@ GUI-only host edits).
 
 - Operators and agents treat host ClamAV as a partner: oysterAV states intent and
   response policy; the host engine performs fanotify block when configured.
-- Health messaging may stay “unmanaged” until Phase 1–2 land; that is intentional
-  honesty, not a license to rewrite conf.
+- Health messaging follows a real conf/kernel probe (Phases 1–2); oysterAV still
+  does not rewrite package-managed clamd conf.
 - Future privileged ClamAV mutations must match the safety rules above and the
   existing overlay/helper style used for rkhunter and fail2ban.
 - Operator steps live in [docs/user-guide/clamonacc-prevention.md](../user-guide/clamonacc-prevention.md).

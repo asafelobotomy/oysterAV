@@ -9,6 +9,7 @@ from oyst_core.config import data_dir, load_config, save_config, set_config_valu
 from oyst_core.models import PackStatus, PackTier
 from oyst_core.packs.base import Pack, resolve_pack_binary
 from oyst_core.packs.clamav import ClamAVPack
+from oyst_core.packs.clamd_onaccess import probe_onaccess_prevention
 from oyst_core.privileged.helper import run_privileged, run_privileged_helper
 from oyst_core.privileged.runner import run_command
 
@@ -60,17 +61,20 @@ class ClamonaccPack(Pack):
         status.details["prevention_requested"] = cfg.clamonacc.prevention
         unit = self._systemd_unit()
         status.details["uses_distro_unit"] = unit is not None
+        onaccess = probe_onaccess_prevention()
+        status.details["onaccess"] = onaccess
         if cfg.clamonacc.prevention:
-            if unit:
+            if onaccess.get("prevention_enforced"):
+                status.message = f"prevention enforced by host conf ({onaccess.get('conf_path')})"
+            elif unit:
                 status.message = (
-                    "prevention=true requires OnAccessPrevention in clamd.conf "
-                    f"(distro unit {unit}); oysterAV does not manage clamd.conf"
+                    "prevention=true but host OnAccessPrevention not blocking "
+                    f"(distro unit {unit}; classification={onaccess.get('classification')})"
                 )
             else:
                 status.message = (
-                    "prevention=true requested but process-mode clamonacc uses "
-                    "--fdpass (detect-only); set OnAccessPrevention in clamd.conf "
-                    "for real blocking"
+                    "prevention=true but host OnAccessPrevention not blocking "
+                    f"(process-mode --fdpass; classification={onaccess.get('classification')})"
                 )
         return status
 

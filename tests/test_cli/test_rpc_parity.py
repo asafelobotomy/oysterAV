@@ -22,6 +22,7 @@ RPC_TO_CLI: dict[str, list[str]] = {
     "setup.run": ["setup", "run", "--help"],
     "job.start": ["scan", "--help"],
     "job.cancel": ["job", "cancel", "--help"],
+    "job.clear": ["job", "clear", "--help"],
     "job.status": ["job", "status", "--json"],
     "rkhunter.scan": ["rkhunter", "scan", "--help"],
     "rkhunter.update": ["rkhunter", "update", "--help"],

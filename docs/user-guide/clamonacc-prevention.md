@@ -125,10 +125,27 @@ Stop and leave the host/admin in charge if:
 
 ## oysterAV preference vs host reality
 
-Until probe/classify ships (ADR-008 Phase 1–2), the GUI may still warn when
-`clamonacc.prevention=true` even if you configured the host correctly. Clearing
-the banner today: set the preference false, or accept the reminder that oysterAV
-does not claim enforcement. After Phase 2, health should follow a real probe.
+`oyst-cli status assess` / the GUI health banner probe host `clamd.conf` for
+`OnAccessPrevention` (ADR-008 Phase 1–2). When the host is configured for
+blocking, `clamonacc_prevention_enforced` is true and the unmanaged banner
+clears even though oysterAV still does not write the conf.
+
+```bash
+oyst-cli status assess --json
+# Look for clamonacc_prevention_enforced / clamonacc_onaccess.classification
+```
+
+| Classification | Meaning |
+|----------------|---------|
+| `blocking` | Host has `OnAccessPrevention yes` without `OnAccessMountPath` conflict |
+| `notify_only` | Prevention not enabled in conf |
+| `block_misconfigured` | Prevention + MountPath (incompatible) |
+| `impossible` | Kernel lacks fanotify access permissions |
+| `handoff_required` | No readable conf among candidates |
+
+If the banner remains after editing conf, restart **clamd** then **clamonacc**,
+and re-run assess. Clearing intent without host blocking: set
+`clamonacc.prevention false`.
 
 ## Related
 

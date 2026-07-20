@@ -72,6 +72,7 @@ Two-column layout (stacks vertically on narrow windows): **Scan** controls (left
 | Profile: Quick / Full / Suite / Integrity / Custom | — (passed to scan) | `oyst-cli scan --profile quick\|full\|suite\|integrity\|custom` |
 | Custom pack checkboxes (clamav, maldet, rkhunter, chkrootkit, unhide, lynis) | `job.start` `packs` | `oyst-cli scan --profile custom --packs clamav,rkhunter,lynis …` |
 | Cancel in-flight scan | `job.cancel` | `oyst-cli job cancel` |
+| Clear stuck job lock (zombie banner) | `job.clear` / `job.cancel` `force` | `oyst-cli job clear`; `oyst-cli job cancel --force` |
 | Target: Home / Downloads / Desktop / Custom (hidden for Integrity) | — | `oyst-cli scan ~/Downloads` or explicit paths |
 
 Integrity runs system-wide packs (`rkhunter`, `chkrootkit`, `unhide`); path controls are hidden. Custom profile exposes a pack picker on this tab.
@@ -288,7 +289,8 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `pack.doctor` | `oyst-cli doctor --json` |
 | `pack.install` | `oyst-cli packs install <name>` |
 | `job.start` | `oyst-cli scan [paths] [--profile] [--quarantine]` |
-| `job.cancel` | `oyst-cli job cancel` |
+| `job.cancel` | `oyst-cli job cancel [--force]` |
+| `job.clear` | `oyst-cli job clear` |
 | `job.status` | `oyst-cli job status --json` |
 | `rkhunter.update` | `oyst-cli rkhunter update` |
 | `rkhunter.propupd` | `oyst-cli rkhunter propupd --confirm` |

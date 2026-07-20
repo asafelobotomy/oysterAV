@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 _JOB_CANCEL_DDL = (
@@ -11,6 +11,11 @@ _JOB_CANCEL_DDL = (
     "id INTEGER PRIMARY KEY CHECK (id = 1), "
     "requested INTEGER NOT NULL)"
 )
+
+# Worker died without release_job_lock (kill/crash/reboot).
+STALE_JOB_LOCK = timedelta(hours=2)
+# Cancel was requested but nobody released the lock.
+STALE_AFTER_CANCEL = timedelta(minutes=10)
 
 
 class EventJobsMixin:
@@ -37,6 +42,7 @@ class EventJobsMixin:
             conn.execute("ALTER TABLE job_lock ADD COLUMN state TEXT")
 
     def acquire_job_lock(self, job_id: str) -> bool:
+        self.clear_stale_job_lock()
         with self._connect() as conn:
             self._ensure_job_progress_schema(conn)
             row = conn.execute("SELECT job_id FROM job_lock WHERE id = 1").fetchone()
@@ -76,6 +82,7 @@ class EventJobsMixin:
             )
 
     def get_job_progress(self) -> dict[str, Any]:
+        self.clear_stale_job_lock()
         with self._connect() as conn:
             self._ensure_job_progress_schema(conn)
             row = conn.execute("SELECT * FROM job_lock WHERE id = 1").fetchone()
@@ -151,7 +158,31 @@ class EventJobsMixin:
             conn.execute("UPDATE job_cancel SET requested = 0 WHERE id = 1")
             return prev
 
+    def clear_stale_job_lock(self) -> str | None:
+        """Drop zombie locks left when a scan worker died without releasing."""
+        with self._connect() as conn:
+            self._ensure_job_progress_schema(conn)
+            self._ensure_cancel_schema(conn)
+            row = conn.execute("SELECT * FROM job_lock WHERE id = 1").fetchone()
+            cancel_row = conn.execute("SELECT requested FROM job_cancel WHERE id = 1").fetchone()
+        if row is None or not row["job_id"]:
+            return None
+        started_raw = row["started_at"]
+        if not started_raw:
+            return self.force_release_job_lock()
+        try:
+            started = datetime.fromisoformat(str(started_raw))
+        except ValueError:
+            return self.force_release_job_lock()
+        age = datetime.now() - started
+        cancel_pending = bool(cancel_row and int(cancel_row["requested"]) == 1)
+        stale = age >= STALE_JOB_LOCK or (cancel_pending and age >= STALE_AFTER_CANCEL)
+        if not stale:
+            return None
+        return self.force_release_job_lock()
+
     def active_job(self) -> str | None:
+        self.clear_stale_job_lock()
         with self._connect() as conn:
             row = conn.execute("SELECT job_id FROM job_lock WHERE id = 1").fetchone()
         if row and row["job_id"]:

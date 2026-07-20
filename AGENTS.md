@@ -105,3 +105,20 @@ See also [docs/adr/007-gui-remapping-phase.md](docs/adr/007-gui-remapping-phase.
 
 Bump [`VERSION`](VERSION), run `python scripts/sync_version.py`, push to `main`.
 See [docs/packaging/release.md](docs/packaging/release.md).
+
+## Learned User Preferences
+
+- Prefer CLI/RPC surfaces first for new features; wire the GUI only after matching commands exist.
+- Prefer a detailed plan before implementing large multi-surface or security-sensitive changes.
+- Prefer recognizing host-installed tools as installed (system vs private runtime) without forcing a pack reinstall.
+- Prefer a single batch privileged auth for multi-finding Resolve/quarantine actions instead of one prompt per item.
+- Prefer Settings options that autosave; avoid redundant Save buttons when individual controls already persist.
+- Prefer a lean GUI that does not duplicate Settings controls onto Scan or other tabs.
+- Prefer distro-portable host integration over distro-specific one-offs.
+
+## Learned Workspace Facts
+
+- oysterAV is a from-scratch successor to deprecated xanadOS Search & Destroy (https://github.com/asafelobotomy/xanadOS-Search_Destroy).
+- Repository license is GPLv3.
+- Default GUI themeing target is Gruvbox Dark Hard via a shared theme/color library.
+- Status-bar pack/service update notices take priority over the security-news ticker.

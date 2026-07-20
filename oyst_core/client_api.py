@@ -32,11 +32,16 @@ class OystClientApi:
     def setup_run(self, **kwargs: Any) -> dict[str, Any]:
         return self._as_dict("setup.run", kwargs)
 
-    def cancel_job(self, job_id: str | None = None) -> dict[str, Any]:
+    def cancel_job(self, job_id: str | None = None, *, force: bool = False) -> dict[str, Any]:
         params: dict[str, Any] = {}
         if job_id is not None:
             params["job_id"] = job_id
+        if force:
+            params["force"] = True
         return self._as_dict("job.cancel", params)
+
+    def clear_job(self) -> dict[str, Any]:
+        return self._as_dict("job.clear")
 
     def job_status(self) -> dict[str, Any]:
         return self._as_dict("job.status")

@@ -58,6 +58,41 @@ def test_cancel_job_with_active_flag(tmp_path) -> None:  # type: ignore[no-untyp
     assert events.cancel_requested()
 
 
+def test_second_cancel_clears_zombie_lock(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    events = EventLog(db_path=tmp_path / "events.db")
+    orch = JobOrchestrator(events=events)
+    assert events.acquire_job_lock("job-zombie")
+    assert orch.cancel_job("job-zombie")["ok"] is True
+    assert events.active_job() == "job-zombie"
+    cleared = orch.cancel_job("job-zombie")
+    assert cleared["ok"] is True
+    assert cleared.get("cleared") is True
+    assert events.active_job() is None
+
+
+def test_clear_job_force_releases(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    events = EventLog(db_path=tmp_path / "events.db")
+    orch = JobOrchestrator(events=events)
+    assert events.acquire_job_lock("job-clear")
+    result = orch.clear_job()
+    assert result["ok"] is True
+    assert result["cleared"] is True
+    assert result["job_id"] == "job-clear"
+    assert events.active_job() is None
+
+
+def test_stale_lock_auto_clears_after_cancel_age(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from datetime import datetime, timedelta
+
+    events = EventLog(db_path=tmp_path / "events.db")
+    assert events.acquire_job_lock("job-old")
+    events.request_cancel("job-old")
+    old = (datetime.now() - timedelta(minutes=11)).isoformat()
+    with events._connect() as conn:
+        conn.execute("UPDATE job_lock SET started_at = ? WHERE id = 1", (old,))
+    assert events.active_job() is None
+
+
 def test_custom_scan_runs_lynis_via_audit(tmp_path) -> None:  # type: ignore[no-untyped-def]
     events = EventLog(db_path=tmp_path / "events.db")
     orch = JobOrchestrator(events=events)
