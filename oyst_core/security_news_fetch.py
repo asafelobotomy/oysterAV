@@ -48,7 +48,7 @@ def _fetch_url(url: str) -> str:
             "User-Agent": "oysterAV/security-news (+https://github.com/asafelobotomy/oysterAV)"
         },
     )
-    with urlopen(req, timeout=FETCH_TIMEOUT_S) as response:  # noqa: S310 — fixed official URLs
+    with urlopen(req, timeout=FETCH_TIMEOUT_S) as response:  # noqa: S310 — fixed official URLs  # nosec B310
         raw = response.read()
         if isinstance(raw, bytes):
             return raw.decode("utf-8", errors="replace")

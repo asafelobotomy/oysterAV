@@ -205,7 +205,8 @@ def _install_script_path_ok(script: Path) -> None:
     if not any(p.startswith("oyst-maldet-") for p in script.parts):
         raise ValueError("install.sh must be under an oyst-maldet-* temp extract")
     under_tmp = False
-    for root in (Path("/tmp").resolve(), Path("/var/tmp").resolve()):
+    # Restrict install.sh to system temp roots only (deny arbitrary paths).
+    for root in (Path("/tmp").resolve(), Path("/var/tmp").resolve()):  # nosec B108
         try:
             script.relative_to(root)
             under_tmp = True

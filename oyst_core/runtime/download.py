@@ -21,7 +21,7 @@ def download_file(
     on_progress: ProgressCallback | None = None,
 ) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with urlopen(url, timeout=180) as response:  # noqa: S310 — fixed upstream URLs
+    with urlopen(url, timeout=180) as response:  # noqa: S310 — fixed upstream URLs  # nosec B310
         total_header = response.headers.get("Content-Length")
         total = int(total_header) if total_header and total_header.isdigit() else 0
         written = 0

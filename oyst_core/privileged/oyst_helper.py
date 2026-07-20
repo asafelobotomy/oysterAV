@@ -112,7 +112,8 @@ def _seal_and_run_install_script(script_path: str, expected_sha256: str) -> int:
     fd = open_install_script_fd(script_path, expected_sha256)
     os.close(fd)
 
-    seal_dir = "/var/tmp" if Path("/var/tmp").is_dir() else None
+    # Prefer sticky /var/tmp for root-owned seal tree; mkdtemp creates uniquely.
+    seal_dir = "/var/tmp" if Path("/var/tmp").is_dir() else None  # nosec B108
     seal_root = Path(tempfile.mkdtemp(prefix="oyst-seal-", dir=seal_dir))
     try:
         os.chmod(seal_root, 0o700)

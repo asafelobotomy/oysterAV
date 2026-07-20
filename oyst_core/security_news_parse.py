@@ -120,7 +120,8 @@ def enrich_title(title: str, description: str) -> str:
 
 
 def parse_feed_xml(source: str, xml_text: str) -> list[dict[str, Any]]:
-    root = ET.fromstring(xml_text)
+    # Official feed bodies only; no external entity expansion used.
+    root = ET.fromstring(xml_text)  # nosec B314
     items: list[dict[str, Any]] = []
     root_name = local_tag(root.tag)
 

@@ -21,7 +21,7 @@ MALDET_SHA256 = "76f1d260dac5e0bb3ca487f8d3e119655196de87b08ec89dfd73155e083feb5
 
 
 def _download(url: str, dest: Path) -> None:
-    with urlopen(url, timeout=120) as response:  # noqa: S310 — fixed upstream URL
+    with urlopen(url, timeout=120) as response:  # noqa: S310 — fixed upstream URL  # nosec B310
         dest.write_bytes(response.read())
 
 
@@ -128,15 +128,15 @@ def ensure_maldet_pub_paths(binary: str) -> tuple[bool, str]:
     user_dir = pub / user
     try:
         pub.mkdir(parents=True, exist_ok=True)
-        os.chmod(pub, 0o711)
+        os.chmod(pub, 0o711)  # maldet pub needs o+x for path traversal  # nosec B103
         for sub in ("quar", "sess", "tmp"):
             (user_dir / sub).mkdir(parents=True, exist_ok=True)
         event_log = user_dir / "event_log"
         if not event_log.exists():
             event_log.touch()
-        os.chmod(user_dir, 0o750)
+        os.chmod(user_dir, 0o750)  # owner+group only  # nosec B103
         for sub in ("quar", "sess", "tmp"):
-            os.chmod(user_dir / sub, 0o750)
+            os.chmod(user_dir / sub, 0o750)  # owner+group only  # nosec B103
         os.chmod(event_log, 0o640)
     except OSError as exc:
         return False, str(exc)
