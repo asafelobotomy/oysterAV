@@ -9,6 +9,8 @@ oyst-cli setup check --json          # wizard gate: exit 1 if attention needed
 oyst-cli setup status --json         # completion state + missing packs
 oyst-cli setup run --json            # guided batch setup (wizard equivalent)
 oyst-cli setup run --enable-linger   # also enable linger when schedule advises it
+oyst-cli setup run --skip-harden     # omit safe ClamAV/rkhunter host hardenings
+oyst-cli firewall ensure-enable --confirm  # SSH-safe UFW/firewalld enable
 oyst-cli setup reset --confirm       # clear completion to re-run setup
 oyst-cli status assess --json
 ```
@@ -72,12 +74,27 @@ oyst-cli packs install lynis [--progress]   # full mode → private runtime; lit
 
 ```bash
 oyst-cli scan ~/Downloads --profile quick --json
-oyst-cli scan / --profile integrity --json
+oyst-cli scan / --profile integrity --confirm --json
+oyst-cli scan / --profile integrity --dry-run --json   # privilege plan only
+oyst-cli job status --json
+oyst-cli job cancel
+oyst-cli job clear                    # clear stuck lock (CLI)
+oyst-cli job cancel --force
 oyst-cli history --limit 20 --json
 oyst-cli history show <job_id> --json
+oyst-cli history handle-open <job_id> --confirm
+oyst-cli history delete <job_id> --confirm
+oyst-cli history delete-all --confirm
+oyst-cli history export <job_id> --json
+oyst-cli history export-all --json
 ```
 
 Profiles: `quick`, `full`, `integrity`, `suite` (malware + rootkits then Lynis audit), `custom` (requires `--packs`).
+
+When a scan includes privileged packs (`rkhunter`, `chkrootkit`, `unhide`, `lynis`),
+CLI prints a Privilege Concert plan and requires `--confirm` before the single
+`scan-concert` polkit prompt. Those packs run first; clamav/maldet follow without
+further passwords. See [ADR-009](../adr/009-privilege-concert.md).
 
 ## Quarantine
 
@@ -89,10 +106,18 @@ oyst-cli quarantine restore <id> --dry-run
 oyst-cli quarantine delete <id> --confirm
 oyst-cli quarantine delete <id> --dry-run
 oyst-cli quarantine verify --json
+oyst-cli quarantine reconcile --json
+oyst-cli quarantine reconcile --delete-orphans --confirm --json
 oyst-cli quarantine add <path>
 ```
 
 Restore/delete require `--confirm` (or `--dry-run` to preview). `add` is additive and does not require confirmation.
+`verify` reports hash-invalid DB rows and vault orphans (files with no DB row);
+`reconcile --delete-orphans --confirm` removes those orphans.
+
+Home / custom scans exclude oysterAV quarantine and maldet `sigs/` / `pub/` trees so
+signature packs are not reported as malware. Prefer a system/AUR `chkrootkit` for
+integrity profiles when the privileged helper cannot seal a runtime binary.
 
 ## Packs
 
@@ -120,7 +145,11 @@ oyst-cli maldet monitor status --json
 oyst-cli rkhunter propupd --confirm --json
 ```
 
-Use `--confirm` (or `--dry-run`) for UFW/firewalld rule mutations, UFW enable/disable/default, fail2ban unban/jail control/`reload --unban`, rkhunter propupd, rkhunter resolve, runtime remove, schedule disable, and path removes. Firewall enable checks for an SSH allow rule unless `--force-lockout-risk`.
+Use `--confirm` (or `--dry-run`) for UFW/firewalld rule mutations, UFW enable/disable/default,
+fail2ban unban/jail control/`reload --unban`, rkhunter propupd, rkhunter resolve,
+`history handle-open --resolve`, runtime remove, schedule disable, and path removes.
+Resolve / handle-open `--resolve` print a Privilege Concert plan before `--confirm`.
+Firewall enable checks for an SSH allow rule unless `--force-lockout-risk`.
 
 ## Schedule
 
@@ -168,14 +197,20 @@ Scan tuning: see [pack-commands.md](pack-commands.md#scan-tuning-configtoml) and
 oyst-cli news list --json
 oyst-cli news list --refresh --json
 oyst-cli news list --sources arch,gentoo --json
+oyst-cli news list --max-age-days 7 --json
 oyst-cli news refresh --json
 oyst-cli news refresh --sources ubuntu,debian --json
 ```
 
-Selectable security advisory feeds (default: Arch / Ubuntu / Debian). Optional sources:
-`arch`, `ubuntu`, `debian`, `gentoo`, `fedora`, `oss-security`. Headlines are
-severity-prioritized then by date. Configure defaults with
-`oyst-cli config set ui.security_news_sources arch,ubuntu,debian`.
+Selectable security advisory feeds (defaults: Arch, Ubuntu, Debian, Fedora, openSUSE,
+oss-security; optional: `gentoo`). Headlines are severity-prioritized then by date, and
+limited to a freshness window (`ui.security_news_max_age_days`, default **14**; allowed
+`7` / `14` / `30`). Configure with:
+
+```bash
+oyst-cli config set ui.security_news_sources arch,ubuntu,debian,fedora,opensuse,oss-security
+oyst-cli config set ui.security_news_max_age_days 14
+```
 
 ## Updates
 
@@ -194,12 +229,18 @@ definitions, then runs rkhunter propupd.
 # Prefer a distro/package install so /usr/bin/oyst-cli is root-owned (required for
 # Polkit elevation). Dev venv paths cannot be used with pkexec.
 sudo oyst-cli install-privileged-helper
+# Git checkout on Arch / PEP 668 hosts (embeds checkout; dev only):
+sudo uv run oyst-cli install-privileged-helper --dev
+# Or install oyst_core for system Python, then reinstall without --dev:
+# sudo uv pip install --python /usr/bin/python3 --break-system-packages .
+# sudo oyst-cli install-privileged-helper
 # or: oyst-cli install-privileged-helper  # prompts via Polkit when packaged
 oyst-cli helper-status --json
 ```
 
 Installs `oyst-helper` and fine-grained polkit actions (`io.github.asafelobotomy.helper.*` via
-`pkexec` argv1). Re-run after upgrades when `helper-status` reports an outdated policy.
+`pkexec` argv1), including policy **v11** `scan-concert`. Re-run after upgrades when
+`helper-status` reports an outdated policy.
 From Flatpak GUI, elevation uses `flatpak-spawn --host pkexec` against the host
 `oyst-cli` — see `packaging/oysterav/flatpak/README.md`.
 
@@ -226,10 +267,13 @@ sudo oyst-cli auth revoke-service-lifecycle --confirm
 ```
 
 Grant installs `/etc/polkit-1/rules.d/49-oysterav-service-lifecycle.rules` so
-`systemctl` / `maldet-config` helper actions succeed without a password for the
-named user. Firewall, fail2ban mutations, and package installs still require auth.
+`systemctl-up` (start/enable/restart for ClamAV and maldet units only) and
+`maldet-config` succeed without a password for the named **active local** session.
+Stop/disable, fail2ban, firewalld, firewall rules, and package installs still require
+auth. Grants expire after **7 days** (systemd timer auto-revokes).
 
-After upgrading oysterAV, reinstall the helper so argv1-scoped polkit actions are current:
+After upgrading oysterAV, reinstall the helper so argv1-scoped polkit actions are current
+(policy v10+). Existing grants are rewritten to the narrowed `systemctl-up` scope:
 
 ```bash
 sudo oyst-cli install-privileged-helper

@@ -35,7 +35,7 @@ jobs:
       force: ${{ steps.detect.outputs.force }}
       build_ref: ${{ steps.detect.outputs.build_ref }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
       - id: detect
@@ -99,7 +99,7 @@ jobs:
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -135,7 +135,7 @@ jobs:
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.detect.outputs.build_ref }}
       - uses: astral-sh/setup-uv@v5
@@ -154,7 +154,7 @@ jobs:
       - run: uv sync --extra all
       - run: uv run python scripts/sync_version.py --check
       - run: uv build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-dist
           path: |
@@ -166,13 +166,13 @@ jobs:
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.detect.outputs.build_ref }}
       - name: Install zstd
         run: sudo apt-get update && sudo apt-get install -y zstd curl
       - run: bash scripts/build_runtime.sh x86_64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: runtime-x86_64
           path: dist/runtime-x86_64.tar.zst
@@ -183,7 +183,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.detect.outputs.build_ref }}
       - name: Install flatpak-builder
@@ -192,7 +192,7 @@ jobs:
           sudo apt-get install -y flatpak flatpak-builder
       - name: Build Flatpak bundle
         run: bash scripts/build_flatpak.sh x86_64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: flatpak
           path: dist/*.flatpak
@@ -202,7 +202,7 @@ jobs:
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.detect.outputs.build_ref }}
       - uses: astral-sh/setup-uv@v5
@@ -220,7 +220,7 @@ jobs:
           uv sync --extra all
           export PYTHON_BIN="$(uv run which python)"
           bash scripts/build_native_packages.sh x86_64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: native-pkgs
           path: |
@@ -232,12 +232,12 @@ jobs:
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.detect.outputs.build_ref }}
       - name: Render PKGBUILD
         run: bash scripts/render_arch_pkgbuild.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: arch-pkgbuild
           include-hidden-files: true
@@ -250,7 +250,7 @@ jobs:
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
           ref: ${{ needs.detect.outputs.build_ref }}
@@ -270,7 +270,7 @@ jobs:
         env:
           OUTPUT: CHANGELOG_FULL.md
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
         with:
           path: release-assets
           merge-multiple: true

@@ -59,18 +59,27 @@ Error:
 | `setup.run` | `oyst-cli setup run` | **New in v2** |
 | `job.start` | `oyst-cli scan` | |
 | `job.cancel` | `oyst-cli job cancel` | Cooperative cancel between packs |
+| `job.clear` | `oyst-cli job clear` | Clear stuck job lock (CLI; GUI uses cancel only) |
 | `job.status` | `oyst-cli job status --json` | Live pack progress while a job is active |
 | `rkhunter.scan` | `oyst-cli rkhunter scan` | |
 | `rkhunter.update` | `oyst-cli rkhunter update` | |
 | `rkhunter.propupd` | `oyst-cli rkhunter propupd` | |
-| `rkhunter.resolve` | `oyst-cli rkhunter resolve` | whitelist overlay; `--confirm` on CLI || `quarantine.list` | `oyst-cli quarantine list --json` | |
+| `rkhunter.resolve` | `oyst-cli rkhunter resolve` | whitelist overlay; `--confirm` on CLI |
+| `quarantine.list` | `oyst-cli quarantine list --json` | |
+| `quarantine.add` | `oyst-cli quarantine add` | |
 | `quarantine.restore` | `oyst-cli quarantine restore` | |
 | `quarantine.delete` | `oyst-cli quarantine delete` | |
 | `quarantine.verify` | `oyst-cli quarantine verify --json` | |
+| `desktop.status` | `oyst-cli desktop status --json` | Autostart / desktop integration |
 | `maintenance.bootstrap` | `oyst-cli maintenance bootstrap` | |
 | `maintenance.post-update` | `oyst-cli maintenance post-update` | |
 | `history.list` | `oyst-cli history --json` | |
 | `history.get` | `oyst-cli history show <job_id> [--json]` | Full persisted scan result |
+| `history.handle_open` | `oyst-cli history handle-open` | Resolve open findings |
+| `history.delete` | `oyst-cli history delete` | |
+| `history.delete_all` | `oyst-cli history delete-all` | |
+| `history.export` | `oyst-cli history export` | |
+| `history.export_all` | `oyst-cli history export-all` | |
 | `audit.list` | `oyst-cli audit list --json` | **New in v2** |
 | `config.get` | `oyst-cli config get [key]` | Omit key to dump full config |
 | `config.set` | `oyst-cli config set` | |
@@ -94,7 +103,7 @@ Error:
 | `helper.install` | `oyst-cli install-privileged-helper` | Polkit-elevated install/reinstall |
 | `auth.grant_service_lifecycle` | `oyst-cli auth grant-service-lifecycle` | Optional param `user` |
 | `auth.revoke_service_lifecycle` | `oyst-cli auth revoke-service-lifecycle` | |
-| `news.list` | `oyst-cli news list [--json] [--sources …]` | Selectable advisory feeds (severity-sorted) |
+| `news.list` | `oyst-cli news list [--json] [--sources …] [--max-age-days 7\|14\|30]` | Selectable advisory feeds (severity-sorted, age-filtered) |
 | `news.refresh` | `oyst-cli news refresh [--json] [--sources …]` | Force-refresh selected feeds |
 | `updates.check` | `oyst-cli updates check [--json]` | Available pack/service package upgrades |
 | `updates.apply` | `oyst-cli updates apply [--json]` | Upgrade packages + refresh definitions + propupd |

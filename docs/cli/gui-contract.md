@@ -27,7 +27,7 @@ Living document mapping every GTK user-facing feature to CLI-first equivalents
 | Tab switcher (Dashboard / Scan / Quarantine / Settings) | No single command — use tab-specific commands below |
 | Global status bar (operational messages) | stderr/stdout from CLI commands |
 | Update alert (idle; yellow; above news) | **`oyst-cli updates check --json`** (`updates.check`) |
-| Security news ticker (idle status bar; below updates) | **`oyst-cli news list [--json] [--sources …]`** / `oyst-cli news refresh` |
+| Security news ticker (idle status bar; below updates) | **`oyst-cli news list [--json] [--sources …] [--max-age-days …]`** / `oyst-cli news refresh` |
 | Auto setup wizard on first launch | `oyst-cli setup check` (exit 1 = show wizard equivalent) |
 
 ---
@@ -72,7 +72,7 @@ Two-column layout (stacks vertically on narrow windows): **Scan** controls (left
 | Profile: Quick / Full / Suite / Integrity / Custom | — (passed to scan) | `oyst-cli scan --profile quick\|full\|suite\|integrity\|custom` |
 | Custom pack checkboxes (clamav, maldet, rkhunter, chkrootkit, unhide, lynis) | `job.start` `packs` | `oyst-cli scan --profile custom --packs clamav,rkhunter,lynis …` |
 | Cancel in-flight scan | `job.cancel` | `oyst-cli job cancel` |
-| Clear stuck job lock (zombie banner) | `job.clear` / `job.cancel` `force` | `oyst-cli job clear`; `oyst-cli job cancel --force` |
+| Clear stuck job lock | — (CLI only) | `oyst-cli job clear`; `oyst-cli job cancel --force` |
 | Target: Home / Downloads / Desktop / Custom (hidden for Integrity) | — | `oyst-cli scan ~/Downloads` or explicit paths |
 
 Integrity runs system-wide packs (`rkhunter`, `chkrootkit`, `unhide`); path controls are hidden. Custom profile exposes a pack picker on this tab.
@@ -110,7 +110,7 @@ Master–detail scan history (list + summary + findings). Findings are grouped b
 | **Resolve** (confirm; whitelist script/hidden/SSH advisories; patches history when `job_id` set) | `rkhunter.resolve` | `oyst-cli rkhunter resolve --threat … [--path …] [--message …] [--job-id …] --confirm [--json]` |
 | Disabled **Resolved** label (after resolve or overlay match) | — (finding `resolved` flag / overlay heuristic) | — |
 | **Quarantine open** / **Resolve open** (one confirm; per-item gates; partial failures reported) | `history.handle_open` | `oyst-cli history handle-open <job_id> --quarantine\|--resolve --confirm [--json]` |
-| Resolve open auth | one `rkhunter-whitelist set-many` polkit prompt for the whole batch | same CLI path |
+| Resolve open auth | Privilege Concert preflight + one `rkhunter-whitelist set-many` polkit prompt | same CLI path (`history handle-open --resolve --confirm`) |
 | Copy path / message | — (clipboard) | — |
 | Review manually hint (chkrootkit / unhide / lynis / non-actionable rkhunter) | — | — |
 
@@ -148,7 +148,8 @@ Dashboard “Open Settings” (missing required packs) deep-links to **Security 
 |-------------|--------------|----------------|
 | oyst-cli backend connection status | `config.get` (probe on Settings refresh) | `oyst-cli status --json` / serve health |
 | Security news ticker | `config.set ui.security_news` + `news.list` | `oyst-cli config set ui.security_news true\|false`; `oyst-cli news list` |
-| News sources (multi-select) | `config.set ui.security_news_sources` + force `news.refresh` | `oyst-cli config set ui.security_news_sources arch,ubuntu,debian[,gentoo,fedora,oss-security]`; `news list --sources …` |
+| News freshness (7/14/30 days) | `config.set ui.security_news_max_age_days` | `oyst-cli config set ui.security_news_max_age_days 7\|14\|30` (default 14); `news list --max-age-days …` |
+| News sources (multi-select) | `config.set ui.security_news_sources` + force `news.refresh` | `oyst-cli config set ui.security_news_sources arch,ubuntu,debian,fedora,opensuse,oss-security[,gentoo]`; `news list --sources …` |
 | Refresh security news | `news.refresh` | `oyst-cli news refresh [--json] [--sources …]` |
 | Auto-quarantine threats | `config.set quarantine.auto` | `oyst-cli config set quarantine.auto true` |
 | Scan backend | `config.set scan.backend` | `oyst-cli config set scan.backend auto\|clamd\|clamscan` |
@@ -182,6 +183,7 @@ Clamonacc under Services is **status-only** (no `services.set` toggle). Paths an
 | Ensure `--fdpass` drop-in | `clamonacc.ensure_fdpass` | `oyst-cli clamonacc ensure-fdpass --confirm` |
 | Ensure host prevention | `clamonacc.ensure_prevention` | `oyst-cli clamonacc ensure-prevention --confirm` |
 | Ensure VirusEvent | `virusevent.ensure` | `oyst-cli virusevent ensure --confirm` |
+| Ensure DisableCache | `clamav.ensure_disable_cache` | `oyst-cli clamav ensure-disable-cache --confirm` |
 
 ### Scheduling
 
@@ -210,8 +212,8 @@ Schedule quarantine/backend are **timer overrides** of General defaults.
 
 | GUI feature | RPC / client | CLI equivalent |
 |-------------|--------------|----------------|
-| **Update all** | `updates.apply` | **`oyst-cli updates apply [--json]`** (check → package upgrades → signatures/definitions → rkhunter propupd) |
-| **Install runtime and update signatures** | `runtime.bootstrap` | **`oyst-cli runtime bootstrap`** |
+| **Update all** | `updates.apply` (+ privilege preflight) | **`oyst-cli updates apply [--json]`** (check → package upgrades → signatures/definitions → rkhunter propupd). Expander lists pipeline steps with per-item Run. |
+| **Install runtime and update signatures** | `runtime.bootstrap` | **`oyst-cli runtime bootstrap`** (outside Update all) |
 | **Maintenance only** | `maintenance.bootstrap` | `oyst-cli maintenance bootstrap` |
 | **Post-update maintenance** | `maintenance.post_update` | `oyst-cli maintenance post-update` |
 | **Update rkhunter data** | `rkhunter.update` | `oyst-cli rkhunter update [--json]` |
@@ -228,8 +230,9 @@ Maintenance only may include rkhunter propupd as part of the bundle without the 
 | Pack list by tier | `pack.doctor` | `oyst-cli doctor --json` or `oyst-cli packs list --json` |
 | Origin (Private/System) + description + path + version | `pack.doctor` + `runtime.status` | `oyst-cli doctor --json`; `oyst-cli runtime status --json` |
 | **Install** / **Install to runtime** | `pack.install` / `runtime.install` | `oyst-cli packs install <name>` / `runtime install <name>` |
+| **Install All** | full: `runtime.install` (`packs=[…]` selected); lite: `setup.run` (`packs=[…]`, skip harden/schedule/bootstrap) | `oyst-cli runtime install <pack>…` / batch via `setup run` / `packs install` (priority: required → recommended → optional) |
 | **Remove** (private only) | `runtime.remove` | `oyst-cli runtime remove <name> --confirm [--progress]` |
-| AUR confirm dialog | `pack.install(confirm_aur=true)` | `--confirm-aur` flag |
+| AUR confirm dialog | `pack.install(confirm_aur=true)` | `--confirm-aur` flag (once up front for Install All) |
 
 System PATH and private runtime both count as installed. Remove deletes only a private copy.
 
@@ -240,13 +243,15 @@ Settings Scheduling is the GUI editor for `[schedule]`; Apply materializes `oyst
 | GUI feature | RPC / client | CLI equivalent |
 |-------------|--------------|----------------|
 | **Run setup wizard** (under Maintenance) | Opens SetupWizard | Step through wizard, or use Auto-Install |
-| **Auto-Install** (wizard welcome) | `setup.run` | **`oyst-cli setup run --enable-linger`** |
+| **Auto-Install** (wizard welcome) | `setup.run` (recipe SwitchRows → skip_* / enable_*) | **`oyst-cli setup run --enable-linger`** |
+| **Host hardening** (wizard) | `setup.run` (`harden_include`, firewall switch; per-step Ensure RPCs) | `oyst-cli setup run --skip-packs --skip-bootstrap --skip-schedule` or individual ensure-* |
+| **Enable host firewall** (wizard switch) | `setup.run` `enable_firewall` | `oyst-cli firewall ensure-enable --confirm` |
 
 ---
 
-## Setup wizard (5 pages)
+## Setup wizard (6 pages)
 
-Pages: Welcome → Security packs → Preferences → Scheduling → Ready.
+Pages: Welcome → Security packs → Preferences → Scheduling → **Host hardening** → Ready.
 
 | Wizard page / action | GUI RPC composition | CLI equivalent |
 |----------------------|---------------------|----------------|
@@ -264,7 +269,11 @@ Pages: Welcome → Security packs → Preferences → Scheduling → Ready.
 | Ready summary checklist | — (GUI) | — |
 | Cancel | — (no mark complete) | Do not run `setup run`; or `setup run --no-mark-complete` |
 
-**Auto-Install defaults:** quick profile, daily at 02:00, linger enabled, full runtime bootstrap. Step-through Scheduling widgets apply only when you install the timer manually on that page.
+**Auto-Install defaults:** quick profile, daily at 02:00, linger enabled, full runtime
+bootstrap, safe ClamAV/rkhunter hardenings (clamd, fdpass, VirusEvent, DisableCache),
+and SSH-safe firewall enable when UFW/firewalld is available. On-access prevention
+stays on Settings → Real-time after path selection. Step-through Scheduling widgets
+apply only when you install the timer manually on that page.
 
 **Preferred first-run path:**
 
@@ -325,7 +334,7 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `quarantine.add` | `oyst-cli quarantine add` |
 | `desktop.status` | `oyst-cli desktop status --json` |
 | `clamonacc.*` | `oyst-cli clamonacc …` |
-| `news.list` | `oyst-cli news list [--json] [--sources …]` |
+| `news.list` | `oyst-cli news list [--json] [--sources …] [--max-age-days …]` |
 | `news.refresh` | `oyst-cli news refresh [--json] [--sources …]` |
 
 Enforced by `tests/test_cli/test_gui_cli_parity.py` and `tests/test_cli/test_rpc_parity.py`.
@@ -374,7 +383,7 @@ See [pack-commands.md](pack-commands.md) for the full pack inventory.
 
 | Topic | GUI | CLI |
 |-------|-----|-----|
-| Setup | 5-page wizard with granular RPC calls | Single `setup run` batch workflow |
+| Setup | 6-page wizard with Host hardening + granular RPC calls | Single `setup run` batch workflow |
 | Failure UX | Copy-to-clipboard command dialogs | Commands are run directly; use `--json` for scripting |
 | AUR installs | Per-pack modal confirm | `--confirm-aur` on install/setup |
 | fail2ban unban | MessageDialog before RPC | `--confirm` required |

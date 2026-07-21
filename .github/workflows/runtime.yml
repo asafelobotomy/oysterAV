@@ -7,17 +7,20 @@ on:
       - "scripts/build_runtime.sh"
       - "oyst_core/runtime/**"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Install zstd
         run: sudo apt-get update && sudo apt-get install -y zstd curl
       - name: Build runtime tarball
         run: bash scripts/build_runtime.sh x86_64
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: runtime-x86_64
           path: dist/runtime-x86_64.tar.zst

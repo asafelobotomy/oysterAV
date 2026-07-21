@@ -75,6 +75,7 @@ Living map: [docs/cli/gui-contract.md](docs/cli/gui-contract.md).
 
 - GUI talks to security tools only via `OystClient` (Unix JSON-RPC or in-process fallback). CI greps for forbidden GUI subprocesses.
 - Privileged ops go through polkit `oyst-helper` (`oyst-cli install-privileged-helper`). No raw `pkexec bash` fallback.
+- **Privilege Concert** ([ADR-009](docs/adr/009-privilege-concert.md)): userspace `oyst_core/privilege/` builds a `PrivilegePlan`; one `auth_admin` polkit prompt runs allowlisted recipes via helper argv1 `setup-concert` / `setup-harden` / `scan-concert` (plus Resolve façade on `rkhunter-whitelist`). Reinstall the helper after policy bumps.
 - Runtime modes: **full** (tools under `~/.local/share/oysterav/runtime/`) vs **lite** (host packages). Set with `oyst-cli config set runtime.mode full|lite`.
 - ClamAV on-access **blocking** is host co-control (never wholesale `clamd.conf` rewrite): [ADR-008](docs/adr/008-clamav-host-cocontrol.md), [operator guide](docs/user-guide/clamonacc-prevention.md).
 
@@ -114,10 +115,15 @@ See [docs/packaging/release.md](docs/packaging/release.md).
 - Prefer CLI/RPC surfaces first for new features; wire the GUI only after matching commands exist.
 - Prefer a detailed plan before implementing large multi-surface or security-sensitive changes.
 - Prefer recognizing host-installed tools as installed (system vs private runtime) without forcing a pack reinstall.
-- Prefer a single batch privileged auth for multi-finding Resolve/quarantine actions instead of one prompt per item.
+- Prefer a single password/auth prompt at the start of each user-initiated action (Privilege Concert), including multi-pack scans, hardenings, and bulk resolve/quarantine—not mid-flow or per-item prompts; order disclosed steps by priority.
 - Prefer Settings options that autosave; avoid redundant Save buttons when individual controls already persist.
-- Prefer a lean GUI that does not duplicate Settings controls onto Scan or other tabs.
+- Prefer a lean GUI that does not duplicate Settings controls onto Scan or other tabs; bulk Update/Apply/Install All actions should use one collapsible itemized checklist with per-item controls (no duplicate lists).
 - Prefer distro-portable host integration over distro-specific one-offs.
+- Prefer host co-control that works in concert with the host (surgical drop-ins / ensure-*); never wholesale override of host ClamAV or daemon config.
+- Prefer first-run/setup wizard auto-application of safe surgical hardenings; leave path-scoped on-access prevention for Real-time after the user chooses paths.
+- Prefer SSH-safe checks before enabling UFW/firewalld during setup/wizard flows.
+- Prefer user-facing system and status messages without developer notes or internal implementation jargon.
+- Prefer GUI chrome that keeps a stable default window size: primary pages (especially Scan) should fit without scrollbars, and optional UI (news ticker) or post-action refreshes must not change status-bar or window height.
 
 ## Learned Workspace Facts
 
@@ -125,3 +131,6 @@ See [docs/packaging/release.md](docs/packaging/release.md).
 - Repository license is GPLv3.
 - Default GUI themeing target is Gruvbox Dark Hard via a shared theme/color library.
 - Status-bar pack/service update notices take priority over the security-news ticker.
+- Security-news ticker freshness is configurable in Settings (7/14/30 days; default 14).
+- Privileged-helper install refuses to embed a user-writable oysterAV checkout; `oyst_core` must live under a root-owned prefix (distro package or root install), which matters on externally-managed Python distros (e.g. Arch/CachyOS).
+- Privilege Concert ([ADR-009](docs/adr/009-privilege-concert.md)) is the unified single-admin-auth-per-user-action model for privileged multi-step flows (scans, setup hardenings, resolve, bulk install).
