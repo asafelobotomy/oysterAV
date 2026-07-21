@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +26,8 @@ AUDIT_KINDS = frozenset(
         "auth.revoke",
         "privileged.run",
         "setup.run",
+        "setup.harden",
+        "setup.concert",
         "runtime.bootstrap",
         "firewall.mutate",
         "fail2ban.unban",
@@ -39,6 +43,26 @@ AUDIT_KINDS = frozenset(
     },
 )
 
+_HOME_PATH_RE = re.compile(r"/home/[^/\s\"']+")
+
+
+def redact_paths(value: Any) -> Any:
+    """Replace ``/home/<user>`` with ``/home/<redacted>`` in nested data."""
+    if isinstance(value, str):
+        return _HOME_PATH_RE.sub("/home/<redacted>", value)
+    if isinstance(value, dict):
+        return {str(k): redact_paths(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_paths(v) for v in value]
+    return value
+
+
+def _chmod_private(path: Path) -> None:
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
 
 class SecurityAudit:
     def __init__(self, db_path: Path | None = None) -> None:
@@ -48,6 +72,7 @@ class SecurityAudit:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        _chmod_private(self.db_path)
         return conn
 
     def _init_db(self) -> None:
@@ -64,6 +89,7 @@ class SecurityAudit:
                 )
                 """,
             )
+        _chmod_private(self.db_path)
 
     def log(
         self,
@@ -73,6 +99,10 @@ class SecurityAudit:
         success: bool = True,
         data: dict[str, Any] | None = None,
     ) -> None:
+        safe_action = str(redact_paths(action))
+        safe_data = redact_paths(data or {})
+        if not isinstance(safe_data, dict):
+            safe_data = {"value": safe_data}
         with self._connect() as conn:
             conn.execute(
                 """
@@ -82,9 +112,9 @@ class SecurityAudit:
                 (
                     datetime.now().isoformat(),
                     kind,
-                    action,
+                    safe_action,
                     1 if success else 0,
-                    json.dumps(data or {}),
+                    json.dumps(safe_data),
                 ),
             )
 

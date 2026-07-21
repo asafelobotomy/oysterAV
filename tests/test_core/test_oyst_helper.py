@@ -34,7 +34,25 @@ def test_validate_jail_rejects_shell() -> None:
 
 def test_build_ufw_allow_argv() -> None:
     argv = _build_ufw_argv(["allow", "--port", "22", "--proto", "tcp"])
-    assert argv == ["ufw", "allow", "to", "any", "port", "22", "tcp"]
+    assert argv == ["ufw", "allow", "22/tcp"]
+
+
+def test_build_ufw_allow_from_argv() -> None:
+    argv = _build_ufw_argv(
+        ["allow", "--port", "22", "--proto", "tcp", "--from", "192.0.2.0/24"],
+    )
+    assert argv == [
+        "ufw",
+        "allow",
+        "from",
+        "192.0.2.0/24",
+        "proto",
+        "tcp",
+        "to",
+        "any",
+        "port",
+        "22",
+    ]
 
 
 def test_build_fail2ban_unban_argv() -> None:
@@ -98,7 +116,10 @@ def test_maldet_start_monitor_one_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert _build_maldet_config_argv(["start-monitor", "users"]) == ["true"]
     assert applied == ["users"]
-    assert systemctl == [["systemctl", "enable", "--now", "maldet"]]
+    assert len(systemctl) == 1
+    assert systemctl[0][0].endswith("systemctl")
+    assert systemctl[0][1:] == ["enable", "--now", "maldet"]
+    assert Path(systemctl[0][0]).is_absolute()
 
 
 def test_build_systemctl_rejects_unknown_unit() -> None:
@@ -158,6 +179,33 @@ def test_oyst_helper_allows_clamonacc_fdpass(tmp_path: Path) -> None:
     assert "--fdpass" in argv
     assert any(a.startswith("--include-list=") for a in argv)
     assert any(a.startswith("--exclude-list=") for a in argv)
+
+
+def test_oyst_helper_rejects_clamonacc_list_symlink(tmp_path: Path) -> None:
+    from oyst_core.privileged.oyst_helper import _validate_scanner_argv
+
+    target = tmp_path / "real.list"
+    target.write_text("/tmp\n", encoding="utf-8")
+    link = tmp_path / "link.list"
+    link.symlink_to(target)
+    with pytest.raises(ValueError, match="not readable"):
+        _validate_scanner_argv(
+            "clamonacc",
+            ["/usr/bin/clamonacc", "--foreground", f"--include-list={link}"],
+        )
+
+
+def test_oyst_helper_rejects_clamonacc_world_writable_list(tmp_path: Path) -> None:
+    from oyst_core.privileged.oyst_helper import _validate_scanner_argv
+
+    include = tmp_path / "ww.list"
+    include.write_text("/tmp\n", encoding="utf-8")
+    include.chmod(0o666)
+    with pytest.raises(ValueError, match="world-writable"):
+        _validate_scanner_argv(
+            "clamonacc",
+            ["/usr/bin/clamonacc", "--foreground", f"--include-list={include}"],
+        )
 
 
 def test_oyst_helper_rejects_bad_linger_user() -> None:

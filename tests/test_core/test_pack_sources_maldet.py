@@ -17,6 +17,7 @@ def test_configure_maldet_enables_clamav_and_user_access(tmp_path: Path) -> None
     text = conf.read_text(encoding="utf-8")
     assert 'scan_clamscan="1"' in text
     assert 'scan_user_access="1"' in text
+    assert "ignore_paths=" in text
     assert configure_maldet_clamav(tmp_path) is False
 
 

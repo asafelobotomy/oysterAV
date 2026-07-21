@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
+import re
 import sqlite3
+import stat
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -73,44 +74,85 @@ class QuarantineVault:
         src = Path(source).expanduser()
         if src.is_symlink():
             raise ValueError("refuse to quarantine through symlink")
-        if not src.exists():
-            raise FileNotFoundError(source)
-        if not src.is_file():
-            raise ValueError("quarantine add requires a regular file")
-        src = src.resolve(strict=True)
-        digest = self._sha256(src)
-        ts = datetime.now().strftime("%Y%m%d%H%M%S")
-        dest_name = f"{ts}_{uuid.uuid4().hex[:8]}_{src.name}"
-        dest = self.vault_dir / dest_name
-        if dest.exists():
-            raise RuntimeError(f"quarantine destination collision: {dest}")
-        shutil.move(str(src), str(dest))
-        with self._connect() as conn:
-            cur = conn.execute(
-                """
-                INSERT INTO entries (
-                    original_path, vault_path, sha256,
-                    threat_name, quarantined_at, metadata
+        flags = os.O_RDONLY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            src_fd = os.open(str(src), flags)
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(source) from exc
+        except OSError as exc:
+            raise ValueError(f"cannot open quarantine source: {exc}") from exc
+        dest: Path | None = None
+        entry_id = 0
+        try:
+            st = os.fstat(src_fd)
+            if not stat.S_ISREG(st.st_mode):
+                raise ValueError("quarantine add requires a regular file")
+            hasher = hashlib.sha256()
+            while True:
+                chunk = os.read(src_fd, 65536)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+            sha = hasher.hexdigest()
+            os.lseek(src_fd, 0, os.SEEK_SET)
+            resolved = src.resolve(strict=False)
+            ts = datetime.now().strftime("%Y%m%d%H%M%S")
+            dest = self.vault_dir / f"{ts}_{uuid.uuid4().hex[:8]}_{resolved.name}"
+            if dest.exists():
+                raise RuntimeError(f"quarantine destination collision: {dest}")
+            with open(dest, "wb") as out_f:
+                while True:
+                    chunk = os.read(src_fd, 65536)
+                    if not chunk:
+                        break
+                    out_f.write(chunk)
+                out_f.flush()
+                os.fsync(out_f.fileno())
+            dir_fd = os.open(str(self.vault_dir), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+            with self._connect() as conn:
+                cur = conn.execute(
+                    """
+                    INSERT INTO entries (
+                        original_path, vault_path, sha256,
+                        threat_name, quarantined_at, metadata
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(resolved),
+                        str(dest),
+                        sha,
+                        threat_name,
+                        datetime.now().isoformat(),
+                        json.dumps({}),
+                    ),
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(src),
-                    str(dest),
-                    digest,
-                    threat_name,
-                    datetime.now().isoformat(),
-                    json.dumps({}),
-                ),
-            )
-            entry_id = int(cur.lastrowid or 0)
-            if entry_id == 0:
-                raise RuntimeError("failed to insert quarantine entry")
+                entry_id = int(cur.lastrowid or 0)
+                if entry_id == 0:
+                    raise RuntimeError("failed to insert quarantine entry")
+                conn.commit()
+            resolved.unlink()
+            src = resolved
+        except Exception:
+            if dest is not None and dest.exists():
+                dest.unlink(missing_ok=True)
+            raise
+        finally:
+            try:
+                os.close(src_fd)
+            except OSError:
+                pass
         return QuarantineEntry(
             id=entry_id,
             original_path=str(src),
             vault_path=str(dest),
-            sha256=digest,
+            sha256=sha,
             threat_name=threat_name,
             quarantined_at=datetime.now(),
         )
@@ -215,3 +257,48 @@ class QuarantineVault:
             if self._sha256(vault) != entry.sha256:
                 bad.append(entry.id)
         return bad
+
+    _ORPHAN_NAME_RE = re.compile(r"^\d{14}_[0-9a-f]{8}_")
+
+    def list_orphans(self) -> list[str]:
+        """Vault files matching quarantine naming with no DB row."""
+        tracked = {str(Path(e.vault_path).resolve()) for e in self.list_entries()}
+        orphans: list[str] = []
+        for path in self.vault_dir.iterdir():
+            if not path.is_file() or path.name == "vault.db":
+                continue
+            if not self._ORPHAN_NAME_RE.match(path.name):
+                continue
+            try:
+                resolved = str(path.resolve())
+            except OSError:
+                continue
+            if resolved not in tracked:
+                orphans.append(resolved)
+        return sorted(orphans)
+
+    def reconcile_orphans(self, *, delete: bool = False) -> dict[str, object]:
+        orphans = self.list_orphans()
+        deleted: list[str] = []
+        if delete:
+            for path_str in orphans:
+                path = Path(path_str)
+                try:
+                    contained = self._contained_vault_path(path)
+                    if contained.is_file():
+                        contained.unlink()
+                        deleted.append(str(contained))
+                except (OSError, ValueError):
+                    continue
+            if deleted:
+                SecurityAudit().log(
+                    "quarantine.reconcile",
+                    "delete-orphans",
+                    success=True,
+                    data={"count": len(deleted)},
+                )
+        return {
+            "orphans": orphans,
+            "deleted": deleted,
+            "ok": True,
+        }

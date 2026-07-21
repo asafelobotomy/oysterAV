@@ -195,3 +195,36 @@ def test_quarantine_restore_refuses_existing(
     sample.write_bytes(b"occupied")
     with pytest.raises(ValueError, match="overwrite"):
         vault.restore(entry.id)
+
+
+def test_quarantine_add_atomic_leaves_db_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = _vault(tmp_path, monkeypatch)
+    sample = tmp_path / "payload.bin"
+    sample.write_bytes(b"payload-bytes")
+    entry = vault.add(str(sample), "Threat")
+    assert not sample.exists()
+    assert Path(entry.vault_path).is_file()
+    assert vault.get(entry.id) is not None
+
+
+def test_quarantine_list_and_reconcile_orphans(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = _vault(tmp_path, monkeypatch)
+    orphan = vault.vault_dir / "20260101120000_abcd1234_clamdscan"
+    orphan.write_bytes(b"orphan")
+    listed = vault.list_orphans()
+    assert str(orphan.resolve()) in listed
+    result = vault.reconcile_orphans(delete=True)
+    assert str(orphan.resolve()) in result["deleted"]
+    assert not orphan.exists()
+    assert vault.list_orphans() == []
+
+
+def test_quarantine_refuse_scanner_basename() -> None:
+    from oyst_core.quarantine_guards import quarantine_refuse_reason
+
+    assert quarantine_refuse_reason("/usr/bin/clamdscan") is not None
+    assert quarantine_refuse_reason("/tmp/eicar.com") is None

@@ -146,6 +146,21 @@ def _validate_scanner_argv(base: str, argv: Sequence[str]) -> list[str]:
                 resolved = str(profile)
                 if not resolved.startswith(_TRUSTED_PROFILE_PREFIXES):
                     raise ValueError("lynis profile must be under /usr or /etc")
+                open_flags = os.O_RDONLY
+                if hasattr(os, "O_NOFOLLOW"):
+                    open_flags |= os.O_NOFOLLOW
+                try:
+                    pfd = os.open(resolved, open_flags)
+                except OSError as exc:
+                    raise ValueError(f"lynis profile not readable: {resolved}") from exc
+                try:
+                    pst = os.fstat(pfd)
+                    if not stat.S_ISREG(pst.st_mode):
+                        raise ValueError("lynis profile must be a regular file")
+                    if pst.st_uid != 0:
+                        raise ValueError("lynis profile must be root-owned")
+                finally:
+                    os.close(pfd)
                 out.append(resolved)
             i += 1
         return out
@@ -159,14 +174,27 @@ def _validate_scanner_argv(base: str, argv: Sequence[str]) -> list[str]:
 
 
 def _validate_clamonacc_list_path(flag: str, arg: str) -> str:
-    """Validate --include-list= / --exclude-list= absolute file paths."""
+    """Validate --include-list= / --exclude-list= absolute file paths (no symlink follow)."""
     path = Path(arg.split("=", 1)[1])
     if not path.is_absolute() or ".." in path.parts:
         raise ValueError(f"clamonacc {flag} must be an absolute path")
     if any(ch in str(path) for ch in (";", "|", "&", "$", "`", "\n", "\r")):
         raise ValueError(f"clamonacc {flag} path contains disallowed characters")
-    if not path.is_file():
-        raise ValueError(f"clamonacc {flag} list not found: {path}")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(str(path), flags)
+    except OSError as exc:
+        raise ValueError(f"clamonacc {flag} list not readable: {path}") from exc
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError(f"clamonacc {flag} must be a regular file")
+        if st.st_mode & 0o002:
+            raise ValueError(f"clamonacc {flag} refuses world-writable list file")
+    finally:
+        os.close(fd)
     return f"{flag}={path}"
 
 

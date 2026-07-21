@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
 from collections.abc import Sequence
-from pathlib import Path
 
 from oyst_core.privileged.helper_clamd import _build_clamd_cocontrol_argv
+from oyst_core.privileged.helper_concert import (
+    run_scan_concert_alias,
+    run_setup_concert_alias,
+    run_setup_harden_alias,
+)
 from oyst_core.privileged.helper_fail2ban import (
     _build_fail2ban_argv,
     _persist_fail2ban_ignoreip,
@@ -24,12 +25,17 @@ from oyst_core.privileged.helper_firewall import (
     _has_flag,
     _parse_flag,
 )
+from oyst_core.privileged.helper_install_script import seal_and_run_install_tarball
+from oyst_core.privileged.helper_sealed_scanner import seal_and_run_scanner
 from oyst_core.privileged.helper_services import (
     _apply_maldet_monitor_mode,
     _build_maldet_config_argv,
     _build_rkhunter_whitelist_argv,
     _build_systemctl_argv,
+    _build_systemctl_up_argv,
 )
+from oyst_core.privileged.helper_setup_concert import run_setup_concert
+from oyst_core.privileged.helper_setup_harden import run_setup_harden
 from oyst_core.privileged.helper_validate import (
     ALLOWED_PACKAGE_MANAGERS,
     ALLOWED_SCANNER_BINARIES,
@@ -45,7 +51,6 @@ from oyst_core.privileged.helper_validate import (
     _validate_run_argv,
     _validate_scanner_argv,
     _validate_username,
-    open_install_script_fd,
     resolve_trusted_argv,
     resolve_trusted_binary,
 )
@@ -66,6 +71,7 @@ __all__ = [
     "_build_maldet_config_argv",
     "_build_rkhunter_whitelist_argv",
     "_build_systemctl_argv",
+    "_build_systemctl_up_argv",
     "_build_ufw_argv",
     "_has_flag",
     "_parse_flag",
@@ -80,6 +86,9 @@ __all__ = [
     "_validate_username",
     "main",
     "run_helper_argv",
+    "run_scan_concert_alias",
+    "run_setup_concert",
+    "run_setup_harden",
 ]
 
 
@@ -108,45 +117,22 @@ def _secure_exec_env() -> dict[str, str]:
     return env
 
 
-def _seal_and_run_install_script(script_path: str, expected_sha256: str) -> int:
-    """Copy extract tree to a root-owned seal dir, re-verify install.sh, then exec."""
-    script = _validate_install_script(script_path, expected_sha256)
-    fd = open_install_script_fd(script_path, expected_sha256)
-    os.close(fd)
-
-    # Prefer sticky /var/tmp for root-owned seal tree; mkdtemp creates uniquely.
-    seal_dir = "/var/tmp" if Path("/var/tmp").is_dir() else None  # nosec B108
-    seal_root = Path(tempfile.mkdtemp(prefix="oyst-seal-", dir=seal_dir))
-    try:
-        os.chmod(seal_root, 0o700)
-        dest_dir = seal_root / script.parent.name
-        shutil.copytree(script.parent, dest_dir, symlinks=False)
-        sealed_script = dest_dir / "install.sh"
-        digest = hashlib.sha256(sealed_script.read_bytes()).hexdigest()
-        if digest != expected_sha256.lower():
-            print("sealed install.sh sha256 mismatch", file=sys.stderr)
-            return 2
-        bash = resolve_trusted_binary("bash")
-        proc = subprocess.run(
-            [bash, str(sealed_script)],
-            cwd=str(dest_dir),
-            check=False,
-            env=_secure_exec_env(),
-        )
-        return proc.returncode
-    finally:
-        shutil.rmtree(seal_root, ignore_errors=True)
-
-
 def run_helper_argv(argv: Sequence[str]) -> int:
     if not argv:
         print(
-            "usage: oyst-helper run|install-script|firewall|fail2ban|systemctl|"
-            "maldet-config|rkhunter-whitelist|clamd-cocontrol",
+            "usage: oyst-helper run|run-sealed|install-script|firewall|fail2ban|"
+            "systemctl|systemctl-up|maldet-config|rkhunter-whitelist|"
+            "clamd-cocontrol|setup-harden|setup-concert|scan-concert",
             file=sys.stderr,
         )
         return 2
     subcommand = argv[0]
+    if subcommand == "setup-concert":
+        return run_setup_concert_alias(argv[1:])
+    if subcommand == "setup-harden":
+        return run_setup_harden_alias(argv[1:])
+    if subcommand == "scan-concert":
+        return run_scan_concert_alias(argv[1:])
     if subcommand == "run":
         try:
             cmd = resolve_trusted_argv(_validate_run_argv(argv[1:]))
@@ -155,15 +141,27 @@ def run_helper_argv(argv: Sequence[str]) -> int:
             return 2
         proc = subprocess.run(cmd, check=False, env=_secure_exec_env())
         return proc.returncode
-    if subcommand == "install-script":
-        if len(argv) < 3:
+    if subcommand == "run-sealed":
+        if len(argv) < 4:
             print(
-                "usage: oyst-helper install-script /path/to/install.sh <sha256>",
+                "usage: oyst-helper run-sealed /path/to/runtime/bin <basename> <sha256> [args...]",
                 file=sys.stderr,
             )
             return 2
         try:
-            return _seal_and_run_install_script(argv[1], argv[2])
+            return seal_and_run_scanner(argv[1], argv[2], argv[3], list(argv[4:]))
+        except (ValueError, OSError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    if subcommand == "install-script":
+        if len(argv) < 3:
+            print(
+                "usage: oyst-helper install-script /path/to/maldetect.tar.gz <sha256>",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            return seal_and_run_install_tarball(argv[1], argv[2])
         except (ValueError, OSError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
@@ -171,11 +169,17 @@ def run_helper_argv(argv: Sequence[str]) -> int:
         "firewall": _build_firewall_argv,
         "fail2ban": _build_fail2ban_argv,
         "systemctl": _build_systemctl_argv,
+        "systemctl-up": _build_systemctl_up_argv,
         "maldet-config": _build_maldet_config_argv,
         "rkhunter-whitelist": _build_rkhunter_whitelist_argv,
         "clamd-cocontrol": _build_clamd_cocontrol_argv,
     }
     if subcommand in builders:
+        if subcommand in ("systemctl-up", "maldet-config"):
+            print(
+                f"oyst-helper: {subcommand} {' '.join(argv[1:])}",
+                file=sys.stderr,
+            )
         try:
             cmd = builders[subcommand](argv[1:])
         except ValueError as exc:

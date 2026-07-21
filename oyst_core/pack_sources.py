@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import tarfile
 import tempfile
@@ -13,6 +14,7 @@ from urllib.request import urlopen
 from oyst_core.privileged.helper import run_privileged_install_script
 from oyst_core.privileged.runner import CommandResult
 from oyst_core.privileged.safe_write import write_text_nofollow
+from oyst_core.scan_excludes import maldet_ignore_paths_value
 from oyst_core.schedule_linger import current_username
 
 MALDET_URL = "https://www.rfxn.com/downloads/maldetect-current.tar.gz"
@@ -30,41 +32,60 @@ def _verify_sha256(file_path: Path, expected: str) -> bool:
     return digest == expected.lower()
 
 
-def install_maldet_tarball() -> CommandResult:
-    """Download LMD tarball, verify in-repo SHA-256, and run install.sh with helper."""
+def stage_maldet_install_script() -> tuple[str, str, str, Path] | CommandResult:
+    """Download/verify maldet tarball; return (tarball, tarball_sha, install_sh, work).
+
+    ``install_sh`` is for full-mode runtime copy only. Privileged installs must
+    pass the tarball path + ``MALDET_SHA256`` into the helper (A-02).
+    Caller must ``shutil.rmtree(work_dir)`` after the privileged concert finishes.
+    On failure returns a ``CommandResult``.
+    """
     work = Path(tempfile.mkdtemp(prefix="oyst-maldet-"))
     try:
         tarball = work / "maldetect-current.tar.gz"
         _download(MALDET_URL, tarball)
         if not _verify_sha256(tarball, MALDET_SHA256):
+            shutil.rmtree(work, ignore_errors=True)
             return CommandResult(
                 1,
                 "",
                 "Checksum verification failed for maldetect tarball "
                 "(in-repo pin mismatch; update MALDET_SHA256 after review)",
             )
-
         extract_dir = work / "extract"
         extract_dir.mkdir()
         with tarfile.open(tarball, "r:gz") as archive:
             archive.extractall(extract_dir, filter="data")
-
         install_dirs = list(extract_dir.glob("maldetect-*"))
         if not install_dirs:
+            shutil.rmtree(work, ignore_errors=True)
             return CommandResult(1, "", "Could not find maldetect directory in tarball")
         install_sh = install_dirs[0] / "install.sh"
         if not install_sh.is_file():
+            shutil.rmtree(work, ignore_errors=True)
             return CommandResult(1, "", "install.sh not found in tarball")
-
         install_sh.chmod(0o755)
-        from oyst_core.runtime.manifest import is_full_mode
+        return str(tarball), MALDET_SHA256, str(install_sh), work
+    except OSError as exc:
+        shutil.rmtree(work, ignore_errors=True)
+        return CommandResult(1, "", str(exc))
 
+
+def install_maldet_tarball() -> CommandResult:
+    """Download LMD tarball, verify in-repo SHA-256, and run install.sh with helper."""
+    from oyst_core.runtime.manifest import is_full_mode
+
+    staged = stage_maldet_install_script()
+    if isinstance(staged, CommandResult):
+        return staged
+    tarball, tarball_sha, install_sh, work = staged
+    try:
         if is_full_mode():
-            return _install_maldet_to_runtime(install_dirs[0])
-        script_digest = hashlib.sha256(install_sh.read_bytes()).hexdigest()
+            source_dir = Path(install_sh).parent
+            return _install_maldet_to_runtime(source_dir)
         res = run_privileged_install_script(
-            str(install_sh),
-            expected_sha256=script_digest,
+            tarball,
+            expected_sha256=tarball_sha,
         )
         if res.returncode == 0:
             _configure_maldet_clamav(None)
@@ -92,6 +113,7 @@ def configure_maldet_clamav(prefix: Path | None = None) -> bool:
 
     Enables ClamAV layering (``scan_clamscan``) and non-root access
     (``scan_user_access``) so signature updates and scans work without root.
+    Sets ``ignore_paths`` for oysterAV vault / maldet sigs / pub trees.
     Returns True if the config file changed.
     """
     if prefix is None:
@@ -107,6 +129,18 @@ def configure_maldet_clamav(prefix: Path | None = None) -> bool:
         text = text.replace("scan_clamscan=0", "scan_clamscan=1")
         text = text.replace('scan_user_access="0"', 'scan_user_access="1"')
         text = text.replace("scan_user_access=0", "scan_user_access=1")
+        ignore = maldet_ignore_paths_value()
+        ignore_line = f'ignore_paths="{ignore}"'
+        if re.search(r"^ignore_paths=", text, flags=re.MULTILINE):
+            text = re.sub(
+                r"^ignore_paths=.*$",
+                ignore_line,
+                text,
+                count=1,
+                flags=re.MULTILINE,
+            )
+        else:
+            text = text.rstrip() + "\n" + ignore_line + "\n"
         if text != original:
             write_text_nofollow(conf, text, mode=0o644)
             return True

@@ -68,19 +68,19 @@ def run_privileged_helper(
 
 
 def run_privileged_install_script(
-    script_path: str,
+    tarball_path: str,
     *,
     expected_sha256: str,
 ) -> CommandResult:
-    """Run a vetted install.sh via oyst-helper only (no raw pkexec bash)."""
+    """Run maldet install from a pinned tarball via oyst-helper (A-02)."""
     helper = resolve_helper_path()
     pkexec = which("pkexec")
-    script = str(Path(script_path).resolve())
+    tarball = str(Path(tarball_path).resolve())
     if not helper or not pkexec:
         return CommandResult(1, "", "pkexec and oyst-helper required for install script")
     try:
         return run_install_command(
-            ["pkexec", helper, "install-script", script, expected_sha256],
+            ["pkexec", helper, "install-script", tarball, expected_sha256],
             timeout=1800,
         )
     except (ValueError, OSError) as exc:

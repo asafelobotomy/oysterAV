@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import shutil
@@ -9,6 +10,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from oyst_core.privileged.helper_validate import resolve_trusted_argv
 from oyst_core.privileged.safe_write import write_text_nofollow
 from oyst_core.privileged.validators import validate_unit
 
@@ -26,12 +28,21 @@ _WAIT_TIMEOUT_SEC = 30.0
 _WAIT_POLL_SEC = 0.5
 
 
+def _secure_exec_env() -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k in ("LANG", "LC_ALL", "TZ")}
+    env["PATH"] = "/usr/bin:/usr/sbin:/bin:/sbin"
+    env["HOME"] = "/root"
+    return env
+
+
 def _run_systemctl(args: list[str]) -> None:
+    cmd = resolve_trusted_argv(["systemctl", *args])
     proc = subprocess.run(
-        ["systemctl", *args],
+        cmd,
         check=False,
         capture_output=True,
         text=True,
+        env=_secure_exec_env(),
     )
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "systemctl failed").strip()
@@ -39,11 +50,13 @@ def _run_systemctl(args: list[str]) -> None:
 
 
 def _systemctl_show(unit: str, prop: str) -> str:
+    cmd = resolve_trusted_argv(["systemctl", "show", unit, "-p", prop, "--value"])
     proc = subprocess.run(
-        ["systemctl", "show", unit, "-p", prop, "--value"],
+        cmd,
         check=False,
         capture_output=True,
         text=True,
+        env=_secure_exec_env(),
     )
     if proc.returncode != 0:
         return ""

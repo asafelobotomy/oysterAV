@@ -22,6 +22,10 @@ def config_dir() -> Path:
 def data_dir() -> Path:
     path = Path.home() / ".local" / "share" / "oysterav"
     path.mkdir(parents=True, exist_ok=True)
+    try:
+        path.chmod(0o700)
+    except OSError:
+        pass
     return path
 
 
@@ -169,5 +173,6 @@ def save_config(config: OysterConfig) -> None:
     lines.append(
         f"security_news_sources = [{_toml_str_list(config.ui.security_news_sources)}]",
     )
+    lines.append(f"security_news_max_age_days = {int(config.ui.security_news_max_age_days)}")
     lines.append(f"theme = {_toml_str(config.ui.theme)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

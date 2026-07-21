@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 
 from oyst_core.config import data_dir
@@ -19,6 +20,10 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
     handler = RotatingFileHandler(LOG_PATH, maxBytes=MAX_BYTES, backupCount=3)
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     logger.addHandler(handler)
+    try:
+        os.chmod(LOG_PATH, 0o600)
+    except OSError:
+        pass
     stream = logging.StreamHandler()
     stream.setLevel(logging.WARNING)
     logger.addHandler(stream)

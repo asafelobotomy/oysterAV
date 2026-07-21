@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
@@ -11,12 +12,22 @@ from oyst_core.packs.rkhunter_resolve import (
     apply_overlay_line,
     apply_overlay_lines,
 )
+from oyst_core.privileged.helper_validate import resolve_trusted_argv
 from oyst_core.privileged.safe_write import write_text_nofollow
 from oyst_core.privileged.validators import (
     validate_monitor_mode,
+    validate_passwordless_systemctl_action,
+    validate_passwordless_unit,
     validate_systemctl_action,
     validate_unit,
 )
+
+
+def _secure_exec_env() -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k in ("LANG", "LC_ALL", "TZ")}
+    env["PATH"] = "/usr/bin:/usr/sbin:/bin:/sbin"
+    env["HOME"] = "/root"
+    return env
 
 
 def _build_systemctl_argv(argv: Sequence[str]) -> list[str]:
@@ -28,6 +39,17 @@ def _build_systemctl_argv(argv: Sequence[str]) -> list[str]:
         return ["systemctl", "enable", "--now", unit]
     if action == "disable-now":
         return ["systemctl", "disable", "--now", unit]
+    return ["systemctl", action, unit]
+
+
+def _build_systemctl_up_argv(argv: Sequence[str]) -> list[str]:
+    """Start/enable/restart AV units only (passwordless grant path)."""
+    if len(argv) < 2:
+        raise ValueError("usage: systemctl-up <action> <unit>")
+    action = validate_passwordless_systemctl_action(argv[0])
+    unit = validate_passwordless_unit(argv[1])
+    if action == "enable-now":
+        return ["systemctl", "enable", "--now", unit]
     return ["systemctl", action, unit]
 
 
@@ -69,11 +91,13 @@ def _build_maldet_config_argv(argv: Sequence[str]) -> list[str]:
         mode = validate_monitor_mode(argv[1])
         _apply_maldet_monitor_mode(mode)
         unit = validate_unit("maldet")
+        cmd = resolve_trusted_argv(["systemctl", "enable", "--now", unit])
         proc = subprocess.run(
-            ["systemctl", "enable", "--now", unit],
+            cmd,
             check=False,
             capture_output=True,
             text=True,
+            env=_secure_exec_env(),
         )
         if proc.returncode != 0:
             detail = (proc.stderr or proc.stdout or "systemctl enable --now failed").strip()
