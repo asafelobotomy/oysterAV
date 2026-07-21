@@ -11,7 +11,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw  # noqa: E402
 
-from oyst_core.security_news import NEWS_SOURCES
+from oyst_core.security_news import DEFAULT_SOURCE_IDS, NEWS_SOURCES, normalize_max_age_days
 from oyst_core.ui_theme import DEFAULT_UI_THEME
 from oysterav.gui.rpc_actions import request_news_refresh
 from oysterav.gui.theme import apply_theme
@@ -21,6 +21,8 @@ from oysterav.gui.widgets.common import bind_string_combo_row, make_button, run_
 from oysterav.gui.widgets.schedule_ui import format_timer_status
 from oysterav.gui.widgets.settings_const import (
     BACKEND_OPTIONS,
+    NEWS_MAX_AGE_LABELS,
+    NEWS_MAX_AGE_OPTIONS,
     SCHEDULE_PROFILE_LABELS,
     SCHEDULE_PROFILE_OPTIONS,
     THEME_LABELS,
@@ -42,13 +44,24 @@ def build_general_section(page: SettingsPage) -> None:
 
     page.security_news_row = Adw.SwitchRow(title="Security news ticker")
     page.security_news_row.set_subtitle(
-        "Scroll selected advisories in the status bar (severity-prioritized, updated daily)",
+        "Scroll selected advisories in the status bar (severity-prioritized)",
     )
     page.security_news_row.connect(
         "notify::active",
         lambda *a: on_security_news_saved(page, *a),
     )
     general.add(page.security_news_row)
+
+    page.news_max_age_row = Adw.ComboRow(title="News freshness")
+    page.news_max_age_row.set_subtitle(
+        "Only show advisories published within this window (default: 14 days)",
+    )
+    bind_string_combo_row(page.news_max_age_row, NEWS_MAX_AGE_LABELS)
+    page.news_max_age_row.connect(
+        "notify::selected",
+        lambda *a: on_news_max_age_saved(page, *a),
+    )
+    general.add(page.news_max_age_row)
 
     news_refresh_row = Adw.ActionRow(title="Refresh security news")
     news_refresh_row.set_subtitle("Force-refresh selected advisory feeds now")
@@ -70,6 +83,7 @@ def build_general_section(page: SettingsPage) -> None:
         "debian": "Debian Security Advisories (DSA)",
         "gentoo": "Gentoo Linux Security Advisories (GLSA)",
         "fedora": "Fedora Bodhi security updates",
+        "opensuse": "openSUSE / SUSE security-announce list",
         "oss-security": "Open Source Security mailing list (seclists)",
     }
     for sid, src in NEWS_SOURCES.items():
@@ -151,6 +165,7 @@ def build_general_section(page: SettingsPage) -> None:
 
 def sync_news_source_sensitivity(page: SettingsPage) -> None:
     enabled = bool(page.security_news_row.get_active())
+    page.news_max_age_row.set_sensitive(enabled)
     for row in page._news_source_rows.values():
         row.set_sensitive(enabled)
 
@@ -164,21 +179,33 @@ def on_security_news_saved(page: SettingsPage, row: Adw.SwitchRow, *_args: objec
         page._on_security_news_changed()
 
 
+def on_news_max_age_saved(page: SettingsPage, *_args: object) -> None:
+    if page._loading:
+        return
+    value = page._selected_option(page.news_max_age_row, NEWS_MAX_AGE_OPTIONS)
+    if not value:
+        return
+    page._save("ui.security_news_max_age_days", value)
+    if page._on_security_news_changed:
+        page._on_security_news_changed()
+
+
 def on_news_sources_saved(page: SettingsPage, *_args: object) -> None:
     if page._loading:
         return
     selected = [sid for sid, row in page._news_source_rows.items() if row.get_active()]
     if not selected:
-        # Keep at least one source — re-enable Arch and persist defaults.
+        # Keep at least one source — re-enable catalog defaults.
+        defaults = list(DEFAULT_SOURCE_IDS)
         page._loading = True
         for sid, row in page._news_source_rows.items():
-            row.set_active(sid in ("arch", "ubuntu", "debian"))
+            row.set_active(sid in defaults)
         page._loading = False
-        selected = ["arch", "ubuntu", "debian"]
+        selected = defaults
         page._set_status("At least one news source is required")
 
     def done(_: object) -> bool:
-        page._set_status("Saved ui.security_news_sources")
+        page._set_status("Saved security news sources")
         if page._on_security_news_changed:
             # Force refresh so the ticker matches the new selection.
             on_news_refresh(page)
@@ -267,11 +294,11 @@ def apply_settings_data(page: SettingsPage, data: dict[str, Any]) -> bool:
     ui_raw = config.get("ui")
     ui = ui_raw if isinstance(ui_raw, dict) else {}
     page.security_news_row.set_active(bool(ui.get("security_news", True)))
+    age_key = str(normalize_max_age_days(ui.get("security_news_max_age_days", 14)))
+    page.news_max_age_row.set_selected(NEWS_MAX_AGE_OPTIONS.index(age_key))
     raw_sources = ui.get("security_news_sources")
     enabled_sources = (
-        {str(s) for s in raw_sources}
-        if isinstance(raw_sources, list)
-        else {"arch", "ubuntu", "debian"}
+        {str(s) for s in raw_sources} if isinstance(raw_sources, list) else set(DEFAULT_SOURCE_IDS)
     )
     for sid, row in page._news_source_rows.items():
         row.set_active(sid in enabled_sources)

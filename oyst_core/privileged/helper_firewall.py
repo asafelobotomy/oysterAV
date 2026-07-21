@@ -52,16 +52,24 @@ def _build_ufw_argv(argv: Sequence[str]) -> list[str]:
         if rest:
             raise ValueError(f"unexpected ufw args: {' '.join(rest)}")
         cmd = ["ufw", action]
+        port_val = port or to_port
         if from_addr:
+            # Full syntax: proto must precede "to" (ufw rejects "... port 22 tcp").
             src = validate_cidr(from_addr) if "/" in from_addr else validate_ip(from_addr)
             cmd.extend(["from", src])
-        if port:
-            cmd.extend(["to", "any", "port", validate_port(port)])
-        elif to_port:
-            cmd.extend(["to", "any", "port", validate_port(to_port)])
-        if proto:
-            cmd.append(validate_proto(proto))
-        return cmd
+            if proto:
+                cmd.extend(["proto", validate_proto(proto)])
+            if port_val:
+                cmd.extend(["to", "any", "port", validate_port(port_val)])
+            return cmd
+        if port_val:
+            # Simple syntax: "22/tcp" — accepted by all ufw versions.
+            if proto:
+                cmd.append(f"{validate_port(port_val)}/{validate_proto(proto)}")
+            else:
+                cmd.append(validate_port(port_val))
+            return cmd
+        raise ValueError("ufw rule requires --port or --to-port")
     if action == "default":
         if len(rest) < 2:
             raise ValueError("usage: ufw default <incoming|outgoing|routed> <allow|deny|reject>")

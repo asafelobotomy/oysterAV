@@ -135,12 +135,13 @@ def test_resolve_finding_dry_run(tmp_path: Path) -> None:
 def test_resolve_finding_calls_helper() -> None:
     with (
         patch(
-            "oyst_core.packs.rkhunter_overlay.path_allowed_for_resolve",
+            "oyst_core.packs.rkhunter_resolve_preview.path_allowed_for_resolve",
         ),
         patch(
-            "oyst_core.packs.rkhunter_overlay.run_privileged_helper",
+            "oyst_core.privilege.run.run_privileged_helper",
             return_value=CommandResult(0, "ok", ""),
         ) as helper,
+        patch("oyst_core.privilege.run.SecurityAudit"),
     ):
         result = resolve_finding(
             "rkhunter-ssh",
@@ -211,10 +212,13 @@ def test_resolve_findings_batch_one_helper_call() -> None:
             ),
         },
     ]
-    with patch(
-        "oyst_core.packs.rkhunter_overlay.run_privileged_helper",
-        return_value=CommandResult(0, "ok", ""),
-    ) as helper:
+    with (
+        patch(
+            "oyst_core.privilege.run.run_privileged_helper",
+            return_value=CommandResult(0, "ok", ""),
+        ) as helper,
+        patch("oyst_core.privilege.run.SecurityAudit"),
+    ):
         result = resolve_findings_batch(findings)
     assert result["ok"] is True
     assert result["resolved"] == 2

@@ -36,6 +36,10 @@ from oyst_core.packs.rkhunter_resolve_plan import (
     plan_resolve,
     validate_whitelist_option,
 )
+from oyst_core.packs.rkhunter_resolve_preview import (
+    collect_resolve_directives,
+    preview_rkhunter_resolve_plan,
+)
 
 __all__ = [
     "ALLOWED_OPTIONS",
@@ -50,12 +54,14 @@ __all__ = [
     "apply_overlay_line",
     "apply_overlay_lines",
     "build_disable_tests_overlay_text",
+    "collect_resolve_directives",
     "ensure_disable_tests_overlay",
     "is_resolvable_threat",
     "merge_overlay_text",
     "package_owner",
     "path_allowed_for_resolve",
     "plan_resolve",
+    "preview_rkhunter_resolve_plan",
     "resolve_finding",
     "resolve_findings_batch",
     "validate_disable_tests",

@@ -9,12 +9,11 @@ from oyst_core.packs.rkhunter_resolve_plan import (
     _SINGLE_VALUE_OPTIONS,
     OVERLAY_HEADER,
     OVERLAY_PATH,
-    ResolvePlan,
-    path_allowed_for_resolve,
-    plan_resolve,
     validate_whitelist_option,
 )
-from oyst_core.privileged.helper import run_privileged_helper
+from oyst_core.packs.rkhunter_resolve_preview import collect_resolve_directives
+from oyst_core.privilege.recipes import build_rkhunter_resolve_plan
+from oyst_core.privilege.run import run_privilege_concert
 
 
 def merge_overlay_text(existing: str, option: str, value: str) -> tuple[str, bool]:
@@ -147,36 +146,9 @@ def resolve_findings_batch(
 
     Path/ownership gates still run per finding before the helper is invoked.
     """
-    planned: list[tuple[dict[str, object], ResolvePlan]] = []
-    errors: list[str] = []
-
-    for raw in findings:
-        threat = str(raw.get("threat_name") or "")
-        path = str(raw.get("path") or "")
-        message = str(raw.get("message") or "")
-        try:
-            plan = plan_resolve(threat, path=path, message=message)
-            if plan.requires_path:
-                path_allowed_for_resolve(plan.value, plan.threat_name, force=force)
-        except ValueError as exc:
-            errors.append(f"{threat or path or 'finding'}: {exc}")
-            continue
-        planned.append((raw, plan))
-
-    items: list[dict[str, object]] = []
-    for raw, plan in planned:
-        items.append(
-            {
-                "ok": True,
-                "threat_name": plan.threat_name,
-                "path": str(raw.get("path") or ""),
-                "message": str(raw.get("message") or ""),
-                "option": plan.option,
-                "value": plan.value,
-                "explanation": plan.explanation,
-                "overlay": str(OVERLAY_PATH),
-            }
-        )
+    directives, errors, items, _plans = collect_resolve_directives(findings, force=force)
+    for item in items:
+        item["overlay"] = str(OVERLAY_PATH)
 
     if dry_run:
         for item in items:
@@ -190,7 +162,7 @@ def resolve_findings_batch(
             "dry_run": True,
         }
 
-    if not planned:
+    if not directives:
         return {
             "ok": len(errors) == 0,
             "resolved": 0,
@@ -198,19 +170,11 @@ def resolve_findings_batch(
             "items": [],
         }
 
-    directives: list[tuple[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for _, plan in planned:
-        key = (plan.option, plan.value)
-        if key in seen:
-            continue
-        seen.add(key)
-        directives.append(key)
-
-    argv = ["set-many", *[f"{opt}={val}" for opt, val in directives]]
-    res = run_privileged_helper("rkhunter-whitelist", argv, timeout=60)
-    if res.returncode != 0:
-        err = (res.stderr or res.stdout or "rkhunter-whitelist set-many failed").strip()
+    priv = build_rkhunter_resolve_plan(directives)
+    steps = run_privilege_concert(priv, timeout=60)
+    failed = [s for s in steps if not s.get("ok")]
+    if failed:
+        err = str(failed[0].get("message") or "rkhunter-whitelist set-many failed").strip()
         for item in items:
             item["ok"] = False
             item["error"] = err
@@ -222,7 +186,7 @@ def resolve_findings_batch(
             "items": items,
         }
 
-    message = (res.stdout or "").strip() or "whitelist updated"
+    message = "whitelist updated"
     for item in items:
         item["changed"] = True
         item["message"] = message
@@ -232,3 +196,13 @@ def resolve_findings_batch(
         "errors": errors,
         "items": items,
     }
+
+
+# Re-export for callers that imported planning helpers from this module.
+__all__ = [
+    "apply_overlay_line",
+    "apply_overlay_lines",
+    "merge_overlay_text",
+    "resolve_finding",
+    "resolve_findings_batch",
+]

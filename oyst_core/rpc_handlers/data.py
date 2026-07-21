@@ -25,8 +25,15 @@ def handle_quarantine_delete(params: dict[str, Any], _ctx: RpcContext) -> Any:
 
 
 def handle_quarantine_verify(_params: dict[str, Any], _ctx: RpcContext) -> Any:
-    bad = QuarantineVault().verify()
-    return {"invalid_entries": bad, "ok": len(bad) == 0}
+    vault = QuarantineVault()
+    bad = vault.verify()
+    orphans = vault.list_orphans()
+    return {
+        "invalid_entries": bad,
+        "orphans": orphans,
+        "orphan_count": len(orphans),
+        "ok": len(bad) == 0 and len(orphans) == 0,
+    }
 
 
 def handle_quarantine_add(params: dict[str, Any], ctx: RpcContext) -> Any:

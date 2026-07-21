@@ -50,6 +50,31 @@ def firewall_audit(json_mode: bool) -> None:
         click.echo("fail2ban: not installed (optional)")
 
 
+@firewall_group.command("ensure-enable")
+@click.option("--confirm", is_flag=True)
+@click.option("--force-lockout-risk", is_flag=True)
+@click.option("--dry-run", is_flag=True)
+@click.option("--json", "json_mode", is_flag=True)
+def firewall_ensure_enable(
+    confirm: bool,
+    force_lockout_risk: bool,
+    dry_run: bool,
+    json_mode: bool,
+) -> None:
+    """Enable UFW or firewalld when installed but inactive (SSH-safe)."""
+    require_confirm(
+        confirm,
+        dry_run=dry_run,
+        message="--confirm required to enable host firewall",
+    )
+    result = FirewallOps().ensure_firewall_enabled(
+        force_lockout=force_lockout_risk,
+        dry_run=dry_run,
+    )
+    emit(result.__dict__, json_mode=json_mode)
+    raise SystemExit(0 if result.ok or result.skipped else 2)
+
+
 @firewall_group.command("export")
 @click.option("--json", "json_mode", is_flag=True)
 def firewall_export(json_mode: bool) -> None:

@@ -44,10 +44,81 @@ label.oyster-section-heading {
   margin-bottom: 2px;
 }
 
-/* Shell status bar under the header. */
+/* Scan tab — fit default 960×700 window without vertical scroll. */
+frame.oyster-scan-result-card {
+  border-radius: 10px;
+}
+
+/* Compact profile/target ComboRows (libadwaita ActionRow defaults are taller). */
+.oyster-scan-options {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.oyster-scan-options > box {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.oyster-scan-options list {
+  background: transparent;
+}
+
+.oyster-scan-options row.oyster-scan-combo,
+.oyster-scan-options row.oyster-scan-combo.activatable {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.oyster-scan-options row.oyster-scan-combo > box {
+  min-height: 28px;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.oyster-scan-options row.oyster-scan-combo title,
+.oyster-scan-options row.oyster-scan-combo .title {
+  font-size: 0.92em;
+}
+
+.oyster-scan-options row.oyster-scan-combo .subtitle,
+.oyster-scan-options row.oyster-scan-combo subtitle {
+  font-size: 0.88em;
+}
+
+.oyster-scan-options .oyster-combo.oyster-scan-combo dropdown popover.menu contents {
+  min-width: 26rem;
+}
+
+.oyster-scan-options .oyster-combo.oyster-scan-combo dropdown popover.menu listview row,
+.oyster-scan-options .oyster-combo.oyster-scan-combo dropdown popover.menu list row,
+.oyster-combo.oyster-scan-combo dropdown popover.menu listview row,
+.oyster-combo.oyster-scan-combo dropdown popover.menu list row {
+  min-height: 26px;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+button.oyster-scan-run {
+  min-height: 30px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+label.oyster-section-heading.oyster-scan-section {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+
+/* Shell status bar under the header — fixed-height slot (status / ticker). */
 .oyster-status-bar {
   padding-top: 2px;
   padding-bottom: 2px;
+  min-height: 22px;
 }
 """
 

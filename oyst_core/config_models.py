@@ -179,8 +179,16 @@ class UiConfig(BaseModel):
     minimize_to_tray: bool = False
     security_news: bool = True
     security_news_sources: list[str] = Field(
-        default_factory=lambda: ["arch", "ubuntu", "debian"],
+        default_factory=lambda: [
+            "arch",
+            "ubuntu",
+            "debian",
+            "fedora",
+            "opensuse",
+            "oss-security",
+        ],
     )
+    security_news_max_age_days: int = 14
     theme: UiThemeId = DEFAULT_UI_THEME
 
 

@@ -11,12 +11,14 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from oysterav.gui.widgets.bulk_checklist import add_switch_item, make_bulk_expander
 from oysterav.gui.widgets.common import (
     bind_string_combo_row,
     make_button,
     make_section_heading,
 )
 from oysterav.gui.widgets.packs import PackListWidget
+from oysterav.gui.widgets.setup_wizard_harden_page import build_harden_page
 
 if TYPE_CHECKING:
     from oysterav.gui.widgets.setup_wizard import SetupWizard
@@ -34,9 +36,9 @@ def build_pages(wizard: SetupWizard) -> None:
             "and runs first-time maintenance.\n\n"
             "In full delivery mode, security tools are installed to a private runtime "
             "under ~/.local/share/oysterav/runtime/.\n\n"
-            "Auto-Install uses recommended defaults: quick profile, daily at 02:00, "
-            "linger enabled, and full runtime bootstrap. "
-            "Use Next to choose packs, quarantine, and schedule yourself."
+            "Auto-Install uses recommended defaults. Toggle recipe steps below, "
+            "or use Next to choose packs, quarantine, schedule, and hardenings yourself. "
+            "Install All for packs lives on the Packs page."
         ),
         xalign=0,
         wrap=True,
@@ -49,6 +51,30 @@ def build_pages(wizard: SetupWizard) -> None:
     wizard.auto_install_btn = make_button("Auto-Install", suggested=True)
     wizard.auto_install_btn.connect("clicked", wizard._on_auto_install)
     welcome_box.append(wizard.auto_install_btn)
+
+    recipe = make_bulk_expander(
+        "Steps included in Auto-Install",
+        subtitle="Packs detail and Install All are on the next page",
+        expanded=True,
+    )
+    wizard.auto_recipe_switches = {}
+    for key, title, subtitle in (
+        ("packs", "Install packs", "Required and recommended missing packs"),
+        ("linger", "Enable linger", "Keep user timers running after logout"),
+        ("schedule", "Install schedule", "Quick daily scan at 02:00"),
+        ("harden", "Apply hardenings", "Safe ClamAV / rkhunter defaults"),
+        ("firewall", "Enable firewall", "SSH-safe UFW or firewalld"),
+    ):
+        wizard.auto_recipe_switches[key] = add_switch_item(
+            recipe,
+            title=title,
+            subtitle=subtitle,
+            active=True,
+        )
+    welcome_box.append(recipe)
+    review_btn = make_button("Review packs")
+    review_btn.connect("clicked", lambda *_: wizard._go_to_page(1))
+    welcome_box.append(review_btn)
     wizard._stack.add_named(wizard._wrap_scrolled(welcome_box), "page-0")
 
     packs_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -192,6 +218,13 @@ def build_pages(wizard: SetupWizard) -> None:
     services_box.append(wizard.schedule_btn)
     wizard._stack.add_named(wizard._wrap_scrolled(services_box), "page-3")
 
+    harden_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    harden_box.set_margin_top(12)
+    harden_box.set_margin_start(12)
+    harden_box.set_margin_end(12)
+    build_harden_page(wizard, harden_box)
+    wizard._stack.add_named(wizard._wrap_scrolled(harden_box), "page-4")
+
     ready_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
     ready_box.set_margin_top(12)
     ready_box.set_margin_start(12)
@@ -213,6 +246,6 @@ def build_pages(wizard: SetupWizard) -> None:
     scan_btn = make_button("Open Scan tab", suggested=True)
     scan_btn.connect("clicked", wizard._on_open_scan)
     ready_box.append(scan_btn)
-    wizard._stack.add_named(wizard._wrap_scrolled(ready_box), "page-4")
+    wizard._stack.add_named(wizard._wrap_scrolled(ready_box), "page-5")
 
     wizard._go_to_page(0)

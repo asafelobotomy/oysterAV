@@ -17,10 +17,7 @@ from oysterav.gui.widgets.runtime_ui import (
     format_runtime_status_line,
 )
 from oysterav.gui.widgets.schedule_ui import show_schedule_result
-from oysterav.gui.widgets.setup_wizard_text import (
-    PAGE_TITLES,
-    format_check_summary,
-)
+from oysterav.gui.widgets.setup_wizard_text import format_check_summary
 
 if TYPE_CHECKING:
     from oysterav.gui.widgets.setup_wizard import SetupWizard
@@ -90,94 +87,6 @@ def on_packs_changed(wizard: SetupWizard) -> None:
     wizard._refresh_ready_summary()
     wizard._update_nav()
     wizard._emit_changed()
-
-
-def on_auto_install(wizard: SetupWizard, *_args: object) -> None:
-    if wizard._auto_install_busy:
-        return
-    wizard._load_preferences()
-    wizard._auto_install_busy = True
-    wizard.welcome_status.set_text("Running Auto-Install with recommended defaults…")
-    wizard._set_status("Running Auto-Install…")
-    wizard._update_nav()
-    auto_quarantine = wizard.auto_quarantine.get_active()
-
-    def worker() -> dict[str, Any]:
-        return wizard.client.setup_run(
-            confirm_aur=True,
-            enable_linger=True,
-            auto_quarantine=auto_quarantine,
-        )
-
-    def done(result: dict[str, Any]) -> bool:
-        wizard._auto_install_busy = False
-        completed = bool(result.get("completed"))
-        ok = bool(result.get("ok"))
-        steps_ok = result.get("steps_ok", 0)
-        steps_total = result.get("steps_total", 0)
-        if completed and ok:
-            summary = f"Auto-Install finished ({steps_ok}/{steps_total} steps OK)."
-            wizard.welcome_status.set_text(summary)
-            wizard._set_status(summary)
-            wizard._bootstrap_ran = True
-            wizard._refresh_schedule_status()
-            run_doctor(wizard)
-            wizard._go_to_page(len(PAGE_TITLES) - 1)
-            wizard._emit_changed()
-            if wizard._on_complete:
-                wizard._on_complete()
-        else:
-            summary = f"Auto-Install finished with issues ({steps_ok}/{steps_total} steps OK)."
-            wizard.welcome_status.set_text(summary)
-            wizard._set_status(summary)
-            body = summary
-            failed = [
-                step
-                for step in result.get("steps", [])
-                if isinstance(step, dict) and not step.get("ok") and not step.get("skipped")
-            ]
-            if failed:
-                details = []
-                for step in failed[:5]:
-                    name = str(step.get("step", "?"))
-                    message = str(step.get("message", "")).strip()
-                    if message:
-                        details.append(f"{name}: {message[:200]}")
-                    else:
-                        details.append(name)
-                body = f"{summary}\n\n" + "\n".join(details)
-            show_command_dialog(
-                wizard.dialog,
-                heading="Auto-Install completed with issues",
-                body=body,
-                copy_text="oyst-cli setup run --enable-linger",
-            )
-            wizard._refresh_schedule_status()
-            run_doctor(wizard)
-            wizard._emit_changed()
-            if completed:
-                wizard._bootstrap_ran = True
-                wizard._go_to_page(len(PAGE_TITLES) - 1)
-                if wizard._on_complete:
-                    wizard._on_complete()
-            else:
-                wizard._update_nav()
-        return False
-
-    def fail(message: str) -> bool:
-        wizard._auto_install_busy = False
-        wizard.welcome_status.set_text(f"Auto-Install failed: {message}")
-        wizard._set_status(f"Auto-Install failed: {message}")
-        wizard._update_nav()
-        show_command_dialog(
-            wizard.dialog,
-            heading="Auto-Install failed",
-            body=message,
-            copy_text="oyst-cli setup run --enable-linger",
-        )
-        return False
-
-    run_in_thread(worker, done, fail)
 
 
 def on_install_skip(wizard: SetupWizard, *_args: object) -> None:
@@ -315,6 +224,8 @@ def finish_gaps(wizard: SetupWizard) -> list[str]:
         gaps.append("Runtime bootstrap / signatures were not run")
     if not wizard._schedule_installed:
         gaps.append("Scheduled scan timer was not installed")
+    if not wizard._harden_ran:
+        gaps.append("Host hardenings were not applied")
     return gaps
 
 
@@ -366,6 +277,8 @@ def complete_finish(wizard: SetupWizard, *, mark_complete: bool = True) -> None:
                 skip_packs=True,
                 skip_schedule=True,
                 skip_bootstrap=True,
+                skip_harden=True,
+                enable_firewall=False,
                 auto_quarantine=wizard.auto_quarantine.get_active(),
                 mark_complete=True,
             )

@@ -116,11 +116,12 @@ Do not hardcode a single conf path. Discover via portable probes (see
 | **3** | Threat-response bridge: VirusEvent → oysterAV quarantine/notify/audit; CLI first (ADR-002); fix process-mode `--exclude-list` helper allowlist debt | Done (`oyst_core/virusevent.py`, helper allowlist) |
 | **4** | Safe concert: systemd `--fdpass` drop-in; surgical ensure of whitelisted OnAccess / VirusEvent keys when unmarked/conflict-free; else handoff | Done (`oyst_core/packs/clamd_ensure.py`, `helper_clamd`, CLI/RPC/GUI) |
 | **4.1** | Robustness: preserve vendor ExecStart for fdpass; sidecar visibility in probe/health; clamd socket wait before clamonacc restart; DisableCache probe + surgical ensure | Done (`helper_clamd_unit.py`, probe fields, `clamav ensure-disable-cache`) |
+| **4.2** | First-run safe concert: Auto-Install / `setup run` applies clamd ensure, fdpass, VirusEvent, DisableCache, rkhunter defaults; SSH-safe firewall enable; prevention stays Real-time | Done (`setup_harden.py`, `FirewallOps.ensure_firewall_enabled`) |
 
 GUI surfaces for any of the above follow ADR-007 (CLI/RPC first; no silent
 GUI-only host edits).
 
-### Explicit non-goals (Phases 0–4.1)
+### Explicit non-goals (Phases 0–4.2)
 
 - No wholesale rewrite of package-managed clamd conf.
 - No free-form conf editor in the GUI.
@@ -128,6 +129,7 @@ GUI-only host edits).
 - No owning `/` (or equivalent) under prevention.
 - No auto-merge of `.rpmnew` / `.dpkg-dist` (handoff only).
 - No MaxThreads / TCPAddr surgical ensure in 4.1 (tuning, not safety).
+- No automatic OnAccessPrevention at first-run (paths + Real-time Ensure only).
 
 ## Consequences
 

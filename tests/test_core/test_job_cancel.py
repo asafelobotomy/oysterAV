@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from oyst_core.events import EventLog
-from oyst_core.models import JobState, PackTier, ScanProfile
+from oyst_core.models import Finding, FindingSeverity, JobState, PackTier, ScanProfile
 from oyst_core.orchestrator import JobOrchestrator
 
 
@@ -93,7 +93,7 @@ def test_stale_lock_auto_clears_after_cancel_age(tmp_path) -> None:  # type: ign
     assert events.active_job() is None
 
 
-def test_custom_scan_runs_lynis_via_audit(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_custom_scan_runs_lynis_via_concert(tmp_path) -> None:  # type: ignore[no-untyped-def]
     events = EventLog(db_path=tmp_path / "events.db")
     orch = JobOrchestrator(events=events)
 
@@ -104,15 +104,27 @@ def test_custom_scan_runs_lynis_via_audit(tmp_path) -> None:  # type: ignore[no-
         tier=PackTier.RECOMMENDED,
         install_hint="",
     )
-    lynis.audit.return_value = (True, "hardening ok", 72)
 
-    with patch.object(orch.registry, "get", return_value=lynis):
+    finding = Finding(
+        pack="lynis",
+        path="system",
+        threat_name="hardening-index:72",
+        severity=FindingSeverity.INFO,
+        message="Hardening index: 72",
+    )
+    with (
+        patch.object(orch.registry, "get", return_value=lynis),
+        patch(
+            "oyst_core.orchestrator.run_privileged_scan_concert",
+            return_value=([finding], [], [{"pack": "lynis", "ok": True}]),
+        ) as concert,
+    ):
         result, _code = orch.run_scan(
             profile=ScanProfile.CUSTOM,
             paths=[str(tmp_path)],
             packs=["lynis"],
         )
 
-    lynis.audit.assert_called_once()
+    concert.assert_called_once()
     lynis.scan_paths.assert_not_called()
     assert any(f.pack == "lynis" for f in result.findings)

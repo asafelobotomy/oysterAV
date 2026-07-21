@@ -22,6 +22,9 @@ from oyst_core.models import (
     ScanResult,
 )
 from oyst_core.orchestrator_helpers import OrchestratorHelpersMixin
+from oyst_core.orchestrator_scan_concert import run_privileged_scan_concert
+from oyst_core.privilege.plan import LOCAL_SCAN_PACKS, PRIVILEGED_SCAN_PACKS
+from oyst_core.privilege.recipes import split_scan_packs
 from oyst_core.registry import get_registry
 
 
@@ -85,6 +88,16 @@ class JobOrchestrator(OrchestratorHelpersMixin):
 
         try:
             pack_names, audit_names = self._split_path_and_audit_packs(profile, packs)
+            # Privileged integrity/audit first (one concert), then local malware packs.
+            all_selected = [*pack_names, *audit_names]
+            privileged, local = split_scan_packs(all_selected)
+            # Path packs that are neither privileged nor local (shouldn't happen) stay local loop.
+            other = [
+                n
+                for n in pack_names
+                if n not in PRIVILEGED_SCAN_PACKS and n not in LOCAL_SCAN_PACKS
+            ]
+            local_path = [*local, *other]
             scan_paths = self._resolve_paths(profile, paths)
             result = ScanResult(
                 job_id=job_id,
@@ -102,22 +115,55 @@ class JobOrchestrator(OrchestratorHelpersMixin):
                 on_progress=on_progress,
             )
 
-            total = len(pack_names) + len(audit_names)
-            for idx, name in enumerate(pack_names):
+            total = max(len(privileged) + len(local_path), 1)
+            done = 0
+
+            if privileged:
                 if self.events.cancel_requested():
-                    result.finalize()
-                    result.state = JobState.CANCELLED
-                    self.events.log("scan", "cancelled", {"job_id": job_id})
-                    self.events.save_scan(result.model_dump(mode="json"))
+                    return self._cancel_result(result, job_id, on_progress)
+                # Skip packs that are not installed.
+                installed_priv: list[str] = []
+                for name in privileged:
+                    pack = self.registry.get(name)
+                    if pack is None:
+                        result.pack_errors.append(PackError(pack=name, error="unknown pack"))
+                        continue
+                    status = pack.doctor()
+                    if not status.installed:
+                        result.pack_errors.append(
+                            PackError(pack=name, error="optional pack not installed"),
+                        )
+                        continue
+                    installed_priv.append(name)
+                if installed_priv:
                     self._emit_progress(
                         job_id,
-                        pack=name,
-                        message="Cancelled",
-                        percent=(idx / max(total, 1)) * 100,
-                        state="cancelled",
+                        pack=installed_priv[0],
+                        message="Running privileged scanners (one authentication)",
+                        percent=0.0,
+                        state="running",
                         on_progress=on_progress,
                     )
-                    return result, ExitCode.ERROR
+                    findings, errors, _steps = run_privileged_scan_concert(
+                        job_id=job_id,
+                        privileged_packs=installed_priv,
+                        registry=self.registry,
+                    )
+                    result.findings.extend(findings)
+                    result.pack_errors.extend(errors)
+                    done += len(installed_priv)
+                    self._emit_progress(
+                        job_id,
+                        pack="",
+                        message="Finished privileged scanners",
+                        percent=(done / total) * 100,
+                        state="running",
+                        on_progress=on_progress,
+                    )
+
+            for idx, name in enumerate(local_path):
+                if self.events.cancel_requested():
+                    return self._cancel_result(result, job_id, on_progress)
                 pack = self.registry.get(name)
                 if pack is None:
                     result.pack_errors.append(PackError(pack=name, error="unknown pack"))
@@ -136,7 +182,7 @@ class JobOrchestrator(OrchestratorHelpersMixin):
                             job_id,
                             pack=name,
                             message=f"Missing required pack: {name}",
-                            percent=(idx / max(total, 1)) * 100,
+                            percent=((done + idx) / total) * 100,
                             state="failed",
                             on_progress=on_progress,
                         )
@@ -145,7 +191,7 @@ class JobOrchestrator(OrchestratorHelpersMixin):
                         PackError(pack=name, error="optional pack not installed")
                     )
                     continue
-                pct = (idx / max(total, 1)) * 100
+                pct = ((done + idx) / total) * 100
                 self._emit_progress(
                     job_id,
                     pack=name,
@@ -163,54 +209,7 @@ class JobOrchestrator(OrchestratorHelpersMixin):
                     job_id,
                     pack=name,
                     message=f"Finished {name}",
-                    percent=((idx + 1) / max(total, 1)) * 100,
-                    state="running",
-                    on_progress=on_progress,
-                )
-
-            for offset, name in enumerate(audit_names):
-                if self.events.cancel_requested():
-                    result.finalize()
-                    result.state = JobState.CANCELLED
-                    self.events.log("scan", "cancelled", {"job_id": job_id})
-                    self.events.save_scan(result.model_dump(mode="json"))
-                    self._emit_progress(
-                        job_id,
-                        pack=name,
-                        message="Cancelled",
-                        percent=((len(pack_names) + offset) / max(total, 1)) * 100,
-                        state="cancelled",
-                        on_progress=on_progress,
-                    )
-                    return result, ExitCode.ERROR
-                pack = self.registry.get(name)
-                if pack is None:
-                    result.pack_errors.append(PackError(pack=name, error="unknown pack"))
-                    continue
-                status = pack.doctor()
-                if not status.installed:
-                    result.pack_errors.append(
-                        PackError(pack=name, error="optional pack not installed")
-                    )
-                    continue
-                pct = ((len(pack_names) + offset) / max(total, 1)) * 100
-                self._emit_progress(
-                    job_id,
-                    pack=name,
-                    message=f"Running {name}",
-                    percent=pct,
-                    state="running",
-                    on_progress=on_progress,
-                )
-                try:
-                    result.findings.extend(self._run_audit_pack(pack))
-                except Exception as exc:  # noqa: BLE001 — pack boundary
-                    result.pack_errors.append(PackError(pack=name, error=str(exc)))
-                self._emit_progress(
-                    job_id,
-                    pack=name,
-                    message=f"Finished {name}",
-                    percent=((len(pack_names) + offset + 1) / max(total, 1)) * 100,
+                    percent=((done + idx + 1) / total) * 100,
                     state="running",
                     on_progress=on_progress,
                 )
@@ -246,3 +245,23 @@ class JobOrchestrator(OrchestratorHelpersMixin):
             return result, code
         finally:
             self.events.release_job_lock(job_id)
+
+    def _cancel_result(
+        self,
+        result: ScanResult,
+        job_id: str,
+        on_progress: Callable[[str, float], None] | None,
+    ) -> tuple[ScanResult, ExitCode]:
+        result.finalize()
+        result.state = JobState.CANCELLED
+        self.events.log("scan", "cancelled", {"job_id": job_id})
+        self.events.save_scan(result.model_dump(mode="json"))
+        self._emit_progress(
+            job_id,
+            pack="",
+            message="Cancelled",
+            percent=0.0,
+            state="cancelled",
+            on_progress=on_progress,
+        )
+        return result, ExitCode.ERROR

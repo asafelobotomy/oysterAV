@@ -14,15 +14,16 @@ from oysterav.gui.widgets.setup_wizard import (
 )
 
 
-def test_page_titles_are_five_without_separate_bootstrap() -> None:
+def test_page_titles_include_host_hardening() -> None:
     assert PAGE_TITLES == (
         "Welcome",
         "Security packs",
         "Preferences",
         "Scheduling",
+        "Host hardening",
         "Ready",
     )
-    assert len(PAGE_TITLES) == 5
+    assert len(PAGE_TITLES) == 6
     assert "Bootstrap" not in PAGE_TITLES
 
 
@@ -55,8 +56,9 @@ def test_format_ready_checklist() -> None:
     assert "skipped" in text
     assert "not run" in text
     assert "not installed" in text
+    assert "Host hardenings" in text
     assert "Auto-quarantine: on" in text
-    assert "Update all" in text
+    assert "Real-time" in text
 
 
 def test_schedule_timer_button_label() -> None:

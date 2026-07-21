@@ -335,7 +335,13 @@ def build_host_cocontrol_group(
     on_complete: Callable[[], None] | None,
 ) -> tuple[Adw.PreferencesGroup, Adw.ActionRow]:
     """Build Real-time host co-control group; returns (group, probe_row)."""
-    group = Adw.PreferencesGroup(title="Host ClamAV co-control")
+    group = Adw.PreferencesGroup(
+        title="Host ClamAV co-control",
+        description=(
+            "Surgical host edits only. Prevention is opt-in and path-scoped; "
+            "blocking large trees can hurt performance (see operator guide)."
+        ),
+    )
     probe = Adw.ActionRow(title="On-access probe")
     probe.set_subtitle("Classification from host clamd.conf")
     group.add(probe)

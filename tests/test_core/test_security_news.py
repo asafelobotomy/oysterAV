@@ -8,6 +8,7 @@ from oyst_core.security_news import (
     _merge_items,
     _parse_feed_xml,
     headlines_for_ticker,
+    normalize_max_age_days,
     normalize_source_ids,
     relative_age_label,
     score_severity,
@@ -89,6 +90,19 @@ OSS = """<?xml version="1.0" encoding="utf-8"?>
 </rss>
 """
 
+OPENSUSE = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>openSUSE Security Announce</title>
+    <item>
+      <title>SUSE-SU-2026:3132-1: important: Security update for python311</title>
+      <link>https://lists.opensuse.org/archives/list/security-announce@lists.opensuse.org/message/AAJMOL/</link>
+      <pubDate>Mon, 20 Jul 2026 20:43:46 +0000</pubDate>
+    </item>
+  </channel>
+</rss>
+"""
+
 
 def test_parse_atom_rss_rdf() -> None:
     arch = _parse_feed_xml("Arch", ATOM)
@@ -117,6 +131,10 @@ def test_parse_gentoo_fedora_oss() -> None:
 
     oss = _parse_feed_xml("oss-security", OSS)
     assert oss[0]["severity_label"] == "medium"  # DoS
+
+    opensuse = _parse_feed_xml("openSUSE", OPENSUSE)
+    assert "SUSE-SU" in opensuse[0]["title"]
+    assert opensuse[0]["severity_label"] == "high"
 
 
 def test_severity_scoring() -> None:
@@ -174,7 +192,61 @@ def test_relative_age_label() -> None:
     assert relative_age_label("2026-07-04T08:00:00+00:00", now=now) == "(2w)"
 
 
+def test_merge_max_age_days() -> None:
+    now = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+    recent = {
+        "source": "Ubuntu",
+        "title": "recent",
+        "link": "https://example/recent",
+        "published": "2026-07-18T12:00:00+00:00",
+        "severity": 45,
+        "severity_label": "medium",
+    }
+    old = {
+        "source": "Arch",
+        "title": "old critical",
+        "link": "https://example/old",
+        "published": "2026-06-01T12:00:00+00:00",
+        "severity": 95,
+        "severity_label": "critical",
+    }
+    undated = {
+        "source": "Debian",
+        "title": "no date",
+        "link": "https://example/none",
+        "published": "",
+        "severity": 95,
+        "severity_label": "critical",
+    }
+    merged = _merge_items([[recent], [old], [undated]], max_age_days=14, now=now)
+    assert [i["link"] for i in merged] == ["https://example/recent"]
+
+
 def test_normalize_source_ids() -> None:
-    assert normalize_source_ids([]) == ["arch", "ubuntu", "debian"]
+    assert normalize_source_ids([]) == [
+        "arch",
+        "ubuntu",
+        "debian",
+        "fedora",
+        "opensuse",
+        "oss-security",
+    ]
     assert normalize_source_ids(["fedora", "arch", "nope", "arch"]) == ["arch", "fedora"]
-    assert normalize_source_ids(["bogus"]) == ["arch", "ubuntu", "debian"]
+    assert normalize_source_ids(["bogus"]) == [
+        "arch",
+        "ubuntu",
+        "debian",
+        "fedora",
+        "opensuse",
+        "oss-security",
+    ]
+    assert normalize_source_ids(["opensuse", "gentoo"]) == ["gentoo", "opensuse"]
+
+
+def test_normalize_max_age_days() -> None:
+    assert normalize_max_age_days(14) == 14
+    assert normalize_max_age_days("7") == 7
+    assert normalize_max_age_days(30) == 30
+    assert normalize_max_age_days(99) == 14
+    assert normalize_max_age_days(None) == 14
+    assert normalize_max_age_days("nope") == 14

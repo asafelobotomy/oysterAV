@@ -6,8 +6,12 @@ import re
 
 from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier
 from oyst_core.packs.base import Pack, resolve_pack_binary
-from oyst_core.privileged.helper import run_privileged
+from oyst_core.privileged.helper_validate import resolve_trusted_binary
 from oyst_core.privileged.runner import run_command
+from oyst_core.privileged.scanner_exec import (
+    privileged_scanner_unavailable_message,
+    run_privileged_scanner,
+)
 
 
 class ChkrootkitPack(Pack):
@@ -30,14 +34,22 @@ class ChkrootkitPack(Pack):
         status = self._base_status(installed, version)
         if installed:
             status.details = {"tool_source": source, "binary": path}
+            if source == "runtime":
+                try:
+                    resolve_trusted_binary("chkrootkit")
+                except ValueError:
+                    status.message = privileged_scanner_unavailable_message("chkrootkit")
         return status
 
     def scan(self) -> tuple[bool, str]:
         path, _ = resolve_pack_binary("chkrootkit", "chkrootkit")
         if not path:
             return False, "chkrootkit not installed"
-        res = run_privileged([path], timeout=7200)
-        return res.returncode in (0, 1), res.stdout + res.stderr
+        res = run_privileged_scanner(path, timeout=7200)
+        out = res.stdout + res.stderr
+        if res.returncode not in (0, 1) and "trusted binary" in (res.stderr or "").lower():
+            return False, privileged_scanner_unavailable_message("chkrootkit")
+        return res.returncode in (0, 1), out or privileged_scanner_unavailable_message("chkrootkit")
 
     def parse_findings(self, output: str) -> list[Finding]:
         findings: list[Finding] = []

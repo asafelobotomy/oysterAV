@@ -6,6 +6,11 @@ import ipaddress
 import re
 from pathlib import Path
 
+from oyst_core.privileged.auth_grant_scope import (
+    PASSWORDLESS_SYSTEMCTL_ACTIONS,
+    PASSWORDLESS_SYSTEMCTL_UNITS,
+)
+
 JAIL_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
 ZONE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
 UNIT_NAME_RE = re.compile(r"^[a-zA-Z0-9@._-]+$")
@@ -22,6 +27,7 @@ ALLOWED_SYSTEMCTL_UNITS = frozenset(
         "clamav-freshclam-once.timer",
         "clamav-freshclam",
         "clamav-clamonacc",
+        "firewalld",
     },
 )
 
@@ -82,6 +88,20 @@ def validate_systemctl_action(action: str) -> str:
     cleaned = action.strip()
     if cleaned not in ALLOWED_SYSTEMCTL_ACTIONS:
         raise ValueError(f"systemctl action not allowlisted: {action}")
+    return cleaned
+
+
+def validate_passwordless_unit(name: str) -> str:
+    cleaned = validate_unit(name)
+    if cleaned not in PASSWORDLESS_SYSTEMCTL_UNITS:
+        raise ValueError(f"unit not allowed for systemctl-up: {name}")
+    return cleaned
+
+
+def validate_passwordless_systemctl_action(action: str) -> str:
+    cleaned = validate_systemctl_action(action)
+    if cleaned not in PASSWORDLESS_SYSTEMCTL_ACTIONS:
+        raise ValueError(f"action not allowed for systemctl-up: {action}")
     return cleaned
 
 

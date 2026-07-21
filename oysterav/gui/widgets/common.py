@@ -72,20 +72,27 @@ def make_section_heading(text: str) -> Gtk.Label:
     return heading
 
 
-def _combo_list_factory() -> Gtk.SignalListItemFactory:
+def _combo_list_factory(*, compact: bool = False) -> Gtk.SignalListItemFactory:
     """Popup factory: full label text + selection checkmark (no ellipsis)."""
     factory = Gtk.SignalListItemFactory()
+    icon_px = 14 if compact else 16
+    row_spacing = 6 if compact else 8
 
     def on_setup(_factory: Gtk.SignalListItemFactory, item: Gtk.ListItem) -> None:
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=row_spacing)
+        if compact:
+            row.set_margin_top(2)
+            row.set_margin_bottom(2)
         check = Gtk.Image.new_from_icon_name("object-select-symbolic")
-        check.set_pixel_size(16)
+        check.set_pixel_size(icon_px)
         check.set_opacity(0.0)
         label = Gtk.Label(xalign=0.0)
         label.set_halign(Gtk.Align.START)
         label.set_hexpand(True)
         label.set_ellipsize(Pango.EllipsizeMode.NONE)
         label.set_wrap(False)
+        if compact:
+            label.add_css_class("caption")
         row.append(check)
         row.append(label)
         item.set_child(row)
@@ -113,11 +120,18 @@ def _combo_list_factory() -> Gtk.SignalListItemFactory:
     return factory
 
 
-def bind_string_combo_row(row: Adw.ComboRow, labels: list[str]) -> None:
+def bind_string_combo_row(
+    row: Adw.ComboRow,
+    labels: list[str],
+    *,
+    compact: bool = False,
+) -> None:
     """Bind string options so the open menu never truncates labels."""
     row.set_model(Gtk.StringList.new(labels))
-    row.set_list_factory(_combo_list_factory())
+    row.set_list_factory(_combo_list_factory(compact=compact))
     row.add_css_class("oyster-combo")
+    if compact:
+        row.add_css_class("oyster-scan-combo")
 
 
 def run_in_thread(
@@ -254,21 +268,27 @@ class StatusCard(Gtk.Frame):
         title: str,
         *,
         on_activate: Callable[[], None] | None = None,
+        compact: bool = False,
     ) -> None:
         super().__init__()
         self.add_css_class("card")
         self.add_css_class("oyster-status-card")
-        self.set_margin_start(6)
-        self.set_margin_end(6)
-        self.set_margin_top(6)
-        self.set_margin_bottom(6)
+        if compact:
+            self.add_css_class("oyster-scan-result-card")
+        card_margin = 3 if compact else 6
+        self.set_margin_start(card_margin)
+        self.set_margin_end(card_margin)
+        self.set_margin_top(card_margin)
+        self.set_margin_bottom(card_margin)
         self.set_hexpand(True)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        box.set_margin_start(16)
-        box.set_margin_end(16)
-        box.set_margin_top(12)
-        box.set_margin_bottom(12)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2 if compact else 4)
+        pad_x = 10 if compact else 16
+        pad_y = 6 if compact else 12
+        box.set_margin_start(pad_x)
+        box.set_margin_end(pad_x)
+        box.set_margin_top(pad_y)
+        box.set_margin_bottom(pad_y)
 
         self.title_label = Gtk.Label(label=title)
         self.title_label.set_halign(Gtk.Align.START)
@@ -276,12 +296,18 @@ class StatusCard(Gtk.Frame):
 
         self.value_label = Gtk.Label(label="—")
         self.value_label.set_halign(Gtk.Align.START)
-        self.value_label.add_css_class("title-2")
+        if compact:
+            self.value_label.add_css_class("caption")
+        else:
+            self.value_label.add_css_class("title-2")
 
         self.desc_label = Gtk.Label(label="")
         self.desc_label.set_halign(Gtk.Align.START)
         self.desc_label.set_wrap(True)
         self.desc_label.add_css_class("dim-label")
+        if compact:
+            self.desc_label.set_lines(1)
+            self.desc_label.set_ellipsize(Pango.EllipsizeMode.END)
 
         box.append(self.title_label)
         box.append(self.value_label)
@@ -297,6 +323,7 @@ class StatusCard(Gtk.Frame):
     def set_values(self, value: str, description: str = "", *, css_class: str = "") -> None:
         self.value_label.set_text(value)
         self.desc_label.set_text(description)
+        self.desc_label.set_visible(bool(description.strip()))
         apply_status_css(self.value_label, css_class)
 
 

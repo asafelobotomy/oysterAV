@@ -8,10 +8,23 @@
   <defaults>
     <allow_any>auth_admin</allow_any>
     <allow_inactive>auth_admin</allow_inactive>
-    <allow_active>auth_admin_keep</allow_active>
+    <allow_active>auth_admin</allow_active>
   </defaults>
   <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/oysterav/oyst-helper</annotate>
   <annotate key="org.freedesktop.policykit.exec.argv1">systemctl</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.asafelobotomy.helper.systemctl-up">
+  <description>Start or enable oysterAV AV services</description>
+  <message>Authentication is required to start or enable ClamAV and maldet system services</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin_keep</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">systemctl-up</annotate>
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
@@ -93,6 +106,45 @@
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
+<action id="io.github.asafelobotomy.helper.setup-harden">
+  <description>Apply oysterAV first-run host hardenings</description>
+  <message>Authentication is required to apply recommended ClamAV, rkhunter, and firewall host hardenings</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">setup-harden</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.asafelobotomy.helper.setup-concert">
+  <description>Run oysterAV first-run setup concert</description>
+  <message>Authentication is required to install security packs and apply recommended host hardenings</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">setup-concert</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.asafelobotomy.helper.scan-concert">
+  <description>Run oysterAV privileged security scanners</description>
+  <message>Authentication is required to run integrity and audit scanners for this scan</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">scan-concert</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
 <action id="io.github.asafelobotomy.helper.install-script">
   <description>Run oysterAV vetted install scripts</description>
   <message>Authentication is required to install security tools</message>
@@ -103,6 +155,19 @@
   </defaults>
   <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/oysterav/oyst-helper</annotate>
   <annotate key="org.freedesktop.policykit.exec.argv1">install-script</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
+<action id="io.github.asafelobotomy.helper.run-sealed">
+  <description>Run oysterAV sealed runtime scanners</description>
+  <message>Authentication is required to run a hash-verified copy of an oysterAV runtime scanner</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">run-sealed</annotate>
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 </policyconfig>

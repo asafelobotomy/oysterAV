@@ -286,4 +286,19 @@ def test_ui_theme_default_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert load_config().ui.security_news_sources == ["arch", "fedora"]
 
     set_config_value("ui.security_news_sources", "")
-    assert load_config().ui.security_news_sources == ["arch", "ubuntu", "debian"]
+    assert load_config().ui.security_news_sources == [
+        "arch",
+        "ubuntu",
+        "debian",
+        "fedora",
+        "opensuse",
+        "oss-security",
+    ]
+
+    set_config_value("ui.security_news_max_age_days", "7")
+    assert load_config().ui.security_news_max_age_days == 7
+    set_config_value("ui.security_news_max_age_days", "30")
+    assert load_config().ui.security_news_max_age_days == 30
+    with pytest.raises(KeyError, match="security_news_max_age_days"):
+        set_config_value("ui.security_news_max_age_days", "21")
+    assert load_config().ui.security_news_max_age_days == 30

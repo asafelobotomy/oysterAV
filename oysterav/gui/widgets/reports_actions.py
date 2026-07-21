@@ -15,6 +15,7 @@ from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 from oyst_core.client import OystClient
 from oyst_core.config import data_dir
 from oyst_core.finding_status import MALWARE_PACKS, finding_is_open
+from oyst_core.packs.rkhunter_resolve import preview_rkhunter_resolve_plan
 from oysterav.gui.finding_present import is_resolvable_finding
 from oysterav.gui.rpc_actions import (
     request_history_delete,
@@ -24,7 +25,9 @@ from oysterav.gui.rpc_actions import (
     request_history_get,
     request_history_handle_open,
 )
+from oysterav.gui.widgets.bulk_checklist import format_capped_list
 from oysterav.gui.widgets.common import run_in_thread
+from oysterav.gui.widgets.privilege_confirm import confirm_privilege_plan
 
 
 class _ReportsHost(Protocol):
@@ -103,34 +106,8 @@ def confirm_handle_open(
         return
     if resolve and r_n == 0:
         return
-    if quarantine:
-        heading = "Quarantine open malware findings?"
-        body = (
-            f"Quarantine {q_n} open malware finding(s) for this report. "
-            "Same per-item gates as row Quarantine."
-        )
-    else:
-        heading = "Resolve open rkhunter findings?"
-        body = (
-            f"Resolve {r_n} open rkhunter finding(s) via whitelist overlay "
-            "in one privileged write (one authentication). "
-            "Does not edit sshd_config or delete files."
-        )
-    dialog = Adw.MessageDialog(
-        transient_for=page._window,
-        heading=heading,
-        body=body,
-    )
-    dialog.add_response("cancel", "Cancel")
-    dialog.add_response("confirm", "Confirm")
-    dialog.set_default_response("cancel")
-    dialog.set_close_response("cancel")
-    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
 
-    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
-        if response != "confirm":
-            return
-
+    def run_handle() -> None:
         def worker() -> dict[str, Any]:
             return request_history_handle_open(
                 page.client,
@@ -154,6 +131,60 @@ def confirm_handle_open(
             return False
 
         run_in_thread(worker, done, failed)
+
+    if resolve and not quarantine:
+        findings = [
+            f for f in page._detail_findings if finding_is_open(f) and is_resolvable_finding(f)
+        ]
+        plan, _errs = preview_rkhunter_resolve_plan(findings)
+        if plan is None or not plan.needs_elevation:
+            page._set_status("No resolvable rkhunter findings to whitelist")
+            return
+        confirm_privilege_plan(
+            page._window,
+            plan,
+            on_continue=run_handle,
+            continue_label="Resolve",
+        )
+        return
+
+    if quarantine:
+        paths = [
+            str(f.get("path") or "")
+            for f in page._detail_findings
+            if finding_is_open(f)
+            and str(f.get("pack") or "") in MALWARE_PACKS
+            and str(f.get("path") or "") not in {"", "system"}
+        ]
+        listed = format_capped_list(paths, limit=8)
+        heading = "Quarantine open malware findings?"
+        body = (
+            f"Quarantine {q_n} open malware finding(s) for this report. "
+            "Same per-item gates as row Quarantine."
+        )
+        if listed:
+            body = f"{body}\n\nPaths:\n{listed}"
+    else:
+        heading = "Resolve open rkhunter findings?"
+        body = (
+            f"Resolve {r_n} open rkhunter finding(s) via whitelist overlay "
+            "in one privileged write (one authentication). "
+            "Does not edit sshd_config or delete files."
+        )
+    dialog = Adw.MessageDialog(
+        transient_for=page._window,
+        heading=heading,
+        body=body,
+    )
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("confirm", "Confirm")
+    dialog.set_default_response("cancel")
+    dialog.set_close_response("cancel")
+    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
+
+    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
+        if response == "confirm":
+            run_handle()
 
     dialog.connect("response", on_response)
     dialog.present()

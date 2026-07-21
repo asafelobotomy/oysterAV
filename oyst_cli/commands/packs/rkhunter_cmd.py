@@ -9,6 +9,7 @@ from oyst_cli.output import emit
 from oyst_core.pack_jobs import run_rkhunter_resolve
 from oyst_core.packs.rkhunter import RKHunterPack
 from oyst_core.packs.rkhunter_resolve import plan_resolve
+from oyst_core.privilege import build_rkhunter_resolve_plan, preflight_body, preflight_dict
 
 
 @click.group("rkhunter")
@@ -84,21 +85,29 @@ def rkhunter_resolve(
     json_mode: bool,
 ) -> None:
     """Whitelist an rkhunter finding in /etc/rkhunter.d/oysterav-whitelist.conf."""
-    if not dry_run:
-        require_confirm(
-            confirm,
-            message="--confirm required to write rkhunter whitelist overlay",
-        )
     try:
-        plan = plan_resolve(threat_name, path=path, message=message)
+        resolve_plan = plan_resolve(threat_name, path=path, message=message)
     except ValueError as exc:
         if json_mode:
             emit({"ok": False, "error": str(exc)}, json_mode=True)
         else:
             click.echo(str(exc), err=True)
         raise SystemExit(2) from None
-    if not json_mode:
-        click.echo(plan.explanation)
+
+    priv = build_rkhunter_resolve_plan([(resolve_plan.option, resolve_plan.value)])
+    if not dry_run:
+        if json_mode and not confirm:
+            emit(preflight_dict(priv), json_mode=True)
+        elif not json_mode:
+            click.echo(preflight_body(priv))
+            click.echo(resolve_plan.explanation)
+        require_confirm(
+            confirm,
+            message="--confirm required to write rkhunter whitelist overlay",
+        )
+    elif not json_mode:
+        click.echo(resolve_plan.explanation)
+
     result = run_rkhunter_resolve(
         threat_name,
         path=path,

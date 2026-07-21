@@ -111,7 +111,7 @@ def on_fail2ban_unban(page: SettingsPage, row: Adw.EntryRow, *_args: object) -> 
     dialog = Adw.MessageDialog(
         transient_for=page._window,
         heading="Unban IP in fail2ban?",
-        body=f"This will unban {ip} (requires polkit authentication).",
+        body=f"This will unban {ip} (requires administrator authentication).",
     )
     dialog.add_response("cancel", "Cancel")
     dialog.add_response("unban", "Unban")

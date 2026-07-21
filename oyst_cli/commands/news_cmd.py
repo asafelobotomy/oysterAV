@@ -31,10 +31,24 @@ def news_group() -> None:
         f"({', '.join(NEWS_SOURCES)}); default: config ui.security_news_sources"
     ),
 )
-def news_list_cmd(json_mode: bool, refresh: bool, sources: str | None) -> None:
+@click.option(
+    "--max-age-days",
+    type=click.Choice(["7", "14", "30"], case_sensitive=False),
+    default=None,
+    help=(
+        "Only include advisories newer than N days (default: config ui.security_news_max_age_days)"
+    ),
+)
+def news_list_cmd(
+    json_mode: bool,
+    refresh: bool,
+    sources: str | None,
+    max_age_days: str | None,
+) -> None:
     """List cached or freshly fetched security headlines."""
     selected = _parse_sources_option(sources)
-    data = list_security_news(force_refresh=refresh, sources=selected)
+    age = int(max_age_days) if max_age_days is not None else None
+    data = list_security_news(force_refresh=refresh, sources=selected, max_age_days=age)
     if json_mode:
         emit(data, json_mode=True)
         return
@@ -44,6 +58,9 @@ def news_list_cmd(json_mode: bool, refresh: bool, sources: str | None) -> None:
     used = data.get("sources")
     if isinstance(used, list) and used:
         click.echo(f"Sources: {', '.join(str(s) for s in used)}")
+    window = data.get("max_age_days")
+    if window is not None:
+        click.echo(f"Freshness: last {window} day(s)")
     if data.get("stale"):
         click.echo("Cache: stale (showing last good fetch)")
     elif data.get("from_cache"):
@@ -78,10 +95,23 @@ def news_list_cmd(json_mode: bool, refresh: bool, sources: str | None) -> None:
         f"({', '.join(NEWS_SOURCES)}); default: config ui.security_news_sources"
     ),
 )
-def news_refresh_cmd(json_mode: bool, sources: str | None) -> None:
+@click.option(
+    "--max-age-days",
+    type=click.Choice(["7", "14", "30"], case_sensitive=False),
+    default=None,
+    help=(
+        "Only include advisories newer than N days (default: config ui.security_news_max_age_days)"
+    ),
+)
+def news_refresh_cmd(
+    json_mode: bool,
+    sources: str | None,
+    max_age_days: str | None,
+) -> None:
     """Force-refresh advisory feeds and update the cache."""
     selected = _parse_sources_option(sources)
-    data = list_security_news(force_refresh=True, sources=selected)
+    age = int(max_age_days) if max_age_days is not None else None
+    data = list_security_news(force_refresh=True, sources=selected, max_age_days=age)
     errors_raw = data.get("errors")
     errors = errors_raw if isinstance(errors_raw, list) else []
     items_raw = data.get("items")

@@ -82,6 +82,23 @@ def _resolve_install_base(argv: Sequence[str]) -> str:
     return _command_basename(argv)
 
 
+def pkexec_scrubbed_env() -> dict[str, str]:
+    """Minimal env for pkexec so session secrets are not inherited."""
+    keep = (
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "XAUTHORITY",
+        "XDG_RUNTIME_DIR",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TZ",
+    )
+    env = {k: v for k, v in os.environ.items() if k in keep}
+    env.setdefault("PATH", "/usr/bin:/usr/sbin:/bin:/sbin")
+    return env
+
+
 def run_install_command(
     argv: Sequence[str],
     *,
@@ -92,6 +109,7 @@ def run_install_command(
     base = _resolve_install_base(argv)
     if base not in INSTALL_ALLOWED_COMMANDS:
         raise ValueError(f"install command not allowlisted: {base}")
+    env = pkexec_scrubbed_env() if base in ("pkexec", "oyst-helper") else None
     proc = subprocess.run(
         list(argv),
         capture_output=True,
@@ -99,6 +117,7 @@ def run_install_command(
         timeout=timeout,
         check=False,
         cwd=cwd,
+        env=env,
     )
     return CommandResult(proc.returncode, proc.stdout, proc.stderr)
 

@@ -5,7 +5,18 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-DEFAULT_SOURCE_IDS: tuple[str, ...] = ("arch", "ubuntu", "debian")
+DEFAULT_SOURCE_IDS: tuple[str, ...] = (
+    "arch",
+    "ubuntu",
+    "debian",
+    "fedora",
+    "opensuse",
+    "oss-security",
+)
+
+# Allowed ticker freshness windows (Settings + config).
+ALLOWED_MAX_AGE_DAYS: tuple[int, ...] = (7, 14, 30)
+DEFAULT_MAX_AGE_DAYS: int = 14
 
 # CISA RSS retired May 2025 — do not add.
 # Official / well-known open feeds only (fixed URLs; no user-supplied URLs).
@@ -43,6 +54,11 @@ NEWS_SOURCES: dict[str, NewsSource] = {
         "fedora",
         "Fedora",
         "https://bodhi.fedoraproject.org/rss/updates/?type=security",
+    ),
+    "opensuse": NewsSource(
+        "opensuse",
+        "openSUSE",
+        "https://lists.opensuse.org/archives/list/security-announce@lists.opensuse.org/feed/",
     ),
     "oss-security": NewsSource(
         "oss-security",
@@ -125,3 +141,21 @@ def normalize_source_ids(raw: Sequence[str] | None) -> list[str]:
         return list(DEFAULT_SOURCE_IDS)
     # Preserve NEWS_SOURCES catalog order for stable cache fingerprints.
     return [sid for sid in NEWS_SOURCES if sid in seen]
+
+
+def normalize_max_age_days(raw: object) -> int:
+    """Return 7|14|30; invalid / missing → DEFAULT_MAX_AGE_DAYS (14)."""
+    if isinstance(raw, bool):
+        return DEFAULT_MAX_AGE_DAYS
+    if isinstance(raw, int):
+        days = raw
+    elif isinstance(raw, str):
+        try:
+            days = int(raw.strip())
+        except ValueError:
+            return DEFAULT_MAX_AGE_DAYS
+    else:
+        return DEFAULT_MAX_AGE_DAYS
+    if days in ALLOWED_MAX_AGE_DAYS:
+        return days
+    return DEFAULT_MAX_AGE_DAYS

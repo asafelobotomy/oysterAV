@@ -47,6 +47,7 @@ class SettingsPage:
     # Attached by settings_*_ui builders / realtime section.
     backend_status_row: Adw.ActionRow
     security_news_row: Adw.SwitchRow
+    news_max_age_row: Adw.ComboRow
     _news_source_rows: dict[str, Adw.SwitchRow]
     auto_quarantine_row: Adw.SwitchRow
     profile_row: Adw.ComboRow
@@ -288,7 +289,7 @@ class SettingsPage:
             return
 
         def done(_: object) -> bool:
-            self._set_status(f"Saved {key}")
+            self._set_status("Settings saved")
             if key.startswith("schedule."):
                 settings_schedule_ui.queue_timer_apply(self)
             return False

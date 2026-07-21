@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Literal
 
 from oyst_core.audit import SecurityAudit
-from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.runner import run_command
+from oyst_core.privileged.systemctl_route import run_systemctl_helper
 
 ServiceName = Literal[
     "clamd",
@@ -84,7 +84,7 @@ def _systemctl_set(unit: str, *, on: bool, boot: bool) -> tuple[bool, str]:
         action = "enable-now" if boot else "start"
     else:
         action = "disable-now" if boot else "stop"
-    res = run_privileged_helper("systemctl", [action, unit])
+    res = run_systemctl_helper(action, unit)
     ok = res.returncode == 0
     msg = (res.stdout or res.stderr or "").strip() or ("ok" if ok else "failed")
     return ok, msg

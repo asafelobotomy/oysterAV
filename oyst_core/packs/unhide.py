@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier
 from oyst_core.packs.base import Pack, resolve_pack_binary
-from oyst_core.privileged.helper import run_privileged
+from oyst_core.privileged.helper_validate import resolve_trusted_binary
 from oyst_core.privileged.runner import run_command
+from oyst_core.privileged.scanner_exec import (
+    privileged_scanner_unavailable_message,
+    run_privileged_scanner,
+)
 
 
 class UnhidePack(Pack):
@@ -40,6 +45,11 @@ class UnhidePack(Pack):
         status = self._base_status(path is not None, version)
         if path:
             status.details = {"tool_source": source, "binary": path}
+            if source == "runtime":
+                try:
+                    resolve_trusted_binary(Path(path).name)
+                except ValueError:
+                    status.message = privileged_scanner_unavailable_message("unhide")
         return status
 
     def scan(self, mode: str = "sys") -> tuple[bool, str]:
@@ -48,7 +58,7 @@ class UnhidePack(Pack):
             return False, "unhide not installed"
         allowed = {"sys", "brute", "quick", "check", "fork", "proc", "reverse"}
         scan_mode = mode if mode in allowed else "sys"
-        res = run_privileged([binary, scan_mode], timeout=600)
+        res = run_privileged_scanner(binary, [scan_mode], timeout=600)
         return res.returncode == 0, res.stdout + res.stderr
 
     def parse_findings(self, output: str) -> list[Finding]:

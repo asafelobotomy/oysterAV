@@ -64,6 +64,7 @@ GUI_CLIENT_TO_CLI: dict[str, list[str]] = {
     "clamonacc_ensure_prevention": ["clamonacc", "ensure-prevention", "--help"],
     "virusevent_status": ["virusevent", "status", "--json"],
     "virusevent_ensure": ["virusevent", "ensure", "--help"],
+    "clamav_ensure_disable_cache": ["clamav", "ensure-disable-cache", "--help"],
     "news_list": ["news", "list", "--json"],
     "news_refresh": ["news", "refresh", "--help"],
     "updates_check": ["updates", "check", "--json"],

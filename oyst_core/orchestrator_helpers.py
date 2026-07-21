@@ -6,11 +6,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from oyst_core.audit import SecurityAudit
 from oyst_core.config import load_config
 from oyst_core.finding_status import MALWARE_PACKS
 from oyst_core.models import Finding, FindingSeverity, ScanResult
 from oyst_core.packs.clamd_onaccess import probe_onaccess_prevention
 from oyst_core.quarantine import QuarantineVault
+from oyst_core.quarantine_guards import quarantine_refuse_reason
 
 if TYPE_CHECKING:
     from oyst_core.events import EventLog
@@ -72,14 +74,24 @@ class OrchestratorHelpersMixin:
 
     def _quarantine_findings(self, result: ScanResult) -> None:
         vault = QuarantineVault()
+        audit = SecurityAudit()
         for finding in result.findings:
             if finding.pack not in MALWARE_PACKS:
                 continue
             if finding.path and finding.path != "system" and Path(finding.path).exists():
+                refuse = quarantine_refuse_reason(finding.path)
+                if refuse:
+                    audit.log(
+                        "quarantine.skip",
+                        finding.path,
+                        success=False,
+                        data={"reason": refuse, "threat": finding.threat_name},
+                    )
+                    continue
                 try:
                     vault.add(finding.path, finding.threat_name)
                     finding.quarantined = True
-                except (OSError, FileNotFoundError):
+                except (OSError, FileNotFoundError, ValueError, RuntimeError):
                     pass
 
     def cancel_job(

@@ -8,7 +8,12 @@ from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier
 from oyst_core.packs.base import Pack, resolve_pack_binary
 from oyst_core.packs.rkhunter_resolve import ensure_disable_tests_overlay
 from oyst_core.privileged.helper import run_privileged
+from oyst_core.privileged.helper_validate import resolve_trusted_binary
 from oyst_core.privileged.runner import run_command
+from oyst_core.privileged.scanner_exec import (
+    privileged_scanner_unavailable_message,
+    run_privileged_scanner,
+)
 
 
 class RKHunterPack(Pack):
@@ -31,11 +36,17 @@ class RKHunterPack(Pack):
         status = self._base_status(installed, version)
         if installed:
             status.details = {"tool_source": source, "binary": path}
-        if installed:
-            status.message = (
+            runtime_note = None
+            if source == "runtime":
+                try:
+                    resolve_trusted_binary("rkhunter")
+                except ValueError:
+                    runtime_note = privileged_scanner_unavailable_message("rkhunter")
+            propupd_note = (
                 "Upstream releases are infrequent; run propupd after OS updates. "
                 "Never propupd on a suspect system."
             )
+            status.message = runtime_note or propupd_note
         return status
 
     def update(self) -> tuple[bool, str]:
@@ -59,8 +70,8 @@ class RKHunterPack(Pack):
             return False, "rkhunter not installed"
         # Best-effort: sync DISABLE_TESTS overlay before check (may require polkit).
         ensure_disable_tests_overlay()
-        argv = [path, "--check", "--sk", "--rwo"] if skip_keypress else [path, "--check"]
-        res = run_privileged(argv, timeout=7200)
+        tail = ["--check", "--sk", "--rwo"] if skip_keypress else ["--check"]
+        res = run_privileged_scanner(path, tail, timeout=7200)
         # --rwo warnings go to stdout via display(). Child-tool noise (egrep
         # obsolescent, grep stray \) lands on stderr — do not feed that to parse.
         output = res.stdout or ""

@@ -8,10 +8,11 @@ from pathlib import Path
 from oyst_core.config import load_config
 from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier, ScanProfile
 from oyst_core.packs.base import Pack, detect_distro_family, resolve_pack_binary
-from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.runner import CommandResult, run_command, version_gte
+from oyst_core.privileged.systemctl_route import run_systemctl_helper
 from oyst_core.runtime.bundles.clamav import clamav_db_dir, clamscan_database_args
 from oyst_core.runtime.manifest import is_full_mode
+from oyst_core.scan_excludes import merged_clamav_exclude_dirs
 
 CLAMD_SOCKETS = [
     "/run/clamav/clamd.ctl",
@@ -98,7 +99,7 @@ class ClamAVPack(Pack):
             helper_action = "stop"
         elif action == "start":
             helper_action = "enable-now"
-        res = run_privileged_helper("systemctl", [helper_action, unit])
+        res = run_systemctl_helper(helper_action, unit)
         ok = res.returncode == 0
         SecurityAudit().log(
             "clamav.clamd",
@@ -204,7 +205,7 @@ class ClamAVPack(Pack):
         argv.extend(self.scan_limit_flags(profile))
 
     def _append_exclude_dirs(self, argv: list[str]) -> None:
-        for raw in load_config().scan.exclude_dirs:
+        for raw in merged_clamav_exclude_dirs():
             expanded = str(Path(raw).expanduser())
             if expanded:
                 argv.append(f"--exclude-dir={expanded}")

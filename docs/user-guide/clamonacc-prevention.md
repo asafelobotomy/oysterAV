@@ -17,6 +17,21 @@ oyst-cli status assess --json
 On-access monitoring can stay enabled (`clamonacc.enabled`); only the
 “prevention requested” health signal clears.
 
+### Performance and VirusEvent caveats
+
+Community and upstream reports show **OnAccessPrevention** can stall or DoS busy
+desktops when fanotify watches large trees ([ClamAV#1024](https://github.com/Cisco-Talos/clamav/issues/1024)).
+Keep includes **path-scoped** (for example `~/Downloads`), never `OnAccessMountPath /`.
+
+Combining **prevention** with a **VirusEvent** script can produce delayed opens and
+duplicate notifications on some hosts ([ClamAV#544](https://github.com/Cisco-Talos/clamav/issues/544)).
+oysterAV’s optional VirusEvent wrapper is for quarantine hand-off; if prevention
+feels sticky or chatty, test with VirusEvent unset or with detect-only first.
+
+oysterAV defaults stay **opt-in** for prevention (wizard / Real-time after path
+selection), matching Linux desktop norms that treat always-on blocking as an
+advanced choice rather than a silent first-run default.
+
 ## Portable discovery (all distros)
 
 Run these **on the host** (not only inside Flatpak). Paths and unit names vary —
@@ -191,6 +206,9 @@ Merge sidecars manually (or via distro tools). oysterAV **will not** auto-merge;
 surgical ensures refuse to write while sidecars exist.
 
 ### DisableCache (daemon result cache)
+
+First-run Auto-Install / `oyst-cli setup run` applies this surgically when safe
+(ADR-008 Phase 4.2). Manual path:
 
 ```bash
 oyst-cli status assess --json   # clamd_disable_cache_unset when unset

@@ -14,6 +14,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
 from oyst_core.packs.rkhunter_resolve import plan_resolve
+from oyst_core.privilege import PrivilegePlan, build_rkhunter_resolve_plan
 from oysterav.gui.finding_present import DisplayFinding
 from oysterav.gui.rpc_actions import (
     request_quarantine_add,
@@ -21,6 +22,7 @@ from oysterav.gui.rpc_actions import (
     request_rkhunter_resolve,
 )
 from oysterav.gui.widgets.common import make_button, run_in_thread
+from oysterav.gui.widgets.privilege_confirm import confirm_privilege_plan
 
 
 def action_button(label: str, callback: Callable[[], None]) -> Gtk.Button:
@@ -113,8 +115,8 @@ def confirm_propupd(
         transient_for=window,
         heading="Refresh rkhunter baseline?",
         body=(
-            "Only run propupd on a trusted system. "
-            "This rewrites the property database (rkhunter --propupd)."
+            "Only refresh the file baseline on a trusted system. "
+            "This rewrites the property database."
         ),
     )
     dialog.add_response("cancel", "Cancel")
@@ -128,14 +130,14 @@ def confirm_propupd(
             return
 
         def done(result: dict[str, Any]) -> bool:
-            msg = result.get("message", "propupd finished")
+            msg = result.get("message", "Baseline refresh finished")
             if on_status:
                 on_status(str(msg))
             return False
 
         def failed(err: str) -> bool:
             if on_status:
-                on_status(f"rkhunter propupd failed: {err}")
+                on_status(f"Baseline refresh failed: {err}")
             return False
 
         run_in_thread(lambda: request_rkhunter_propupd(client), done, failed)
@@ -154,37 +156,27 @@ def confirm_resolve(
     on_refresh: Callable[[], None] | None,
 ) -> None:
     try:
-        plan = plan_resolve(row.threat_name, path=row.path, message=row.message)
+        resolve_plan = plan_resolve(row.threat_name, path=row.path, message=row.message)
     except ValueError as exc:
         if on_status:
             on_status(f"Resolve unavailable: {exc}")
         return
 
-    dialog = Adw.MessageDialog(
-        transient_for=window,
-        heading="Resolve rkhunter finding?",
-        body=(
-            f"{plan.explanation}\n\n"
-            f"Writes {plan.option}={plan.value} to "
-            "/etc/rkhunter.d/oysterav-whitelist.conf. "
-            "Does not delete files or edit sshd_config. "
-            "Re-scan afterward to verify."
-        ),
+    priv = build_rkhunter_resolve_plan([(resolve_plan.option, resolve_plan.value)])
+    enriched = PrivilegePlan(
+        recipe=priv.recipe,
+        title=priv.title,
+        summary=f"{resolve_plan.explanation}\n\n{priv.summary}",
+        argv1=priv.argv1,
+        helper_argv=list(priv.helper_argv),
+        privileged_steps=list(priv.privileged_steps),
     )
-    dialog.add_response("cancel", "Cancel")
-    dialog.add_response("confirm", "Resolve")
-    dialog.set_default_response("cancel")
-    dialog.set_close_response("cancel")
-    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
 
     threat = row.threat_name
     path = row.path
     message = row.message
 
-    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
-        if response != "confirm":
-            return
-
+    def on_continue() -> None:
         def worker() -> dict[str, Any]:
             return request_rkhunter_resolve(
                 client,
@@ -215,5 +207,9 @@ def confirm_resolve(
 
         run_in_thread(worker, done, failed)
 
-    dialog.connect("response", on_response)
-    dialog.present()
+    confirm_privilege_plan(
+        window,
+        enriched,
+        on_continue=on_continue,
+        continue_label="Resolve",
+    )

@@ -10,6 +10,7 @@ from oyst_core.packs.firewall import FirewallPack
 from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.runner import run_command, which
 from oyst_core.privileged.validators import validate_port, validate_proto
+from oyst_core.setup_harden import parse_helper_steps
 
 
 @dataclass
@@ -19,6 +20,7 @@ class FirewallResult:
     argv: list[str] | None = None
     before: str | None = None
     after: str | None = None
+    skipped: bool = False
 
 
 class FirewallOps:
@@ -49,10 +51,24 @@ class FirewallOps:
         except (ValueError, OSError):
             return ""
 
+    def _ufw_rules_text(self) -> str:
+        chunks: list[str] = []
+        for argv in (
+            ["ufw", "status", "verbose"],
+            ["ufw", "status", "numbered"],
+            ["ufw", "show", "added"],
+        ):
+            try:
+                res = run_command(argv, timeout=30)
+                chunks.append(res.stdout.strip())
+            except (ValueError, OSError):
+                continue
+        return "\n".join(chunks)
+
     def _ssh_allowed(self, backend: str) -> bool:
-        snap = self._snapshot(backend).lower()
         if backend == "ufw":
-            return "22/tcp" in snap or "22 " in snap or "ssh" in snap
+            return self.parse_ssh_open(self._ufw_rules_text())
+        snap = self._snapshot(backend).lower()
         return "ssh" in snap or "22/tcp" in snap or "22:tcp" in snap
 
     def _audit_mutate(
@@ -70,6 +86,26 @@ class FirewallOps:
             success=ok,
             data={"argv": argv, "before": before[:2000], "after": after[:2000]},
         )
+
+    def _run_helper(
+        self,
+        action: str,
+        argv: list[str],
+        *,
+        before: str = "",
+        dry_run: bool = False,
+    ) -> FirewallResult:
+        if dry_run:
+            return FirewallResult(ok=True, message="dry-run", argv=argv, before=before)
+        res = run_privileged_helper("firewall", argv)
+        after = ""
+        backend = argv[0] if argv else ""
+        if backend in ("ufw", "firewalld"):
+            after = self._snapshot(backend) if backend == "firewalld" else self._ufw_rules_text()
+        ok = res.returncode == 0
+        self._audit_mutate(action, ok=ok, argv=argv, before=before, after=after)
+        msg = (res.stdout or res.stderr or "").strip() or ("ok" if ok else "failed")
+        return FirewallResult(ok=ok, message=msg, argv=argv, before=before, after=after)
 
     def _run(
         self,
@@ -91,14 +127,61 @@ class FirewallOps:
                 argv=argv,
                 before=before,
             )
+        return self._run_helper(action, argv, before=before, dry_run=dry_run)
+
+    def ensure_firewall_enabled(
+        self,
+        *,
+        force_lockout: bool = False,
+        dry_run: bool = False,
+    ) -> FirewallResult:
+        """Enable UFW or firewalld when installed but inactive (SSH-safe).
+
+        Uses one ``setup-harden`` polkit prompt (shared root firewall ensure).
+        """
+        det = self._pack.detect()
+        if det.get("conflict"):
+            return FirewallResult(
+                ok=False,
+                message="Multiple firewall managers active; resolve UFW vs firewalld first",
+            )
+        active = str(det.get("active", "none"))
+        if active in ("ufw", "firewalld"):
+            return FirewallResult(
+                ok=True,
+                skipped=True,
+                message=f"{active} already active",
+            )
+        prefer_ufw = bool(det.get("ufw"))
+        prefer_fw = bool(det.get("firewalld"))
+        if not prefer_ufw and not prefer_fw:
+            return FirewallResult(
+                ok=True,
+                skipped=True,
+                message="no UFW or firewalld binary installed",
+            )
         if dry_run:
-            return FirewallResult(ok=True, message="dry-run", argv=argv, before=before)
-        res = run_privileged_helper("firewall", argv)
-        after = self._snapshot(backend)
-        ok = res.returncode == 0
-        self._audit_mutate(action, ok=ok, argv=argv, before=before, after=after)
-        msg = (res.stdout or res.stderr or "").strip() or ("ok" if ok else "failed")
-        return FirewallResult(ok=ok, message=msg, argv=argv, before=before, after=after)
+            return FirewallResult(
+                ok=True,
+                message="dry-run",
+                argv=["setup-harden", "--with-firewall"],
+            )
+        argv = ["--with-firewall"]
+        if force_lockout:
+            argv.append("--force-lockout")
+        res = run_privileged_helper("setup-harden", argv, timeout=300)
+        helper_steps = parse_helper_steps(res.stdout or "")
+        fw_step = next((s for s in helper_steps if s.get("step") == "firewall-ensure"), None)
+        if fw_step is not None:
+            ok = bool(fw_step.get("ok"))
+            skipped = bool(fw_step.get("skipped"))
+            return FirewallResult(
+                ok=ok or skipped,
+                skipped=skipped,
+                message=str(fw_step.get("message") or ""),
+            )
+        msg = (res.stderr or res.stdout or "firewall ensure failed").strip()
+        return FirewallResult(ok=res.returncode == 0, message=msg)
 
     def export_rules(self) -> dict[str, object]:
         backend = self._pack.detect()
@@ -148,6 +231,13 @@ class FirewallOps:
         dry_run: bool = False,
         force_lockout: bool = False,
     ) -> FirewallResult:
+        if action == "enable":
+            det = self._pack.detect()
+            if not det.get("conflict") and str(det.get("active", "none")) == "none":
+                return self.ensure_firewall_enabled(
+                    force_lockout=force_lockout,
+                    dry_run=dry_run,
+                )
         self._active_backend()
         argv = ["ufw", action]
         require_ssh = action == "enable"

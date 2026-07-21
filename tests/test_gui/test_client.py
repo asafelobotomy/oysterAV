@@ -43,8 +43,15 @@ def test_oyst_client_history_and_config() -> None:
 
 
 def test_oyst_client_quarantine_verify() -> None:
+    from unittest.mock import MagicMock, patch
+
     from oyst_core.client import OystClient
 
+    vault = MagicMock()
+    vault.verify.return_value = []
+    vault.list_orphans.return_value = []
     client = OystClient(socket_path=Path("/nonexistent/oyst.sock"))
-    result = client.quarantine_verify()
+    with patch("oyst_core.rpc_handlers.data.QuarantineVault", return_value=vault):
+        result = client.quarantine_verify()
     assert result.get("ok") is True
+    assert result.get("orphan_count") == 0

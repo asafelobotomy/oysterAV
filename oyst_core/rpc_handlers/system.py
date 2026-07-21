@@ -37,7 +37,17 @@ def handle_runtime_install(params: dict[str, Any], _ctx: RpcContext) -> Any:
     pack = params.get("pack")
     if pack:
         return install_pack_runtime(str(pack))
-    return bootstrap_runtime()
+    packs_raw = params.get("packs")
+    pack_list: list[str] | None = None
+    if isinstance(packs_raw, list) and packs_raw:
+        pack_list = [str(p) for p in packs_raw if str(p).strip()]
+    results = bootstrap_runtime(pack_list)
+    ok_count = sum(1 for r in results if r.get("ok"))
+    return {
+        "ok": ok_count == len(results) and bool(results),
+        "results": results,
+        "message": f"Installed {ok_count}/{len(results)} runtime packs",
+    }
 
 
 def handle_runtime_remove(params: dict[str, Any], _ctx: RpcContext) -> Any:

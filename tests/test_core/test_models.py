@@ -148,9 +148,16 @@ def test_rpc_config_get_set(tmp_path: Path, monkeypatch: object) -> None:
 
 
 def test_rpc_quarantine_verify() -> None:
-    server = RpcServer()
-    resp = _rpc_request(server, "quarantine.verify")
+    from unittest.mock import MagicMock, patch
+
+    vault = MagicMock()
+    vault.verify.return_value = []
+    vault.list_orphans.return_value = []
+    with patch("oyst_core.rpc_handlers.data.QuarantineVault", return_value=vault):
+        server = RpcServer()
+        resp = _rpc_request(server, "quarantine.verify")
     assert resp["result"]["ok"] is True
+    assert resp["result"]["orphan_count"] == 0
 
 
 def test_client_start_scan_shape() -> None:

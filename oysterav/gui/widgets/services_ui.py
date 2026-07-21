@@ -149,13 +149,21 @@ def build_services_group(
                 install_btn.add_css_class("suggested-action")
             install_btn.set_sensitive(True)
             if grant.get("granted"):
+                expires = grant.get("expires") or "unknown"
                 auth_switch.set_subtitle(
-                    f"Granted for {grant.get('granted_user')} "
-                    "(systemctl/maldet-config only; polkit may still prompt)"
+                    f"Start/enable ClamAV & maldet without a password until {expires}. "
+                    "Stop/disable and fail2ban still prompt. "
+                    "Weakens defenses against same-user malware."
+                )
+            elif grant.get("expired"):
+                auth_switch.set_subtitle(
+                    "Grant expired — re-enable to renew (7 days). "
+                    "Stop/disable always require a password."
                 )
             else:
                 auth_switch.set_subtitle(
-                    "Off — polkit will prompt for admin passwords on service changes"
+                    "Off — opt-in allows passwordless start/enable of ClamAV & maldet "
+                    "for 7 days (local session only). Stop/disable still prompt."
                 )
             state["loading"] = True
             auth_switch.set_active(bool(grant.get("granted")))

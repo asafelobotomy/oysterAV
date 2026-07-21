@@ -5,10 +5,16 @@ from __future__ import annotations
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import textwrap
 from pathlib import Path
 
+from oyst_core.privileged.auth_grant import migrate_grant_on_helper_install
+from oyst_core.privileged.auth_grant_scope import (
+    SERVICE_LIFECYCLE_ACTION_IDS as SERVICE_LIFECYCLE_ACTION_IDS,
+)
+from oyst_core.privileged.polkit_policy import build_polkit_policy
 from oyst_core.privileged.runner import run_command
 
 HELPER_DIR = Path("/usr/lib/oysterav")
@@ -18,28 +24,37 @@ HELPER_PATH_LEGACY = Path("/usr/local/lib/oysterav/oyst-helper")
 POLKIT_PATH = Path("/usr/share/polkit-1/actions/io.github.asafelobotomy.policy")
 
 # Bump when action IDs / argv1 annotations / exec.path change (helper-status reports this).
-POLICY_VERSION = 6
+POLICY_VERSION = 11
 
 POLKIT_ACTION_IDS = (
     "io.github.asafelobotomy.helper.systemctl",
+    "io.github.asafelobotomy.helper.systemctl-up",
     "io.github.asafelobotomy.helper.run",
     "io.github.asafelobotomy.helper.firewall",
     "io.github.asafelobotomy.helper.fail2ban",
     "io.github.asafelobotomy.helper.maldet-config",
     "io.github.asafelobotomy.helper.rkhunter-whitelist",
     "io.github.asafelobotomy.helper.clamd-cocontrol",
+    "io.github.asafelobotomy.helper.setup-harden",
+    "io.github.asafelobotomy.helper.setup-concert",
+    "io.github.asafelobotomy.helper.scan-concert",
     "io.github.asafelobotomy.helper.install-script",
-)
-
-# Actions that auth grant-service-lifecycle may authorize without a password.
-SERVICE_LIFECYCLE_ACTION_IDS = (
-    "io.github.asafelobotomy.helper.systemctl",
-    "io.github.asafelobotomy.helper.maldet-config",
+    "io.github.asafelobotomy.helper.run-sealed",
 )
 
 HELPER_SCRIPT = textwrap.dedent(
     """\
     #!{python}
+    from oyst_core.privileged.oyst_helper import main
+    main()
+    """,
+)
+
+HELPER_SCRIPT_WITH_SITE = textwrap.dedent(
+    """\
+    #!{python}
+    import sys
+    sys.path.insert(0, {site_root!r})
     from oyst_core.privileged.oyst_helper import main
     main()
     """,
@@ -78,127 +93,91 @@ def _resolve_trusted_helper_python(*, allow_untrusted: bool) -> str:
     )
 
 
+def _oyst_core_site_root() -> Path:
+    """Directory that must be on sys.path for ``import oyst_core``."""
+    import oyst_core
+
+    return Path(oyst_core.__file__).resolve().parent.parent
+
+
+def _python_imports_oyst_core(python: str, *, site_root: Path | None = None) -> bool:
+    """Return True if *python* can import oyst_core (with optional site_root)."""
+    code = "import oyst_core"
+    if site_root is not None:
+        code = f"import sys; sys.path.insert(0, {str(site_root)!r}); import oyst_core"
+    try:
+        proc = subprocess.run(
+            [python, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+            # Avoid false positives when the installer cwd is a source checkout.
+            cwd="/",
+            env=os.environ.copy(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0
+
+
+def _validate_site_root(path: Path, *, require_root_owned: bool = True) -> Path:
+    resolved = path.resolve()
+    if not resolved.is_absolute():
+        raise OSError(f"oyst_core site root must be absolute: {path}")
+    if ".." in path.parts:
+        raise OSError(f"oyst_core site root must not contain ..: {path}")
+    pkg = resolved / "oyst_core"
+    if not pkg.is_dir() or not (pkg / "__init__.py").is_file():
+        raise OSError(f"oyst_core package not found under {resolved}")
+    if not require_root_owned:
+        return resolved
+    try:
+        st = resolved.stat()
+    except OSError as exc:
+        raise OSError(f"cannot stat oyst_core site root {resolved}: {exc}") from exc
+    if st.st_uid != 0:
+        raise OSError(
+            f"Refusing to embed user-writable site root {resolved} in oyst-helper "
+            "(must be root-owned). Install oysterAV via a distro package, or place "
+            "oyst_core under a root-owned prefix.",
+        )
+    if st.st_mode & 0o022:
+        raise OSError(
+            f"Refusing to embed world/group-writable site root {resolved} in oyst-helper",
+        )
+    return resolved
+
+
 def _helper_script_text(*, allow_untrusted_python: bool = False) -> str:
-    """Bind the helper to a trusted system interpreter when possible."""
-    return HELPER_SCRIPT.format(
-        python=_resolve_trusted_helper_python(allow_untrusted=allow_untrusted_python),
+    """Bind the helper to a trusted system interpreter when possible.
+
+    Distro installs expect ``oyst_core`` on the system interpreter's path. Source /
+    uv checkouts do not — embed an absolute site root so pkexec (cwd=/) still works.
+    """
+    python = _resolve_trusted_helper_python(allow_untrusted=allow_untrusted_python)
+    if _python_imports_oyst_core(python):
+        return HELPER_SCRIPT.format(python=python)
+    site_root = _validate_site_root(
+        _oyst_core_site_root(),
+        require_root_owned=not allow_untrusted_python,
     )
-
-
-def _action_xml(
-    *,
-    action_id: str,
-    description: str,
-    message: str,
-    argv1: str,
-    allow_active: str,
-) -> str:
-    return textwrap.dedent(
-        f"""\
-          <action id="{action_id}">
-            <description>{description}</description>
-            <message>{message}</message>
-            <defaults>
-              <allow_any>auth_admin</allow_any>
-              <allow_inactive>auth_admin</allow_inactive>
-              <allow_active>{allow_active}</allow_active>
-            </defaults>
-            <annotate key="org.freedesktop.policykit.exec.path">{HELPER_PATH}</annotate>
-            <annotate key="org.freedesktop.policykit.exec.argv1">{argv1}</annotate>
-            <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
-          </action>
-        """,
-    )
-
-
-def build_polkit_policy() -> str:
-    """Return the shipped polkit policy XML (argv1-scoped actions)."""
-    actions = [
-        _action_xml(
-            action_id="io.github.asafelobotomy.helper.systemctl",
-            description="Control oysterAV system services",
-            message=(
-                "Authentication is required to start or stop ClamAV "
-                "and other oysterAV system services"
-            ),
-            argv1="systemctl",
-            allow_active="auth_admin_keep",
-        ),
-        _action_xml(
-            action_id="io.github.asafelobotomy.helper.run",
-            description="Run oysterAV privileged tools",
-            message=(
-                "Authentication is required to run privileged security tools "
-                "or configure scheduling"
-            ),
-            argv1="run",
-            allow_active="auth_admin",
-        ),
-        _action_xml(
-            action_id="io.github.asafelobotomy.helper.firewall",
-            description="Change oysterAV firewall configuration",
-            message="Authentication is required to change firewall rules",
-            argv1="firewall",
-            allow_active="auth_admin",
-        ),
-        _action_xml(
-            action_id="io.github.asafelobotomy.helper.fail2ban",
-            description="Change fail2ban via oysterAV",
-            message=("Authentication is required to manage fail2ban bans, ignores, and jails"),
-            argv1="fail2ban",
-            allow_active="auth_admin",
-        ),
-        _action_xml(
-            action_id="io.github.asafelobotomy.helper.maldet-config",
-            description="Configure Linux Malware Detect monitor",
-            message=("Authentication is required to configure or start the maldet monitor"),
-            argv1="maldet-config",
-            allow_active="auth_admin_keep",
-        ),
-        _action_xml(
-            action_id="io.github.asafelobotomy.helper.rkhunter-whitelist",
-            description="Update oysterAV rkhunter whitelist overlay",
-            message=(
-                "Authentication is required to whitelist rkhunter finding(s) "
-                "in the oysterAV overlay"
-            ),
-            argv1="rkhunter-whitelist",
-            allow_active="auth_admin",
-        ),
-        _action_xml(
-            action_id="io.github.asafelobotomy.helper.clamd-cocontrol",
-            description="Apply oysterAV ClamAV host co-control ensures",
-            message=(
-                "Authentication is required to write ClamAV systemd drop-ins "
-                "or surgical OnAccess / VirusEvent keys"
-            ),
-            argv1="clamd-cocontrol",
-            allow_active="auth_admin",
-        ),
-        _action_xml(
-            action_id="io.github.asafelobotomy.helper.install-script",
-            description="Run oysterAV vetted install scripts",
-            message="Authentication is required to install security tools",
-            argv1="install-script",
-            allow_active="auth_admin",
-        ),
-    ]
-    body = "\n".join(actions)
-    return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        "<!DOCTYPE policyconfig PUBLIC "
-        '"-//freedesktop//DTD polkit Policy Configuration 1.0//EN"\n'
-        ' "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">\n'
-        "<policyconfig>\n"
-        f"{body}"
-        "</policyconfig>\n"
-    )
+    if not _python_imports_oyst_core(python, site_root=site_root):
+        raise OSError(
+            f"{python} cannot import oyst_core even with site root {site_root}. "
+            "Reinstall oysterAV or run: oyst-cli install-privileged-helper",
+        )
+    return HELPER_SCRIPT_WITH_SITE.format(python=python, site_root=str(site_root))
 
 
 POLKIT_POLICY = build_polkit_policy()
 
 
-def install_privileged_helper(*, prefix: Path | None = None) -> dict[str, object]:
+def install_privileged_helper(
+    *,
+    prefix: Path | None = None,
+    dev_mode: bool = False,
+) -> dict[str, object]:
     """Install helper script and polkit policy (requires root)."""
     if os.geteuid() != 0:
         return {
@@ -217,10 +196,12 @@ def install_privileged_helper(*, prefix: Path | None = None) -> dict[str, object
         else POLKIT_PATH
     )
 
+    allow_untrusted = prefix is not None or dev_mode
+
     try:
         helper_dir.mkdir(parents=True, exist_ok=True)
         helper_path.write_text(
-            _helper_script_text(allow_untrusted_python=prefix is not None),
+            _helper_script_text(allow_untrusted_python=allow_untrusted),
             encoding="utf-8",
         )
         helper_path.chmod(helper_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -249,14 +230,31 @@ def install_privileged_helper(*, prefix: Path | None = None) -> dict[str, object
             "policy_version": POLICY_VERSION,
         }
 
-    return {
+    migrate_result: dict[str, object] | None = None
+    try:
+        migrate_result = migrate_grant_on_helper_install(prefix=prefix)
+    except (OSError, ValueError):
+        migrate_result = None
+
+    payload: dict[str, object] = {
         "ok": True,
-        "message": "Installed oyst-helper and polkit policy",
+        "message": (
+            "Installed oyst-helper and polkit policy"
+            + (
+                " (dev mode: helper embeds this checkout; not for production hosts)"
+                if dev_mode
+                else ""
+            )
+        ),
         "helper_path": str(helper_path),
         "polkit_path": str(polkit_path),
         "policy_version": POLICY_VERSION,
         "actions": list(POLKIT_ACTION_IDS),
+        "dev_mode": dev_mode,
     }
+    if migrate_result is not None:
+        payload["grant_migrated"] = migrate_result
+    return payload
 
 
 def resolve_installed_helper_path() -> Path | None:
@@ -283,6 +281,22 @@ def helper_status() -> dict[str, object]:
         except OSError:
             policy_text = ""
         actions_present = [aid for aid in POLKIT_ACTION_IDS if aid in policy_text]
+    import_ok: bool | None = None
+    if helper is not None:
+        try:
+            proc = subprocess.run(
+                [str(helper), "systemctl", "enable-now", "__oysterav_probe__"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+                cwd="/",
+            )
+            # Probe unit is invalid; success is getting past import into argv validation.
+            err = (proc.stderr or proc.stdout or "").lower()
+            import_ok = "no module named 'oyst_core'" not in err
+        except (OSError, subprocess.TimeoutExpired):
+            import_ok = False
     return {
         "installed": installed,
         "helper_path": str(helper) if helper else str(HELPER_PATH),
@@ -291,4 +305,5 @@ def helper_status() -> dict[str, object]:
         "actions": list(POLKIT_ACTION_IDS),
         "actions_present": actions_present,
         "policy_current": bool(actions_present) and set(actions_present) == set(POLKIT_ACTION_IDS),
+        "import_ok": import_ok,
     }

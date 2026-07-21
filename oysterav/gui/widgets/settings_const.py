@@ -26,6 +26,8 @@ SCHED_BACKEND_LABELS = [
 ]
 THEME_OPTIONS: list[str] = list(UI_THEME_IDS)
 THEME_LABELS = [UI_THEME_LABELS[t] for t in UI_THEME_IDS]
+NEWS_MAX_AGE_OPTIONS = ["7", "14", "30"]
+NEWS_MAX_AGE_LABELS = ["7 days", "14 days", "30 days"]
 FREQUENCY_OPTIONS = ["hourly", "daily", "weekly", "custom"]
 FREQUENCY_LABELS = ["Hourly", "Daily", "Weekly", "Custom"]
 WEEKDAY_OPTIONS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]

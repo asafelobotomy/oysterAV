@@ -43,13 +43,13 @@ def test_unhide_scan_argv() -> None:
     with (
         patch.object(pack, "_binary", return_value="/usr/bin/unhide"),
         patch(
-            "oyst_core.packs.unhide.run_privileged",
+            "oyst_core.packs.unhide.run_privileged_scanner",
             return_value=CommandResult(0, "ok", ""),
         ) as run,
     ):
         ok, _ = pack.scan(mode="quick")
     assert ok is True
-    run.assert_called_once_with(["/usr/bin/unhide", "quick"], timeout=600)
+    run.assert_called_once_with("/usr/bin/unhide", ["quick"], timeout=600)
 
 
 def test_install_maldet_runtime_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

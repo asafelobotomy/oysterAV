@@ -14,12 +14,18 @@ from urllib.request import Request, urlopen
 from xml.etree import ElementTree as ET
 
 from oyst_core.security_news_parse import parse_datetime, parse_feed_xml
-from oyst_core.security_news_sources import NEWS_SOURCES, normalize_source_ids
+from oyst_core.security_news_sources import (
+    ALLOWED_MAX_AGE_DAYS,
+    NEWS_SOURCES,
+    normalize_max_age_days,
+    normalize_source_ids,
+)
 
 _logger = logging.getLogger("oyst.security_news")
 
 CACHE_MAX_AGE = timedelta(hours=24)
 MAX_ITEMS = 30
+MAX_CACHE_ITEMS = 120
 FETCH_TIMEOUT_S = 20
 
 
@@ -39,6 +45,12 @@ def resolve_sources_from_config() -> list[str]:
     from oyst_core.config import load_config
 
     return normalize_source_ids(load_config().ui.security_news_sources)
+
+
+def resolve_max_age_days_from_config() -> int:
+    from oyst_core.config import load_config
+
+    return normalize_max_age_days(load_config().ui.security_news_max_age_days)
 
 
 def _fetch_url(url: str) -> str:
@@ -105,7 +117,35 @@ def _item_published_dt(item: dict[str, Any]) -> datetime:
     return dt.astimezone(UTC)
 
 
-def _merge_items(batches: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def _filter_by_max_age(
+    items: list[dict[str, Any]],
+    max_age_days: int,
+    *,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Keep items published within max_age_days; drop undated entries."""
+    ref = now if now is not None else datetime.now(UTC)
+    if ref.tzinfo is None:
+        ref = ref.replace(tzinfo=UTC)
+    cutoff = ref - timedelta(days=max_age_days)
+    kept: list[dict[str, Any]] = []
+    for item in items:
+        published = _item_published_dt(item)
+        # datetime.min means missing/unparseable — exclude from a freshness window.
+        if published <= datetime.min.replace(tzinfo=UTC):
+            continue
+        if published >= cutoff:
+            kept.append(item)
+    return kept
+
+
+def _merge_items(
+    batches: list[list[dict[str, Any]]],
+    *,
+    max_age_days: int | None = None,
+    now: datetime | None = None,
+    limit: int = MAX_ITEMS,
+) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
     seen: set[str] = set()
     for batch in batches:
@@ -116,30 +156,62 @@ def _merge_items(batches: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
             seen.add(key)
             merged.append(item)
 
+    if max_age_days is not None:
+        merged = _filter_by_max_age(merged, max_age_days, now=now)
+
     def sort_key(item: dict[str, Any]) -> tuple[int, datetime]:
         severity = int(item.get("severity") or 0)
         return (severity, _item_published_dt(item))
 
     merged.sort(key=sort_key, reverse=True)
-    return merged[:MAX_ITEMS]
+    return merged[:limit]
+
+
+def _with_freshness(
+    payload: dict[str, Any],
+    *,
+    max_age_days: int,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Re-apply age filter to cached or fresh items (before MAX_ITEMS cap)."""
+    result = dict(payload)
+    raw_items = result.get("items")
+    items = raw_items if isinstance(raw_items, list) else []
+    typed = [i for i in items if isinstance(i, dict)]
+    filtered = _filter_by_max_age(typed, max_age_days, now=now)
+
+    def sort_key(item: dict[str, Any]) -> tuple[int, datetime]:
+        severity = int(item.get("severity") or 0)
+        return (severity, _item_published_dt(item))
+
+    filtered.sort(key=sort_key, reverse=True)
+    result["items"] = filtered[:MAX_ITEMS]
+    result["max_age_days"] = max_age_days
+    return result
 
 
 def fetch_security_news(
     *,
     force: bool = False,
     sources: Sequence[str] | None = None,
+    max_age_days: int | None = None,
 ) -> dict[str, Any]:
     """Return cached or freshly fetched advisory headlines for selected sources."""
     if sources is not None:
         selected = normalize_source_ids(sources)
     else:
         selected = normalize_source_ids(resolve_sources_from_config())
+    age_days = (
+        normalize_max_age_days(max_age_days)
+        if max_age_days is not None
+        else resolve_max_age_days_from_config()
+    )
     cached = _load_cache()
     if cached is not None and not force and _is_fresh(cached, selected):
         result = dict(cached)
         result["stale"] = False
         result["from_cache"] = True
-        return result
+        return _with_freshness(result, max_age_days=age_days)
 
     batches: list[list[dict[str, Any]]] = []
     errors: list[dict[str, str]] = []
@@ -152,13 +224,19 @@ def fetch_security_news(
             _logger.warning("security news fetch failed for %s: %s", src.label, exc)
             errors.append({"source": src.label, "error": str(exc)})
 
-    items = _merge_items(batches)
+    # Cache the widest Settings window so changing 7↔14↔30 needs no refetch.
+    cache_window = max(ALLOWED_MAX_AGE_DAYS)
+    items = _merge_items(
+        batches,
+        max_age_days=cache_window,
+        limit=MAX_CACHE_ITEMS,
+    )
     if not items and cached is not None:
         result = dict(cached)
         result["stale"] = True
         result["from_cache"] = True
         result["errors"] = errors
-        return result
+        return _with_freshness(result, max_age_days=age_days)
 
     payload: dict[str, Any] = {
         "fetched_at": datetime.now(UTC).isoformat(),
@@ -172,15 +250,20 @@ def fetch_security_news(
         _save_cache(payload)
     except OSError as exc:
         _logger.warning("could not write security news cache: %s", exc)
-    return payload
+    return _with_freshness(payload, max_age_days=age_days)
 
 
 def list_security_news(
     *,
     force_refresh: bool = False,
     sources: Sequence[str] | None = None,
+    max_age_days: int | None = None,
 ) -> dict[str, Any]:
-    return fetch_security_news(force=force_refresh, sources=sources)
+    return fetch_security_news(
+        force=force_refresh,
+        sources=sources,
+        max_age_days=max_age_days,
+    )
 
 
 def relative_age_label(published: str, *, now: datetime | None = None) -> str:

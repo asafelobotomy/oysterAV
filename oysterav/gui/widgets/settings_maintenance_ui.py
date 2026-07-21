@@ -12,11 +12,12 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw  # noqa: E402
 
-from oysterav.gui.rpc_actions import request_updates_apply
+from oysterav.gui.widgets.bulk_checklist import make_bulk_expander
 from oysterav.gui.widgets.clamonacc_ui import refresh_clamonacc_subtitle
 from oysterav.gui.widgets.common import make_button, run_in_thread, show_command_dialog
 from oysterav.gui.widgets.progress_button import run_progress_button
 from oysterav.gui.widgets.runtime_ui import bootstrap_runtime_from_gui
+from oysterav.gui.widgets.settings_maintenance_update import on_update_all
 
 if TYPE_CHECKING:
     from oysterav.gui.widgets.settings import SettingsPage
@@ -32,62 +33,65 @@ def build_maintenance_group(page: SettingsPage) -> None:
 
     update_all_row = Adw.ActionRow(title="Update all")
     update_all_row.set_subtitle(
-        "Check pack/service packages, upgrade when needed, refresh definitions, "
-        "then post-update baseline",
+        "Upgrade related packages when needed, refresh definitions, then baselines",
     )
     page.update_all_btn = make_button("Update all", suggested=True, row_suffix=True)
     page.update_all_btn.connect("clicked", lambda *a: on_update_all(page, *a))
     update_all_row.add_suffix(page.update_all_btn)
     maintenance.add(update_all_row)
 
-    bootstrap_row = Adw.ActionRow(title="Install runtime and update signatures")
-    bootstrap_row.set_subtitle(
-        "Private runtime, virus signatures, and pack maintenance",
+    expander = make_bulk_expander(
+        "Steps included in Update all",
+        subtitle="Run individual steps, or use Update all above",
+        expanded=True,
     )
-    page.bootstrap_btn = make_button("Run", suggested=True, row_suffix=True)
-    page.bootstrap_btn.connect("clicked", lambda *a: on_runtime_bootstrap(page, *a))
-    bootstrap_row.add_suffix(page.bootstrap_btn)
-    maintenance.add(bootstrap_row)
 
-    maint_only_row = Adw.ActionRow(title="Maintenance only")
-    maint_only_row.set_subtitle(
-        "Signatures and baselines without reinstalling the runtime (may include rkhunter propupd)",
-    )
     page.maintenance_only_btn = make_button("Run", row_suffix=True)
     page.maintenance_only_btn.connect(
         "clicked",
         lambda *a: on_maintenance_only(page, *a),
     )
-    maint_only_row.add_suffix(page.maintenance_only_btn)
-    maintenance.add(maint_only_row)
-
-    post_update_row = Adw.ActionRow(title="Post-update maintenance")
-    post_update_row.set_subtitle(
-        "Run maintenance after OS package updates (rkhunter propupd, etc.)",
+    maint_row = Adw.ActionRow(title="Maintenance only")
+    maint_row.set_subtitle(
+        "Signatures and baselines without reinstalling the runtime "
+        "(may refresh the rkhunter file baseline)",
     )
+    maint_row.add_suffix(page.maintenance_only_btn)
+    expander.add_row(maint_row)
+
     page.post_update_btn = make_button("Run", row_suffix=True)
     page.post_update_btn.connect("clicked", lambda *a: on_post_update(page, *a))
-    post_update_row.add_suffix(page.post_update_btn)
-    maintenance.add(post_update_row)
+    post_row = Adw.ActionRow(title="Post-update maintenance")
+    post_row.set_subtitle("After OS package updates (refresh rkhunter baseline, etc.)")
+    post_row.add_suffix(page.post_update_btn)
+    expander.add_row(post_row)
 
-    rkh_update_row = Adw.ActionRow(title="Update rkhunter data")
-    rkh_update_row.set_subtitle(
-        "Refresh rkhunter data files (rkhunter --update), not ClamAV signatures",
-    )
     page.rkh_update_btn = make_button("Update", row_suffix=True)
     page.rkh_update_btn.connect("clicked", lambda *a: on_rkh_update(page, *a))
-    rkh_update_row.add_suffix(page.rkh_update_btn)
-    maintenance.add(rkh_update_row)
+    rkh_u = Adw.ActionRow(title="Update rkhunter data")
+    rkh_u.set_subtitle("Refresh rkhunter data files (not ClamAV signatures)")
+    rkh_u.add_suffix(page.rkh_update_btn)
+    expander.add_row(rkh_u)
 
-    rkh_propupd_row = Adw.ActionRow(title="Refresh rkhunter baseline")
-    rkh_propupd_row.set_subtitle(
-        "Rewrite the property baseline (rkhunter --propupd). "
-        "Never run on a system you suspect is compromised.",
-    )
     page.rkh_propupd_btn = make_button("Update baseline", row_suffix=True)
     page.rkh_propupd_btn.connect("clicked", lambda *a: on_rkh_propupd(page, *a))
-    rkh_propupd_row.add_suffix(page.rkh_propupd_btn)
-    maintenance.add(rkh_propupd_row)
+    rkh_p = Adw.ActionRow(title="Refresh rkhunter baseline")
+    rkh_p.set_subtitle(
+        "Updates the trusted file property baseline. "
+        "Never run on a system you suspect is compromised.",
+    )
+    rkh_p.add_suffix(page.rkh_propupd_btn)
+    expander.add_row(rkh_p)
+    maintenance.add(expander)
+
+    bootstrap_row = Adw.ActionRow(title="Install runtime and update signatures")
+    bootstrap_row.set_subtitle(
+        "Private runtime, virus signatures, and pack maintenance (not part of Update all)",
+    )
+    page.bootstrap_btn = make_button("Run", suggested=True, row_suffix=True)
+    page.bootstrap_btn.connect("clicked", lambda *a: on_runtime_bootstrap(page, *a))
+    bootstrap_row.add_suffix(page.bootstrap_btn)
+    maintenance.add(bootstrap_row)
 
     page.maintenance_status_row = Adw.ActionRow(title="Last run")
     page.maintenance_status_row.set_subtitle("No maintenance run yet")
@@ -211,7 +215,7 @@ def on_rkh_propupd(page: SettingsPage, *_args: object) -> None:
         transient_for=page._window,
         heading="Update rkhunter baseline?",
         body=(
-            "Only run propupd on trusted systems. "
+            "Only refresh the file baseline on trusted systems. "
             "Never update the baseline on a system you suspect is compromised."
         ),
     )
@@ -236,14 +240,14 @@ def on_propupd_confirmed(
 
     def done(result: dict[str, Any]) -> bool:
         page.rkh_propupd_btn.set_sensitive(True)
-        msg = result.get("message", "propupd finished")
+        msg = result.get("message", "Baseline refresh finished")
         page.maintenance_status_row.set_subtitle("rkhunter baseline refresh finished")
-        show_command_dialog(page._window, heading="rkhunter propupd", body=str(msg))
+        show_command_dialog(page._window, heading="Refresh rkhunter baseline", body=str(msg))
         return False
 
     def fail(message: str) -> bool:
         page.rkh_propupd_btn.set_sensitive(True)
-        page.maintenance_status_row.set_subtitle(f"rkhunter propupd failed: {message}")
+        page.maintenance_status_row.set_subtitle(f"Baseline refresh failed: {message}")
         return False
 
     run_in_thread(page.client.rkhunter_propupd, done, fail)
@@ -252,57 +256,6 @@ def on_propupd_confirmed(
 def on_setup_wizard(page: SettingsPage, *_args: object) -> None:
     if page._on_setup_wizard_cb:
         page._on_setup_wizard_cb()
-
-
-def on_update_all(page: SettingsPage, *_args: object) -> None:
-    dialog = Adw.MessageDialog(
-        transient_for=page._window,
-        heading="Run Update all?",
-        body=(
-            "This refreshes pack definitions and may run rkhunter --propupd "
-            "(updates the file property baseline). Continue?"
-        ),
-    )
-    dialog.add_response("cancel", "Cancel")
-    dialog.add_response("run", "Update all")
-    dialog.set_response_appearance("run", Adw.ResponseAppearance.SUGGESTED)
-    dialog.set_default_response("cancel")
-    dialog.set_close_response("cancel")
-
-    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
-        if response != "run":
-            return
-        page.update_all_btn.set_sensitive(False)
-        page.maintenance_status_row.set_subtitle("Running Update all…")
-        page._set_status("Running Update all…")
-
-        def done(result: dict[str, Any]) -> bool:
-            page.update_all_btn.set_sensitive(True)
-            raw_steps = result.get("steps")
-            steps: list[Any] = list(raw_steps) if isinstance(raw_steps, list) else []
-            ok_count = sum(1 for s in steps if isinstance(s, dict) and s.get("ok"))
-            msg = str(
-                result.get("message") or f"Update all finished ({ok_count}/{len(steps)} OK)",
-            )
-            page.maintenance_status_row.set_subtitle(msg)
-            page._set_status(msg)
-            if page._on_updates_changed:
-                page._on_updates_changed()
-            reload_security_packs(page)
-            return False
-
-        def fail(message: str) -> bool:
-            page.update_all_btn.set_sensitive(True)
-            page.maintenance_status_row.set_subtitle(f"Update all failed: {message}")
-            page._set_status(f"Update all failed: {message}")
-            if page._on_updates_changed:
-                page._on_updates_changed()
-            return False
-
-        run_in_thread(lambda: request_updates_apply(page.client), done, fail)
-
-    dialog.connect("response", on_response)
-    dialog.present()
 
 
 def on_post_update(page: SettingsPage, *_args: object) -> None:

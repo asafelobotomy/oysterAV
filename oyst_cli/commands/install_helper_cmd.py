@@ -10,9 +10,14 @@ from oyst_core.privileged.install_privileged_helper import helper_status, instal
 
 @click.command("install-privileged-helper")
 @click.option("--json", "json_mode", is_flag=True)
-def install_helper_cmd(json_mode: bool) -> None:
+@click.option(
+    "--dev",
+    is_flag=True,
+    help="Git checkout / uv dev install: embed user site root (not for production)",
+)
+def install_helper_cmd(json_mode: bool, dev: bool) -> None:
     """Install oyst-helper and polkit policy for GUI-driven privileged operations."""
-    result = install_privileged_helper()
+    result = install_privileged_helper(dev_mode=dev)
     if json_mode:
         emit(result, json_mode=True)
     else:

@@ -13,7 +13,7 @@ import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
-from oyst_core.privileged.runner import CommandResult, which
+from oyst_core.privileged.runner import CommandResult, pkexec_scrubbed_env, which
 from oyst_core.schedule_linger import is_flatpak, resolve_oyst_cli_path
 
 _USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -119,6 +119,7 @@ def run_elevated_oyst_cli(
             text=True,
             timeout=timeout,
             check=False,
+            env=pkexec_scrubbed_env() if "pkexec" in cmd else None,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return CommandResult(1, "", str(exc))

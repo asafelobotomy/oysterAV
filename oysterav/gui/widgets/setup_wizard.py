@@ -14,6 +14,8 @@ from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
 from oysterav.gui.widgets import setup_wizard_actions as actions
+from oysterav.gui.widgets import setup_wizard_auto as auto_actions
+from oysterav.gui.widgets import setup_wizard_harden as harden_actions
 from oysterav.gui.widgets.common import make_button, run_in_thread
 from oysterav.gui.widgets.schedule_ui import (
     format_timer_status,
@@ -51,11 +53,16 @@ class SetupWizard:
     bootstrap_primary_btn: Gtk.Button
     bootstrap_secondary_btn: Gtk.Button
     auto_quarantine: Adw.SwitchRow
+    auto_recipe_switches: dict[str, Adw.SwitchRow]
     wizard_sched_profile: Adw.ComboRow
     wizard_sched_frequency: Adw.ComboRow
     wizard_sched_time: Adw.EntryRow
     schedule_label: Gtk.Label
     schedule_btn: Gtk.Button
+    enable_firewall_row: Adw.SwitchRow
+    harden_switches: dict[str, Adw.SwitchRow]
+    harden_label: Gtk.Label
+    harden_btn: Gtk.Button
     ready_summary: Gtk.Label
 
     def __init__(
@@ -85,6 +92,8 @@ class SetupWizard:
         self._bootstrap_busy = False
         self._auto_install_busy = False
         self._bootstrap_ran = False
+        self._harden_ran = False
+        self._harden_busy = False
         self._schedule_installed = False
         self._finish_pending = False
 
@@ -157,6 +166,7 @@ class SetupWizard:
                 schedule_installed=self._schedule_installed,
                 auto_quarantine=self.auto_quarantine.get_active(),
                 full_mode=self._full_mode,
+                harden_ran=self._harden_ran,
             ),
         )
 
@@ -285,13 +295,20 @@ class SetupWizard:
         self._update_nav()
 
     def _update_nav(self) -> None:
-        busy = self._auto_install_busy or self._bootstrap_busy or self._finish_pending
+        busy = (
+            self._auto_install_busy
+            or self._bootstrap_busy
+            or self._harden_busy
+            or self._finish_pending
+        )
         self._back_btn.set_sensitive(self._current > 0 and not busy)
         on_last = self._current == len(PAGE_TITLES) - 1
         self._next_btn.set_label("Finish" if on_last else "Next")
         self._next_btn.set_sensitive((self._can_advance() or on_last) and not busy)
         self._cancel_btn.set_sensitive(not busy)
         self.auto_install_btn.set_sensitive(not self._auto_install_busy)
+        if hasattr(self, "harden_btn"):
+            self.harden_btn.set_sensitive(not self._harden_busy)
 
     def _on_back_clicked(self, *_args: object) -> None:
         if self._current > 0:
@@ -311,7 +328,7 @@ class SetupWizard:
         actions.finish_setup(self, mark_complete=False)
 
     def _on_auto_install(self, *_args: object) -> None:
-        actions.on_auto_install(self, *_args)
+        auto_actions.on_auto_install(self, *_args)
 
     def _on_install_skip(self, *_args: object) -> None:
         actions.on_install_skip(self, *_args)
@@ -324,6 +341,9 @@ class SetupWizard:
 
     def _on_schedule_install(self, *_args: object) -> None:
         actions.on_schedule_install(self, *_args)
+
+    def _on_apply_harden(self, *_args: object) -> None:
+        harden_actions.on_apply_harden(self, *_args)
 
     def _on_open_scan(self, *_args: object) -> None:
         if self._on_navigate:

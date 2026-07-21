@@ -20,11 +20,15 @@ from oyst_core.privileged.runner import CommandResult
 def test_maldet_parse_findings() -> None:
     pack = MaldetPack()
     findings = pack.parse_findings(
-        "SCAN COMPLETE\nmalware hit: /tmp/bad.exe\nother line\nFOUND something /opt/x"
+        "SCAN COMPLETE\n"
+        "maldet(1): {hit} malware hit Evil.Sig found for /tmp/bad.exe\n"
+        "other line\n"
+        "FOUND something /opt/x"
     )
-    assert len(findings) >= 1
-    assert all(f.severity == FindingSeverity.HIGH for f in findings)
-    assert any("bad.exe" in f.path or "bad.exe" in f.raw_line for f in findings)
+    assert len(findings) == 1
+    assert findings[0].path == "/tmp/bad.exe"
+    assert findings[0].threat_name == "Evil.Sig"
+    assert findings[0].severity == FindingSeverity.HIGH
 
 
 def test_maldet_scan_argv() -> None:

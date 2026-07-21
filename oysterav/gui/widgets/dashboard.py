@@ -164,7 +164,7 @@ class DashboardPage:
         return False
 
     def _apply_error(self, message: str) -> bool:
-        self._set_status(f"Backend error: {message}")
+        self._set_status(f"Could not reach the backend: {message}")
         return False
 
     def _clear_history_rows(self) -> None:
@@ -218,7 +218,7 @@ class DashboardPage:
             if result.get("ok"):
                 self._set_status("ClamAV daemon started")
             else:
-                self._set_status(f"clamd: {result.get('message', 'failed')}")
+                self._set_status(f"ClamAV daemon: {result.get('message', 'failed')}")
                 if self._window:
                     show_command_dialog(
                         self._window,

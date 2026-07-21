@@ -10,10 +10,12 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
 from oyst_core.models import ScanProfile
+from oyst_core.privilege import build_scan_privileged_plan
+from oyst_core.runtime.bootstrap import PACK_DESCRIPTIONS
 from oysterav.gui.scan_helpers import PackCardState, expected_packs_for_profile
 from oysterav.gui.widgets.common import (
     PreferencesGroup,
@@ -25,14 +27,39 @@ from oysterav.gui.widgets.common import (
     run_in_thread,
 )
 from oysterav.gui.widgets import scan_job_ui, scan_path_ui
+from oysterav.gui.widgets.privilege_confirm import confirm_privilege_plan
 from oysterav.gui.widgets.scan_const import (
-    COLUMN_BREAKPOINT,
     CUSTOM_PACK_CHOICES,
     PATH_PRESETS,
     PROFILE_LABELS,
     RESULT_PACKS,
+    SCAN_ACTION_INNER_GAP,
+    SCAN_ACTIONS_TO_OPTIONS_GAP,
+    SCAN_OPTIONS_TO_PROGRESS_GAP,
+    SCAN_PAGE_MARGIN,
     SCAN_PROFILES,
+    SCAN_PROGRESS_INNER_GAP,
+    SCAN_PROGRESS_TO_RESULTS_GAP,
+    SCAN_RESULTS_HEADING_GAP,
 )
+
+
+def _custom_pack_row(pack_name: str) -> tuple[Gtk.Box, Gtk.CheckButton]:
+    """Checkbox + info tooltip for one custom scan pack."""
+    row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+    row.set_halign(Gtk.Align.CENTER)
+    check = Gtk.CheckButton(label=pack_name)
+    check.set_active(pack_name == "clamav")
+    info = Gtk.Button()
+    info.set_icon_name("dialog-information-symbolic")
+    info.add_css_class("flat")
+    info.add_css_class("circular")
+    info.set_valign(Gtk.Align.CENTER)
+    info.set_can_focus(False)
+    info.set_tooltip_text(PACK_DESCRIPTIONS.get(pack_name, f"{pack_name} security pack"))
+    row.append(check)
+    row.append(info)
+    return row, check
 
 
 class ScanPage:
@@ -50,7 +77,6 @@ class ScanPage:
         self._on_scan_complete = on_scan_complete
         self._scanning = False
         self._custom_path: str | None = None
-        self._width_handler_id = 0
         self._poll_id = 0
         self._last_scan: dict[str, Any] | None = None
         self._expected_packs: list[str] = []
@@ -60,26 +86,34 @@ class ScanPage:
         self._pack_findings: dict[str, list[dict[str, Any]]] = {name: [] for name in RESULT_PACKS}
         self._pack_errors: dict[str, str] = {name: "" for name in RESULT_PACKS}
 
-        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        left.set_hexpand(True)
-        left.set_size_request(280, -1)
+        stack = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        stack.set_hexpand(True)
 
-        left.append(PreferencesGroup("Scan"))
+        actions_section = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=SCAN_ACTION_INNER_GAP,
+        )
+        actions_section.set_margin_bottom(SCAN_ACTIONS_TO_OPTIONS_GAP)
 
         self.scan_btn = make_button("Run scan", suggested=True)
-        self.scan_btn.set_halign(Gtk.Align.START)
+        self.scan_btn.add_css_class("oyster-scan-run")
+        self.scan_btn.set_halign(Gtk.Align.CENTER)
         self.scan_btn.connect("clicked", self._on_start_scan)
-        left.append(self.scan_btn)
+        actions_section.append(self.scan_btn)
 
         self.cancel_btn = make_button("Cancel scan")
-        self.cancel_btn.set_halign(Gtk.Align.START)
+        self.cancel_btn.set_halign(Gtk.Align.CENTER)
         self.cancel_btn.set_visible(False)
         self.cancel_btn.connect("clicked", lambda *a: scan_job_ui.on_cancel_scan(self, *a))
-        left.append(self.cancel_btn)
+        actions_section.append(self.cancel_btn)
 
-        self.path_controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.path_controls = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=SCAN_ACTION_INNER_GAP,
+        )
         path_buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         path_buttons.set_homogeneous(False)
+        path_buttons.set_halign(Gtk.Align.CENTER)
         self.browse_folder_btn = make_button("Browse folder…")
         self.browse_folder_btn.connect(
             "clicked", lambda *a: scan_path_ui.on_browse_folder(self, *a)
@@ -94,16 +128,22 @@ class ScanPage:
         path_buttons.append(self.clear_path_btn)
         self.path_controls.append(path_buttons)
 
-        self.path_label = Gtk.Label(label="", xalign=0)
+        self.path_label = Gtk.Label(label="", xalign=0.5)
+        self.path_label.set_halign(Gtk.Align.CENTER)
         self.path_label.add_css_class("dim-label")
         self.path_label.set_wrap(True)
         self.path_controls.append(self.path_label)
-        left.append(self.path_controls)
+        actions_section.append(self.path_controls)
+        stack.append(actions_section)
+
+        options_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        options_section.set_margin_bottom(SCAN_OPTIONS_TO_PROGRESS_GAP)
 
         options_group = PreferencesGroup("")
+        options_group.add_css_class("oyster-scan-options")
         profile_row = Adw.ComboRow(title="Scan profile")
         profile_labels = [PROFILE_LABELS[p] for p in SCAN_PROFILES]
-        bind_string_combo_row(profile_row, profile_labels)
+        bind_string_combo_row(profile_row, profile_labels, compact=True)
         profile_row.connect(
             "notify::selected",
             lambda *a: scan_path_ui.on_profile_changed(self, *a),
@@ -112,60 +152,73 @@ class ScanPage:
         self.profile_row = profile_row
 
         self.path_row = Adw.ComboRow(title="Scan target")
-        bind_string_combo_row(self.path_row, [label for label, _ in PATH_PRESETS])
+        bind_string_combo_row(
+            self.path_row,
+            [label for label, _ in PATH_PRESETS],
+            compact=True,
+        )
         self.path_row.connect(
             "notify::selected", lambda *a: scan_path_ui.on_path_preset_changed(self, *a)
         )
         options_group.add(self.path_row)
 
         self.packs_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.packs_box.set_halign(Gtk.Align.CENTER)
         self.packs_box.set_visible(False)
         packs_label = make_section_heading("Custom packs")
+        packs_label.set_xalign(0.5)
+        packs_label.set_halign(Gtk.Align.CENTER)
         self.packs_box.append(packs_label)
         self._pack_checks: dict[str, Gtk.CheckButton] = {}
         for pack_name in CUSTOM_PACK_CHOICES:
-            check = Gtk.CheckButton(label=pack_name)
-            check.set_active(pack_name == "clamav")
+            row, check = _custom_pack_row(pack_name)
             self._pack_checks[pack_name] = check
-            self.packs_box.append(check)
+            self.packs_box.append(row)
 
         options_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         options_box.append(options_group)
         options_box.append(self.packs_box)
-        left.append(options_box)
+        options_section.append(options_box)
 
         self.integrity_note = Gtk.Label(
             label="System-wide integrity tools; paths ignored",
-            xalign=0,
+            xalign=0.5,
         )
+        self.integrity_note.set_halign(Gtk.Align.CENTER)
         self.integrity_note.add_css_class("dim-label")
         self.integrity_note.set_wrap(True)
         self.integrity_note.set_visible(False)
-        left.append(self.integrity_note)
+        options_section.append(self.integrity_note)
+        stack.append(options_section)
 
-        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        right.set_hexpand(True)
-        right.set_size_request(280, -1)
-
-        progress_heading = PreferencesGroup("Scan Progress")
-        right.append(progress_heading)
-        progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        progress_box.set_margin_start(12)
-        progress_box.set_margin_end(12)
-        progress_box.set_margin_bottom(8)
-        self.status_label = Gtk.Label(label="Ready to scan", xalign=0)
+        progress_section = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=SCAN_PROGRESS_INNER_GAP,
+        )
+        progress_section.set_margin_bottom(SCAN_PROGRESS_TO_RESULTS_GAP)
+        progress_heading = make_section_heading("Scan Progress")
+        progress_heading.add_css_class("oyster-scan-section")
+        progress_heading.set_xalign(0.5)
+        progress_heading.set_halign(Gtk.Align.CENTER)
+        progress_section.append(progress_heading)
+        self.status_label = Gtk.Label(label="Ready to scan", xalign=0.5)
+        self.status_label.set_halign(Gtk.Align.CENTER)
         self.status_label.add_css_class("dim-label")
-        progress_box.append(self.status_label)
+        progress_section.append(self.status_label)
         self.progress = Gtk.ProgressBar()
         self.progress.set_visible(False)
-        progress_box.append(self.progress)
+        progress_section.append(self.progress)
         self.result_banner = Adw.Banner(title="")
         self.result_banner.set_revealed(False)
-        progress_box.append(self.result_banner)
-        right.append(progress_box)
+        progress_section.append(self.result_banner)
+        stack.append(progress_section)
 
-        results_group = PreferencesGroup("Scan Results")
-        right.append(results_group)
+        results_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        results_heading = make_section_heading("Scan Results")
+        results_heading.add_css_class("oyster-scan-section")
+        results_heading.set_xalign(0.5)
+        results_heading.set_halign(Gtk.Align.CENTER)
+        results_section.append(results_heading)
 
         self._pack_cards: dict[str, StatusCard] = {}
         row1 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
@@ -177,35 +230,31 @@ class ScanPage:
             return lambda: scan_job_ui.on_pack_card_activated(self, pack_name)
 
         for name in ("clamav", "maldet", "rkhunter"):
-            card = StatusCard(name, on_activate=_bind(name))
+            card = StatusCard(name, on_activate=_bind(name), compact=True)
             self._pack_cards[name] = card
             row1.append(card)
         for name in ("chkrootkit", "unhide", "lynis"):
-            card = StatusCard(name, on_activate=_bind(name))
+            card = StatusCard(name, on_activate=_bind(name), compact=True)
             self._pack_cards[name] = card
             row2.append(card)
         cards_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        cards_box.set_margin_top(SCAN_RESULTS_HEADING_GAP)
         cards_box.append(row1)
         cards_box.append(row2)
-        right.append(cards_box)
+        results_section.append(cards_box)
+        stack.append(results_section)
         scan_job_ui.reset_cards_idle(self)
 
-        self._columns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
-        self._columns.set_homogeneous(True)
-        self._columns.append(left)
-        self._columns.append(right)
-        self._columns.connect("map", self._on_columns_mapped)
-
         clamp = Adw.Clamp()
-        clamp.set_maximum_size(1100)
-        clamp.set_tightening_threshold(720)
-        clamp.set_child(self._columns)
+        clamp.set_maximum_size(760)
+        clamp.set_tightening_threshold(640)
+        clamp.set_child(stack)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        root.set_margin_start(12)
-        root.set_margin_end(12)
-        root.set_margin_top(12)
-        root.set_margin_bottom(12)
+        root.set_margin_start(SCAN_PAGE_MARGIN)
+        root.set_margin_end(SCAN_PAGE_MARGIN)
+        root.set_margin_top(SCAN_PAGE_MARGIN)
+        root.set_margin_bottom(SCAN_PAGE_MARGIN)
         root.append(clamp)
 
         self.widget = make_scrolled_page(root)
@@ -213,16 +262,7 @@ class ScanPage:
         scan_path_ui.update_path_label(self)
 
     def set_window(self, window: Gtk.Window) -> None:
-        if self._window is not None and self._width_handler_id:
-            self._window.disconnect(self._width_handler_id)
-            self._width_handler_id = 0
         self._window = window
-        self._width_handler_id = window.connect(
-            "notify::default-width",
-            self._on_window_geometry,
-        )
-        window.connect("notify::maximized", self._on_window_geometry)
-        GLib.idle_add(self._reflow_columns)
 
     def refresh(self) -> None:
         """Apply scan.profile default from config when not mid-scan."""
@@ -251,25 +291,6 @@ class ScanPage:
             return False
 
         run_in_thread(worker, done, failed)
-
-    def _on_columns_mapped(self, *_args: object) -> None:
-        GLib.idle_add(self._reflow_columns)
-
-    def _on_window_geometry(self, *_args: object) -> None:
-        GLib.idle_add(self._reflow_columns)
-
-    def _reflow_columns(self) -> bool:
-        width = self._columns.get_width()
-        if width < 2 and self._window is not None:
-            width = self._window.get_width()
-        if width < 2:
-            return False
-        desired = (
-            Gtk.Orientation.VERTICAL if width < COLUMN_BREAKPOINT else Gtk.Orientation.HORIZONTAL
-        )
-        if self._columns.get_orientation() != desired:
-            self._columns.set_orientation(desired)
-        return False
 
     def _set_status(self, text: str) -> None:
         self.status_label.set_text(text)
@@ -307,7 +328,17 @@ class ScanPage:
                 return
 
         profile = self._profile()
-        self._expected_packs = expected_packs_for_profile(profile, packs)
+        expected = expected_packs_for_profile(profile, packs)
+        plan = build_scan_privileged_plan(expected, job_id="preview")
+        confirm_privilege_plan(
+            self._window,
+            plan,
+            on_continue=lambda: self._launch_scan(packs, expected),
+            continue_label="Continue",
+        )
+
+    def _launch_scan(self, packs: list[str] | None, expected: list[str]) -> None:
+        self._expected_packs = expected
         self._scanning = True
         self._last_scan = None
         scan_job_ui.set_scan_controls_sensitive(self, False)
@@ -315,7 +346,6 @@ class ScanPage:
         self.result_banner.set_revealed(False)
         self._set_status("Starting scan…")
         scan_job_ui.start_poll(self)
-
         profile_value = self._profile_value()
         paths = scan_path_ui.resolved_paths(self)
 

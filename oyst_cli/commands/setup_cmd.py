@@ -83,6 +83,13 @@ def setup_reset_cmd(confirm: bool, json_mode: bool) -> None:
 @click.option("--skip-packs", is_flag=True, help="Skip pack installation step")
 @click.option("--skip-schedule", is_flag=True, help="Skip daily scan timer install")
 @click.option("--skip-bootstrap", is_flag=True, help="Skip runtime/maintenance bootstrap")
+@click.option("--skip-harden", is_flag=True, help="Skip safe ClamAV/rkhunter host hardenings")
+@click.option(
+    "--enable-firewall/--no-enable-firewall",
+    default=True,
+    show_default=True,
+    help="SSH-safe UFW/firewalld enable after harden (soft-fail if unsafe)",
+)
 @click.option("--confirm-aur", is_flag=True, help="Confirm AUR installs without prompting")
 @click.option(
     "--auto-quarantine/--no-auto-quarantine",
@@ -110,6 +117,8 @@ def setup_run_cmd(
     skip_packs: bool,
     skip_schedule: bool,
     skip_bootstrap: bool,
+    skip_harden: bool,
+    enable_firewall: bool,
     confirm_aur: bool,
     auto_quarantine: bool | None,
     schedule_profile: str,
@@ -123,6 +132,8 @@ def setup_run_cmd(
         skip_packs=skip_packs,
         skip_schedule=skip_schedule,
         skip_bootstrap=skip_bootstrap,
+        skip_harden=skip_harden,
+        enable_firewall=enable_firewall,
         confirm_aur=confirm_aur,
         auto_quarantine=auto_quarantine,
         schedule_profile=schedule_profile,

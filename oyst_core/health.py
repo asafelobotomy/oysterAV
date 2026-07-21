@@ -150,10 +150,10 @@ def assess_health(status: dict[str, Any]) -> dict[str, Any]:
                         "clamd_disable_cache_unset",
                         "info",
                         "ClamAV DisableCache is not enabled",
-                        "Daemon result caching may hide freshly written threats "
-                        "(xanadOS lesson). Prefer DisableCache yes when safe.",
+                        "Daemon result caching may hide freshly written threats. "
+                        "Enable DisableCache when safe for on-access scanning.",
                         "Run: oyst-cli clamav ensure-disable-cache --confirm "
-                        "(or set manually; hand off if admin set DisableCache no)",
+                        "(skips if an admin set DisableCache no outside oysterAV)",
                     ),
                 )
 

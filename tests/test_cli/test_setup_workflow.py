@@ -16,12 +16,18 @@ def test_setup_run_non_interactive_json() -> None:
             "oyst_core.setup_workflow.run_bootstrap",
             return_value=[{"step": "freshclam", "ok": True}],
         ),
-        patch("oyst_core.setup_workflow.install_pack"),
         patch(
             "oyst_core.setup_workflow.apply_schedule",
             return_value={"ok": True, "message": "ok"},
         ),
         patch("oyst_core.setup_workflow.is_full_mode", return_value=False),
+        patch(
+            "oyst_core.setup_workflow.run_setup_concert",
+            return_value=[
+                {"step": "harden-clamd", "ok": True},
+                {"step": "firewall-ensure", "ok": True, "skipped": True},
+            ],
+        ),
         patch("oyst_core.registry.get_registry") as mock_registry,
     ):
         mock_registry.return_value.all.return_value = []
@@ -46,6 +52,13 @@ def test_setup_run_does_not_mark_complete_on_failure() -> None:
             return_value={"ok": True, "message": "ok"},
         ),
         patch("oyst_core.setup_workflow.is_full_mode", return_value=False),
+        patch(
+            "oyst_core.setup_workflow.run_setup_concert",
+            return_value=[
+                {"step": "harden-clamd", "ok": True},
+                {"step": "firewall-ensure", "ok": True, "skipped": True},
+            ],
+        ),
         patch("oyst_core.setup_workflow.set_config_value") as mock_set,
         patch("oyst_core.registry.get_registry") as mock_registry,
     ):
@@ -56,13 +69,12 @@ def test_setup_run_does_not_mark_complete_on_failure() -> None:
     assert not any(c.args[1] == "true" for c in completed_calls)
 
 
-def test_setup_run_enable_linger_calls_helper() -> None:
+def test_setup_run_enable_linger_via_concert() -> None:
     with (
         patch(
             "oyst_core.setup_workflow.run_bootstrap",
             return_value=[{"step": "freshclam", "ok": True}],
         ),
-        patch("oyst_core.setup_workflow.install_pack"),
         patch(
             "oyst_core.setup_workflow.apply_schedule",
             return_value={
@@ -71,15 +83,20 @@ def test_setup_run_enable_linger_calls_helper() -> None:
                 "linger_advisory": "enable linger",
             },
         ),
-        patch(
-            "oyst_core.setup_workflow.enable_user_linger",
-            return_value={"ok": True, "message": "linger on"},
-        ),
         patch("oyst_core.setup_workflow.is_full_mode", return_value=False),
+        patch(
+            "oyst_core.setup_workflow.run_setup_concert",
+            return_value=[
+                {"step": "harden-clamd", "ok": True},
+                {"step": "firewall-ensure", "ok": True, "skipped": True},
+                {"step": "linger", "ok": True, "message": "linger enabled"},
+            ],
+        ) as concert,
         patch("oyst_core.registry.get_registry") as mock_registry,
     ):
         mock_registry.return_value.all.return_value = []
         result = run_setup(skip_packs=True, enable_linger=True)
+    assert concert.call_args.kwargs.get("enable_linger") is True
     assert any(step.get("step") == "linger" for step in result["steps"])
 
 

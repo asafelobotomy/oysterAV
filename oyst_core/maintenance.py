@@ -11,7 +11,11 @@ from oyst_core.packs.rkhunter import RKHunterPack
 from oyst_core.registry import get_registry
 
 
-def run_bootstrap(*, skip_lynis: bool = False) -> list[dict[str, object]]:
+def run_bootstrap(
+    *,
+    skip_lynis: bool = False,
+    skip_rkhunter_propupd: bool = False,
+) -> list[dict[str, object]]:
     events = EventLog()
     steps: list[dict[str, object]] = []
 
@@ -34,12 +38,15 @@ def run_bootstrap(*, skip_lynis: bool = False) -> list[dict[str, object]]:
     else:
         steps.append({"step": "fangfrisch", "ok": True, "skipped": True})
 
-    rkh = RKHunterPack()
-    if rkh.doctor().installed:
-        ok, msg = rkh.propupd()
-        steps.append({"step": "rkhunter-propupd", "ok": ok, "message": msg[:200]})
+    if skip_rkhunter_propupd:
+        steps.append({"step": "rkhunter-propupd", "ok": True, "skipped": True})
     else:
-        steps.append({"step": "rkhunter-propupd", "ok": False, "skipped": True})
+        rkh = RKHunterPack()
+        if rkh.doctor().installed:
+            ok, msg = rkh.propupd()
+            steps.append({"step": "rkhunter-propupd", "ok": ok, "message": msg[:200]})
+        else:
+            steps.append({"step": "rkhunter-propupd", "ok": False, "skipped": True})
 
     if not skip_lynis:
         lynis = LynisPack()

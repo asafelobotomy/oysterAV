@@ -10,8 +10,9 @@ from oyst_core.models import PackStatus, PackTier
 from oyst_core.packs.base import Pack, resolve_pack_binary
 from oyst_core.packs.clamav import ClamAVPack
 from oyst_core.packs.clamd_onaccess import probe_onaccess_prevention
-from oyst_core.privileged.helper import run_privileged, run_privileged_helper
+from oyst_core.privileged.helper import run_privileged
 from oyst_core.privileged.runner import run_command
+from oyst_core.privileged.systemctl_route import run_systemctl_helper
 
 
 class ClamonaccPack(Pack):
@@ -146,7 +147,7 @@ class ClamonaccPack(Pack):
         unit = self._systemd_unit()
         if unit:
             # Distro unit is durable across reboot; OnAccess paths come from clamd.conf.
-            res = run_privileged_helper("systemctl", ["enable-now", unit])
+            res = run_systemctl_helper("enable-now", unit)
             if self.is_running():
                 return True, f"started via {unit}"
             return (
@@ -170,7 +171,7 @@ class ClamonaccPack(Pack):
     def stop(self) -> tuple[bool, str]:
         unit = self._systemd_unit()
         if unit:
-            res = run_privileged_helper("systemctl", ["disable-now", unit])
+            res = run_systemctl_helper("disable-now", unit)
             if not self.is_running():
                 return True, f"stopped via {unit}"
             # Fall through to pkill if unit stop left a process

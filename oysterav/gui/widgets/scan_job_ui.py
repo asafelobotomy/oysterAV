@@ -113,7 +113,7 @@ def set_card_state(
     card = page._pack_cards[pack]
     match state:
         case PackCardState.IDLE:
-            card.set_values("—", "No scan yet")
+            card.set_values("No scan yet", "")
         case PackCardState.PENDING:
             card.set_values("Pending", "Waiting…", css_class="warning")
         case PackCardState.RUNNING:

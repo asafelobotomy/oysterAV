@@ -45,6 +45,7 @@ def test_css_builder_emits_adwaita_defines_for_gruvbox() -> None:
     assert "label.oyster-status-badge" in css
     assert "label.oyster-section-heading" in css
     assert ".oyster-status-bar" in css
+    assert "oyster-scan-combo" in css
     assert "label.oyster-update-alert" in css
     assert colors.update_alert in css
     assert colors.success in css

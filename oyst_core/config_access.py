@@ -259,6 +259,25 @@ def set_config_value(key: str, value: str) -> None:
         from oyst_core.security_news_sources import normalize_source_ids
 
         cfg.ui.security_news_sources = normalize_source_ids(_parse_csv(value))
+    elif key == "ui.security_news_max_age_days":
+        from oyst_core.security_news_sources import (
+            ALLOWED_MAX_AGE_DAYS,
+            normalize_max_age_days,
+        )
+
+        try:
+            raw_days = int(str(value).strip())
+        except ValueError as exc:
+            raise KeyError(
+                "ui.security_news_max_age_days must be "
+                + "|".join(str(d) for d in ALLOWED_MAX_AGE_DAYS),
+            ) from exc
+        if raw_days not in ALLOWED_MAX_AGE_DAYS:
+            raise KeyError(
+                "ui.security_news_max_age_days must be "
+                + "|".join(str(d) for d in ALLOWED_MAX_AGE_DAYS),
+            )
+        cfg.ui.security_news_max_age_days = normalize_max_age_days(raw_days)
     elif key == "ui.theme":
         if value not in UI_THEME_ID_SET:
             raise KeyError(

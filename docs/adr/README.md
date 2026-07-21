@@ -12,5 +12,6 @@ Index of ADRs for oysterAV. Prefer **Accepted** documents; treat **Superseded** 
 | [006](006-dependency-scope.md) | Dependency Scope | Accepted (related: 008) |
 | [007](007-gui-remapping-phase.md) | GUI Remapping Phase | Accepted (supersedes 005) |
 | [008](008-clamav-host-cocontrol.md) | Host Co-Control for ClamAV Threats | Accepted |
+| [009](009-privilege-concert.md) | Privilege Concert (single auth per action) | Accepted |
 
 Living contracts (not ADRs): [gui-contract.md](../cli/gui-contract.md), [pack-commands.md](../cli/pack-commands.md), [clamonacc prevention guide](../user-guide/clamonacc-prevention.md).

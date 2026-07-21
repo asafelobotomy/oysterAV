@@ -15,11 +15,16 @@ from gi.repository import Adw, Gtk  # noqa: E402
 from oyst_core.client import OystClient
 from oyst_core.models import PackTier
 from oyst_core.runtime.bootstrap import RUNTIME_PACKS
+from oysterav.gui.widgets.bulk_checklist import add_switch_item, make_bulk_expander
 from oysterav.gui.widgets.common import make_button, make_status_badge
 from oysterav.gui.widgets.packs_display import (
     display_packs,
     pack_subtitle,
     runtime_info,
+)
+from oysterav.gui.widgets.packs_install_all import (
+    missing_pack_names,
+    on_install_all_clicked,
 )
 from oysterav.gui.widgets.packs_install_ui import (
     on_install_clicked,
@@ -58,6 +63,9 @@ class PackListWidget:
         self._groups: list[Adw.PreferencesGroup] = []
         self._page: Adw.PreferencesPage | None = None
         self._host_box: Gtk.Box | None = None
+        self.install_all_btn = make_button("Install All", suggested=True, row_suffix=True)
+        self.install_all_btn.connect("clicked", lambda *a: on_install_all_clicked(self, *a))
+        self.install_all_switches: dict[str, Adw.SwitchRow] = {}
 
         self.container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
 
@@ -129,6 +137,7 @@ class PackListWidget:
 
     def _populate(self) -> None:
         self._detach_groups()
+        self.install_all_switches = {}
         display = display_packs(self._packs)
 
         if self._runtime and str(self._runtime.get("mode") or "") not in ("", "full"):
@@ -142,15 +151,44 @@ class PackListWidget:
             note_group.add(note)
             self._groups.append(note_group)
 
-        first_tier = True
+        missing = missing_pack_names(display)
+        bulk = Adw.PreferencesGroup(title="Install")
+        bulk.set_description(_GROUP_DESCRIPTION)
+        install_row = Adw.ActionRow(title="Install All")
+        install_row.set_subtitle(
+            "Install missing packs (required first, then recommended, then optional)",
+        )
+        install_row.add_suffix(self.install_all_btn)
+        self.install_all_btn.set_sensitive(bool(missing))
+        bulk.add(install_row)
+        expander = make_bulk_expander(
+            "Packs to install",
+            subtitle="Toggle which missing packs Install All includes",
+            expanded=bool(missing),
+        )
+        by_name = {str(p.get("name") or ""): p for p in display}
+        for name in missing:
+            pack = by_name.get(name) or {"name": name}
+            switch = add_switch_item(
+                expander,
+                title=name,
+                subtitle=str(pack.get("tier") or ""),
+                active=True,
+            )
+            self.install_all_switches[name] = switch
+        if not missing:
+            empty = Adw.ActionRow(title="All listed packs are installed")
+            empty.set_sensitive(False)
+            expander.add_row(empty)
+            expander.set_expanded(False)
+        bulk.add(expander)
+        self._groups.append(bulk)
+
         for tier in _TIER_ORDER:
             tier_packs = [p for p in display if p.get("tier") == tier.value]
             if not tier_packs:
                 continue
             group = Adw.PreferencesGroup(title=tier.value.capitalize())
-            if first_tier:
-                group.set_description(_GROUP_DESCRIPTION)
-                first_tier = False
             for pack in tier_packs:
                 group.add(self._pack_row(pack))
             self._groups.append(group)

@@ -146,5 +146,66 @@ def add_cmd(
 @quarantine_group.command("verify")
 @json_option
 def verify_cmd(json_mode: bool) -> None:
-    bad = QuarantineVault().verify()
-    emit({"invalid_entries": bad, "ok": len(bad) == 0}, json_mode=json_mode)
+    vault = QuarantineVault()
+    bad = vault.verify()
+    orphans = vault.list_orphans()
+    emit(
+        {
+            "invalid_entries": bad,
+            "orphans": orphans,
+            "orphan_count": len(orphans),
+            "ok": len(bad) == 0 and len(orphans) == 0,
+        },
+        json_mode=json_mode,
+    )
+
+
+@quarantine_group.command(
+    "reconcile",
+    epilog="""
+Examples:
+  oyst-cli quarantine reconcile --json
+  oyst-cli quarantine reconcile --delete-orphans --confirm --json
+""",
+)
+@click.option("--delete-orphans", is_flag=True, help="Delete vault files with no DB row")
+@click.option("--confirm", is_flag=True)
+@click.option("--dry-run", is_flag=True)
+@json_option
+def reconcile_cmd(
+    delete_orphans: bool,
+    confirm: bool,
+    dry_run: bool,
+    json_mode: bool,
+) -> None:
+    vault = QuarantineVault()
+    orphans = vault.list_orphans()
+    if delete_orphans:
+        require_confirm(
+            confirm,
+            dry_run=dry_run,
+            message="--confirm required to delete quarantine orphans",
+        )
+        if dry_run:
+            payload = {
+                "ok": True,
+                "dry_run": True,
+                "orphans": orphans,
+                "deleted": [],
+            }
+            emit(payload, json_mode=json_mode)
+            if not json_mode:
+                click.echo(f"Would delete {len(orphans)} orphan(s)")
+            return
+        payload = vault.reconcile_orphans(delete=True)
+    else:
+        payload = {"ok": True, "orphans": orphans, "deleted": []}
+    emit(payload, json_mode=json_mode)
+    if not json_mode:
+        orphans_out = payload.get("orphans") or []
+        deleted_out = payload.get("deleted") or []
+        assert isinstance(orphans_out, list)
+        assert isinstance(deleted_out, list)
+        click.echo(f"Orphans: {len(orphans_out)}")
+        if deleted_out:
+            click.echo(f"Deleted: {len(deleted_out)}")

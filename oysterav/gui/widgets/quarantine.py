@@ -312,7 +312,14 @@ class QuarantinePage:
                 self._set_status("Vault integrity OK")
             else:
                 bad = result.get("invalid_entries", [])
-                self._set_status(f"Vault verify failed: {len(bad)} invalid entries")
+                orphans = int(result.get("orphan_count") or len(result.get("orphans") or []))
+                parts: list[str] = []
+                if bad:
+                    parts.append(f"{len(bad)} invalid")
+                if orphans:
+                    parts.append(f"{orphans} orphan(s)")
+                detail = ", ".join(parts) if parts else "issues found"
+                self._set_status(f"Vault verify failed: {detail}")
             return False
 
         run_in_thread(self.client.quarantine_verify, done, self._apply_error)

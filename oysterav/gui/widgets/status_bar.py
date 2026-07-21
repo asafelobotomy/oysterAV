@@ -10,7 +10,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gio", "2.0")
 
-from gi.repository import Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Gio, GLib, Gtk, Pango  # noqa: E402
 
 from oyst_core.security_news import headlines_for_ticker
 from oyst_core.updates import format_update_status_line
@@ -20,6 +20,8 @@ _IDLE_STATUSES = frozenset({"", "Ready"})
 _MARQUEE_MS = 40
 _OVERRIDE_RESTORE_MS = 12_000
 _UPDATE_ROTATE_MS = 8_000
+# Keep ticker / status / updates the same height so mode switches do not resize the window.
+_SLOT_HEIGHT = 22
 
 
 class StatusBar(Gtk.Box):
@@ -52,19 +54,27 @@ class StatusBar(Gtk.Box):
         self.set_margin_bottom(6)
         self.add_css_class("oyster-status-bar")
 
+        self._slot = Gtk.Stack()
+        self._slot.set_hexpand(True)
+        self._slot.set_vhomogeneous(True)
+        self._slot.set_transition_type(Gtk.StackTransitionType.NONE)
+        self._slot.set_size_request(-1, _SLOT_HEIGHT)
+
         self._op_label = Gtk.Label(label="Ready", xalign=0)
         self._op_label.set_halign(Gtk.Align.START)
+        self._op_label.set_valign(Gtk.Align.CENTER)
+        self._op_label.set_ellipsize(Pango.EllipsizeMode.END)
         self._op_label.add_css_class("dim-label")
-        self.append(self._op_label)
+        self._slot.add_named(self._op_label, "status")
 
         self._scroll = Gtk.ScrolledWindow()
         self._scroll.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
         self._scroll.set_hexpand(True)
-        self._scroll.set_visible(False)
-        self._scroll.set_size_request(-1, 22)
+        self._scroll.set_size_request(-1, _SLOT_HEIGHT)
 
         self._news_label = Gtk.Label(label="", xalign=0)
         self._news_label.set_halign(Gtk.Align.START)
+        self._news_label.set_valign(Gtk.Align.CENTER)
         self._news_label.add_css_class("dim-label")
         self._news_label.set_selectable(False)
         click = Gtk.GestureClick()
@@ -72,7 +82,8 @@ class StatusBar(Gtk.Box):
         click.connect("released", self._on_news_clicked)
         self._news_label.add_controller(click)
         self._scroll.set_child(self._news_label)
-        self.append(self._scroll)
+        self._slot.add_named(self._scroll, "news")
+        self.append(self._slot)
 
     def set_status(self, text: str) -> None:
         self._operational = text or "Ready"
@@ -177,24 +188,21 @@ class StatusBar(Gtk.Box):
         if show_update:
             self._op_label.set_text(update_text)
             self._op_label.add_css_class("oyster-update-alert")
-            self._op_label.set_visible(True)
-            self._scroll.set_visible(False)
+            self._slot.set_visible_child_name("status")
             self._stop_marquee()
             self._start_update_rotate()
             return
 
         self._stop_update_rotate()
         if show_news:
-            self._op_label.set_visible(False)
-            self._scroll.set_visible(True)
             self._news_label.set_text(f"{self._headline_text}     ···     {self._headline_text}")
+            self._slot.set_visible_child_name("news")
             self._start_marquee()
             return
 
         self._op_label.add_css_class("dim-label")
         self._op_label.set_text(self._operational)
-        self._op_label.set_visible(True)
-        self._scroll.set_visible(False)
+        self._slot.set_visible_child_name("status")
         self._stop_marquee()
 
     def _start_update_rotate(self) -> None:
@@ -221,7 +229,7 @@ class StatusBar(Gtk.Box):
             return
 
         def tick() -> bool:
-            if not self._scroll.get_visible():
+            if self._slot.get_visible_child_name() != "news":
                 self._marquee_id = 0
                 return False
             adj = self._scroll.get_hadjustment()

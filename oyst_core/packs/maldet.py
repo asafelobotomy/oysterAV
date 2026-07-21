@@ -7,16 +7,22 @@ from pathlib import Path
 
 from oyst_core.audit import SecurityAudit
 from oyst_core.config import load_config, save_config
-from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier
+from oyst_core.models import Finding, PackStatus, PackTier
 from oyst_core.pack_sources import configure_maldet_clamav, ensure_maldet_pub_paths
 from oyst_core.packs.base import Pack, resolve_pack_binary
+from oyst_core.packs.maldet_parse import (
+    filter_malware_findings,
+    load_session_hit_findings,
+    maldet_event_log_path,
+    merge_findings,
+    parse_console_output,
+)
 from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.runner import run_command, which
 from oyst_core.runtime.manifest import is_full_mode, runtime_maldet_prefix
 
 MALDET_PATHS = ["/usr/local/sbin/maldet", "/usr/sbin/maldet", "/usr/bin/maldet"]
 MALDET_CONF = Path("/usr/local/maldetect/conf.maldet")
-MALDET_EVENT_LOG = Path("/usr/local/maldetect/logs/event_log")
 INOTIFY_WATCHES = Path("/proc/sys/fs/inotify/max_user_watches")
 
 
@@ -116,47 +122,11 @@ class MaldetPack(Pack):
         return res.returncode == 0, res.stdout + res.stderr
 
     def parse_findings(self, output: str) -> list[Finding]:
-        findings: list[Finding] = []
-        for line in output.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            lowered = stripped.lower()
-            # Version / banner lines contain "malware" but are not hits.
-            if re.match(r"^linux malware detect\b", lowered):
-                continue
-            if "maldetect v" in lowered and "/" not in stripped:
-                continue
-            has_hit_keyword = "hit" in lowered or "found" in lowered or "malware" in lowered
-            if not has_hit_keyword:
-                continue
-            path = self._extract_path(stripped)
-            # Require a filesystem path so banners/summaries without paths are dropped.
-            if not path or not (path.startswith("/") or path.startswith("~")):
-                continue
-            findings.append(
-                Finding(
-                    pack=self.name,
-                    path=path,
-                    threat_name="maldet-detection",
-                    severity=FindingSeverity.HIGH,
-                    message=f"maldet hit: {path}",
-                    raw_line=line,
-                ),
-            )
-        return findings
-
-    @staticmethod
-    def _extract_path(line: str) -> str | None:
-        """Best-effort path extraction so oysterAV quarantine can act on hits."""
-        tokens = line.split()
-        for token in reversed(tokens):
-            cleaned = token.strip("\",'")
-            if cleaned.startswith("/") or cleaned.startswith("~"):
-                expanded = str(Path(cleaned).expanduser())
-                if Path(expanded).exists() or "/" in cleaned:
-                    return expanded
-        return None
+        """Parse console output; prefer session.hits when available after a scan."""
+        console = parse_console_output(output)
+        session = load_session_hit_findings(self._binary())
+        merged = merge_findings(session, console)
+        return filter_malware_findings(merged)
 
     def scan_paths(
         self,
@@ -237,6 +207,12 @@ class MaldetPack(Pack):
             cfg.maldet_monitor.enabled = True
             save_config(cfg)
         SecurityAudit().log("maldet.monitor", "start", success=ok, data={"mode": mode})
+        SecurityAudit().log(
+            "auth.passwordless",
+            f"maldet-config start-monitor {mode}",
+            success=ok,
+            data={"helper": "maldet-config", "mode": mode},
+        )
         msg = (res.stdout or res.stderr or "").strip() or ("ok" if ok else "failed")
         return ok, msg
 
@@ -275,8 +251,9 @@ class MaldetPack(Pack):
         return True
 
     def tail_events(self, lines: int = 20) -> tuple[bool, str]:
-        if not MALDET_EVENT_LOG.is_file():
+        event_log = maldet_event_log_path(self._binary())
+        if not event_log.is_file():
             return False, "event log not found"
-        content = MALDET_EVENT_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+        content = event_log.read_text(encoding="utf-8", errors="replace").splitlines()
         tail = content[-lines:] if lines > 0 else content
         return True, "\n".join(tail)

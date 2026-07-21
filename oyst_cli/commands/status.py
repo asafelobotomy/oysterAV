@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import click
 
+from oyst_cli.confirm import require_confirm
 from oyst_cli.options import json_option
 from oyst_cli.output import emit
 from oyst_core.events import EventLog
+from oyst_core.finding_status import finding_is_open
 from oyst_core.health import assess_health
+from oyst_core.history_actions import handle_open_findings
 from oyst_core.orchestrator import JobOrchestrator
+from oyst_core.packs.rkhunter_resolve import is_resolvable_threat, preview_rkhunter_resolve_plan
+from oyst_core.privilege import preflight_body, preflight_dict
 
 
 @click.group("status", invoke_without_command=True)
@@ -88,9 +93,25 @@ def history_handle_open_cmd(
     json_mode: bool,
 ) -> None:
     """Quarantine and/or resolve all open actionable findings for a scan."""
-    from oyst_cli.confirm import require_confirm
-    from oyst_core.history_actions import handle_open_findings
-
+    if resolve:
+        scan = EventLog().get_scan(job_id)
+        if scan is None:
+            raise click.ClickException(f"scan not found: {job_id}")
+        findings_raw = scan.get("findings")
+        findings = [
+            f
+            for f in (findings_raw if isinstance(findings_raw, list) else [])
+            if isinstance(f, dict)
+            and finding_is_open(f)
+            and str(f.get("pack") or "") == "rkhunter"
+            and is_resolvable_threat(str(f.get("threat_name") or ""))
+        ]
+        plan, _errs = preview_rkhunter_resolve_plan(findings, force=force)
+        if plan is not None and plan.needs_elevation:
+            if json_mode and not confirm:
+                emit(preflight_dict(plan), json_mode=True)
+            elif not json_mode:
+                click.echo(preflight_body(plan))
     require_confirm(confirm, message="--confirm required to handle open findings")
     result = handle_open_findings(
         job_id,
@@ -117,8 +138,6 @@ def history_handle_open_cmd(
 @json_option
 def history_delete_cmd(job_id: str, confirm: bool, json_mode: bool) -> None:
     """Delete one scan report from history."""
-    from oyst_cli.confirm import require_confirm
-
     require_confirm(confirm, message="--confirm required to delete a scan report")
     result = EventLog().delete_scan(job_id)
     if json_mode:
@@ -135,8 +154,6 @@ def history_delete_cmd(job_id: str, confirm: bool, json_mode: bool) -> None:
 @json_option
 def history_delete_all_cmd(confirm: bool, json_mode: bool) -> None:
     """Delete every scan report from history."""
-    from oyst_cli.confirm import require_confirm
-
     require_confirm(confirm, message="--confirm required to delete all scan reports")
     result = EventLog().delete_all_scans()
     if json_mode:

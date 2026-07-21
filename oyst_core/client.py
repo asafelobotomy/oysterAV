@@ -127,16 +127,33 @@ class OystClient(OystClientApi):
             return {"scan": result, "exit_code": int(raw.get("exit_code", 0))}
         return {"scan": {}, "exit_code": 2}
 
-    def runtime_install(self, pack: str | None = None, *, on_progress: Any = None) -> Any:
+    def runtime_install(
+        self,
+        pack: str | None = None,
+        *,
+        packs: list[str] | None = None,
+        on_progress: Any = None,
+    ) -> Any:
         if on_progress is not None:
             from oyst_core.runtime.bootstrap import bootstrap_runtime, install_pack_runtime
 
             if pack:
                 return install_pack_runtime(str(pack), on_progress=on_progress)
-            return bootstrap_runtime(on_progress=on_progress)
+            results = bootstrap_runtime(
+                list(packs) if packs else None,
+                on_progress=on_progress,
+            )
+            ok_count = sum(1 for r in results if r.get("ok"))
+            return {
+                "ok": ok_count == len(results) and bool(results),
+                "results": results,
+                "message": f"Installed {ok_count}/{len(results)} runtime packs",
+            }
         params: dict[str, Any] = {}
         if pack:
             params["pack"] = pack
+        if packs:
+            params["packs"] = list(packs)
         return self._call("runtime.install", params)
 
     def runtime_remove(self, pack: str, *, on_progress: Any = None) -> dict[str, Any]:

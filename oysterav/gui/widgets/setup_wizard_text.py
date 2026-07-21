@@ -11,6 +11,7 @@ PAGE_TITLES = (
     "Security packs",
     "Preferences",
     "Scheduling",
+    "Host hardening",
     "Ready",
 )
 
@@ -43,6 +44,7 @@ def format_ready_checklist(
     schedule_installed: bool,
     auto_quarantine: bool,
     full_mode: bool,
+    harden_ran: bool = False,
 ) -> str:
     """Concise Ready-page summary of what was done vs still optional."""
     missing = list(setup.get("missing_required") or [])
@@ -64,12 +66,26 @@ def format_ready_checklist(
         if schedule_installed
         else "Scheduled scan: not installed (optional — Settings → Scheduling)"
     )
+    harden_line = (
+        "Host hardenings: applied (or soft-skipped)"
+        if harden_ran
+        else "Host hardenings: not run (optional — Host hardening page or setup run)"
+    )
     quarantine_line = f"Auto-quarantine: {'on' if auto_quarantine else 'off'}"
     next_steps = (
-        "Next: Scan tab · Settings → Services (helper) · Settings → Maintenance (Update all)"
+        "Next: Scan tab · Settings → Real-time (paths + prevention) · "
+        "Settings → Maintenance (Update all)"
     )
     return "\n".join(
-        [packs_line, bootstrap_line, schedule_line, quarantine_line, "", next_steps],
+        [
+            packs_line,
+            bootstrap_line,
+            schedule_line,
+            harden_line,
+            quarantine_line,
+            "",
+            next_steps,
+        ],
     )
 
 
