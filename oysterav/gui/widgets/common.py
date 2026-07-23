@@ -269,6 +269,7 @@ class StatusCard(Gtk.Frame):
         *,
         on_activate: Callable[[], None] | None = None,
         compact: bool = False,
+        selectable: bool = False,
     ) -> None:
         super().__init__()
         self.add_css_class("card")
@@ -284,7 +285,7 @@ class StatusCard(Gtk.Frame):
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2 if compact else 4)
         pad_x = 10 if compact else 16
-        pad_y = 6 if compact else 12
+        pad_y = 8 if compact else 12
         box.set_margin_start(pad_x)
         box.set_margin_end(pad_x)
         box.set_margin_top(pad_y)
@@ -292,7 +293,20 @@ class StatusCard(Gtk.Frame):
 
         self.title_label = Gtk.Label(label=title)
         self.title_label.set_halign(Gtk.Align.START)
+        self.title_label.set_hexpand(True)
         self.title_label.add_css_class("dim-label")
+
+        self.select_check: Gtk.CheckButton | None = None
+        if selectable:
+            header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            self.select_check = Gtk.CheckButton()
+            self.select_check.set_valign(Gtk.Align.CENTER)
+            self.select_check.set_visible(False)
+            header.append(self.select_check)
+            header.append(self.title_label)
+            box.append(header)
+        else:
+            box.append(self.title_label)
 
         self.value_label = Gtk.Label(label="—")
         self.value_label.set_halign(Gtk.Align.START)
@@ -304,14 +318,27 @@ class StatusCard(Gtk.Frame):
         self.desc_label = Gtk.Label(label="")
         self.desc_label.set_halign(Gtk.Align.START)
         self.desc_label.set_wrap(True)
+        self.desc_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.desc_label.set_xalign(0.0)
         self.desc_label.add_css_class("dim-label")
         if compact:
-            self.desc_label.set_lines(1)
+            # Two lines: purpose copy fits without growing the Scan page past the
+            # default window (spare vertical space below the card grid).
+            self.desc_label.set_lines(2)
             self.desc_label.set_ellipsize(Pango.EllipsizeMode.END)
 
-        box.append(self.title_label)
         box.append(self.value_label)
         box.append(self.desc_label)
+
+        self.progress: Gtk.ProgressBar | None = None
+        if compact:
+            self.progress = Gtk.ProgressBar()
+            self.progress.set_fraction(0.0)
+            self.progress.set_visible(False)
+            self.progress.set_hexpand(True)
+            self.progress.add_css_class("oyster-scan-card-progress")
+            box.append(self.progress)
+
         self.set_child(box)
 
         if on_activate is not None:
@@ -325,6 +352,32 @@ class StatusCard(Gtk.Frame):
         self.desc_label.set_text(description)
         self.desc_label.set_visible(bool(description.strip()))
         apply_status_css(self.value_label, css_class)
+
+    def set_title(self, title: str) -> None:
+        self.title_label.set_text(title)
+
+    def set_select_visible(self, visible: bool) -> None:
+        if self.select_check is not None:
+            self.select_check.set_visible(visible)
+
+    def set_progress(self, fraction: float | None) -> None:
+        """Show card progress fill (0..1), or hide when ``None``."""
+        if self.progress is None:
+            return
+        if fraction is None:
+            self.progress.set_visible(False)
+            return
+        self.progress.set_visible(True)
+        self.progress.set_fraction(max(0.0, min(1.0, float(fraction))))
+
+    def set_active_appearance(self, active: bool) -> None:
+        """Full opacity for packs in the current profile; grey out the rest."""
+        if active:
+            self.remove_css_class("oyster-scan-result-inactive")
+            self.set_opacity(1.0)
+        else:
+            self.add_css_class("oyster-scan-result-inactive")
+            self.set_opacity(0.42)
 
 
 class PreferencesGroup(Adw.PreferencesGroup):

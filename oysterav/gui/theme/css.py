@@ -49,6 +49,22 @@ frame.oyster-scan-result-card {
   border-radius: 10px;
 }
 
+/* Per-pack progress fill inside Scan Results cards. */
+progressbar.oyster-scan-card-progress {
+  min-height: 8px;
+  margin-top: 4px;
+}
+
+progressbar.oyster-scan-card-progress trough {
+  min-height: 8px;
+  border-radius: 4px;
+}
+
+progressbar.oyster-scan-card-progress progress {
+  min-height: 8px;
+  border-radius: 4px;
+}
+
 /* Compact profile/target ComboRows (libadwaita ActionRow defaults are taller). */
 .oyster-scan-options {
   margin-top: 0;
@@ -175,6 +191,14 @@ frame.oyster-status-card {{
   background-color: {colors.card_bg};
   color: {colors.card_fg};
   border: 1px solid {colors.borders};
+}}
+
+progressbar.oyster-scan-card-progress trough {{
+  background-color: {colors.borders};
+}}
+
+progressbar.oyster-scan-card-progress progress {{
+  background-color: {colors.accent_bg};
 }}
 
 .oyster-status-bar {{
