@@ -24,6 +24,7 @@ labels, helper argv). The UI/CLI discloses the plan, then one `pkexec oyst-helpe
 | `setup-concert` | `setup` | shared |
 | `setup-harden` | `harden` | shared |
 | `scan-concert` | `scan-privileged` | shared |
+| `update-concert` | `update-all` | shared |
 | `rkhunter-whitelist` | `resolve-rkhunter` (userspace) | same argv1; concert façade + preflight |
 
 Rules:
@@ -38,7 +39,7 @@ Rules:
 
 Userspace API: `oyst_core/privilege/` (`PrivilegePlan`, recipes, `preflight_*`,
 `run_privilege_concert`). Helper: `helper_concert` + recipe modules. Policy version
-**11** adds `scan-concert`.
+**12** adds `update-concert` (v11 added `scan-concert`).
 
 **Phase 2 (Resolve):** rkhunter Resolve open / row Resolve use recipe
 `resolve-rkhunter` for disclosure and `run_privilege_concert`, but keep existing
@@ -50,14 +51,16 @@ AV start/enable).
 priority-ordered `PrivilegePlan` (required → recommended → optional → harden →
 propupd). Lite **Install All** reuses `setup-concert` via `setup.run` with an
 explicit `packs` list. Full mode uses `runtime.install` (no pack = `--all`)
-without polkit. **Update all** discloses packages + pipeline steps, then
-`updates.apply` (existing install helpers). Harden / Auto-Install recipe toggles
-feed the same concert argv builders. No new polkit argv1.
+without polkit. **Update all** uses `update-concert` for official package upgrades
+plus `rkhunter --update` / `--propupd` in one `auth_admin` prompt; AUR upgrades stay
+user-mode (paru/yay); signature refreshes (freshclam/fangfrisch/maldet) run locally
+after the concert. Harden / Auto-Install recipe toggles feed the same concert argv
+builders.
 
 ## Consequences
 
 - Operators must reinstall the helper after upgrade (`sudo oyst-cli
-  install-privileged-helper`) for policy v11.
+  install-privileged-helper`) for policy **v12**.
 - GUI/CLI must show plan summary before elevation when privileged steps exist.
 - Single-step actions (one firewall ensure, one service toggle) may stay as direct
   argv1.

@@ -18,7 +18,7 @@ uv run oyst-cli doctor
 Run the guided setup wizard equivalent:
 
 ```bash
-uv run oyst-cli setup run --json
+uv run oyst-cli setup run --confirm --json
 uv run oyst-cli status assess --json
 ```
 
@@ -85,14 +85,28 @@ Run `oyst-cli doctor` for distro-specific install commands. On-access prevention
 host ClamAV blocking: [clamonacc prevention guide](clamonacc-prevention.md)
 ([ADR-008](../adr/008-clamav-host-cocontrol.md)).
 
+## Privileged helper
+
+Polkit elevation needs a root-owned `oyst_core` install (distro package or system
+prefix). A user-writable git checkout is refused unless you pass `--dev`:
+
+```bash
+sudo uv run oyst-cli install-privileged-helper --dev   # development only
+# Prefer packaged: sudo oyst-cli install-privileged-helper
+```
+
+See [CLI reference — Helper](../cli/reference.md#helper).
+
 ## Shell completion
+
+Requires `oyst-cli` on `PATH`, or use `uv run` / `.venv/bin` after a uv checkout:
 
 ```bash
 # bash
-eval "$(_OYST_CLI_COMPLETE=bash_source oyst-cli)"
+eval "$(_OYST_CLI_COMPLETE=bash_source uv run oyst-cli)"
 
 # zsh
-eval "$(_OYST_CLI_COMPLETE=zsh_source oyst-cli)"
+eval "$(_OYST_CLI_COMPLETE=zsh_source uv run oyst-cli)"
 ```
 
 ## CLI reference

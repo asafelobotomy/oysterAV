@@ -15,7 +15,7 @@ Living document mapping every GTK user-facing feature to CLI-first equivalents
 | Layer | Role |
 |-------|------|
 | Parity AST / `--help` | Contract: method exists and maps to CLI (not behavioral coverage) |
-| [`oysterav/gui/rpc_actions.py`](../../oysterav/gui/rpc_actions.py) + `tests/test_core/test_rpc_actions.py` | ADR-007 wiring: cancel, services, quarantine add, host security, audit, news |
+| [`oysterav/gui/rpc_actions.py`](../../oysterav/gui/rpc_actions.py) + `tests/test_core/test_rpc_actions.py` | ADR-007 wiring: cancel, services, quarantine add, host security, audit, news, history, updates |
 | Core/CLI unit tests | Mutations, parsers, allowlists (mocked tools) |
 | `fail_under` in `pyproject.toml` | Floor on `oyst_core` + `oyst_cli` line coverage only (`oysterav` excluded) |
 
@@ -204,7 +204,7 @@ Schedule quarantine/backend are **timer overrides** of General defaults.
 
 | GUI feature | RPC / client | CLI equivalent |
 |-------------|--------------|----------------|
-| Firewall status | `firewall.status` | `oyst-cli firewall status` (full DSL remains CLI) |
+| Firewall status | `firewall.status` | `oyst-cli firewall status --json` (full DSL remains CLI) |
 | fail2ban unban IP | `fail2ban.unban` | `oyst-cli fail2ban unban <ip> --confirm` |
 | Audit trail (recent entries) | `audit.list` | `oyst-cli audit list` (display-only in GUI) |
 
@@ -215,7 +215,7 @@ Schedule quarantine/backend are **timer overrides** of General defaults.
 | **Update all** | `updates.apply` (+ privilege preflight) | **`oyst-cli updates apply [--json]`** (check → package upgrades → signatures/definitions → rkhunter propupd). Expander lists pipeline steps with per-item Run. |
 | **Install runtime and update signatures** | `runtime.bootstrap` | **`oyst-cli runtime bootstrap`** (outside Update all) |
 | **Maintenance only** | `maintenance.bootstrap` | `oyst-cli maintenance bootstrap` |
-| **Post-update maintenance** | `maintenance.post_update` | `oyst-cli maintenance post-update` |
+| **Post-update maintenance** | `maintenance.post-update` | `oyst-cli maintenance post-update` |
 | **Update rkhunter data** | `rkhunter.update` | `oyst-cli rkhunter update [--json]` |
 | **Refresh rkhunter baseline** (confirm dialog) | `rkhunter.propupd` | `oyst-cli rkhunter propupd --confirm [--json]` |
 | Last run status | — (GUI label) | Inspect bootstrap/maintenance CLI output |
@@ -279,7 +279,7 @@ apply only when you install the timer manually on that page.
 
 ```bash
 oyst-cli setup check --json
-oyst-cli setup run --confirm-aur --enable-linger --json
+oyst-cli setup run --confirm-aur --enable-linger --confirm --json
 oyst-cli status assess --json
 ```
 
@@ -287,7 +287,7 @@ oyst-cli status assess --json
 
 ## RPC methods used by GUI → CLI
 
-RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashboard already uses `status.assess`. Scan cancel uses `job.cancel`.
+RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashboard already uses `status.assess`. Scan cancel uses `job.cancel`. CLI-only extras (`job.clear`, `schedule.install`, `runtime.update`, `clamonacc.start`/`stop`, `virusevent.status`, …) are omitted here.
 
 | RPC method | CLI |
 |------------|-----|
@@ -295,15 +295,20 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `status.assess` | `oyst-cli status assess --json` (Dashboard health banner) |
 | `history.list` | `oyst-cli history --json` |
 | `history.get` | `oyst-cli history show <job_id> --json` |
+| `history.handle_open` | `oyst-cli history handle-open` |
+| `history.delete` | `oyst-cli history delete` |
+| `history.delete_all` | `oyst-cli history delete-all` |
+| `history.export` | `oyst-cli history export` |
+| `history.export_all` | `oyst-cli history export-all` |
 | `quarantine.list` | `oyst-cli quarantine list --json` |
 | `quarantine.restore` | `oyst-cli quarantine restore <id> --confirm` |
 | `quarantine.delete` | `oyst-cli quarantine delete <id> --confirm` |
 | `quarantine.verify` | `oyst-cli quarantine verify --json` |
+| `quarantine.add` | `oyst-cli quarantine add --confirm` |
 | `pack.doctor` | `oyst-cli doctor --json` |
 | `pack.install` | `oyst-cli packs install <name>` |
 | `job.start` | `oyst-cli scan [paths] [--profile] [--quarantine]` |
 | `job.cancel` | `oyst-cli job cancel [--force]` |
-| `job.clear` | `oyst-cli job clear` |
 | `job.status` | `oyst-cli job status --json` |
 | `rkhunter.update` | `oyst-cli rkhunter update` |
 | `rkhunter.propupd` | `oyst-cli rkhunter propupd --confirm` |
@@ -311,8 +316,7 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `config.get` | `oyst-cli config get [key] [--json]` |
 | `config.set` | `oyst-cli config set <key> <value>` |
 | `setup.status` | `oyst-cli setup status --json` |
-| `setup.run` | `oyst-cli setup run` (GUI Auto-Install on wizard welcome) |
-| `schedule.install` | `oyst-cli schedule install` |
+| `setup.run` | `oyst-cli setup run --confirm` (GUI Auto-Install on wizard welcome) |
 | `schedule.apply` | `oyst-cli schedule apply` |
 | `schedule.status` | `oyst-cli schedule status --json` |
 | `schedule.run` | `oyst-cli schedule run --json` |
@@ -321,19 +325,31 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `runtime.status` | `oyst-cli runtime status --json` |
 | `runtime.install` | `oyst-cli runtime install` |
 | `runtime.remove` | `oyst-cli runtime remove <name> --confirm` |
-| `runtime.update` | `oyst-cli runtime update` |
 | `runtime.bootstrap` | `oyst-cli runtime bootstrap` |
 | `maintenance.bootstrap` | `oyst-cli maintenance bootstrap` |
-| `maintenance.post-update` | `oyst-cli maintenance post-update` | Settings → Maintenance |
-| `updates.check` | `oyst-cli updates check [--json]` | Status bar alerts |
-| `updates.apply` | `oyst-cli updates apply [--json]` | Settings → Maintenance → Update all |
+| `maintenance.post-update` | `oyst-cli maintenance post-update` |
+| `updates.check` | `oyst-cli updates check [--json]` |
+| `updates.apply` | `oyst-cli updates apply [--json]` |
 | `clamav.clamd.ensure` | `oyst-cli clamav clamd ensure` |
 | `services.status` | `oyst-cli services status --json` |
 | `services.set` | `oyst-cli services set <name> on\|off [--boot]` |
 | `auth.status` | `oyst-cli auth status --json` |
-| `quarantine.add` | `oyst-cli quarantine add` |
+| `helper.install` | `oyst-cli install-privileged-helper` |
+| `auth.grant_service_lifecycle` | `oyst-cli auth grant-service-lifecycle` |
+| `auth.revoke_service_lifecycle` | `oyst-cli auth revoke-service-lifecycle` |
 | `desktop.status` | `oyst-cli desktop status --json` |
-| `clamonacc.*` | `oyst-cli clamonacc …` |
+| `firewall.status` | `oyst-cli firewall status --json` |
+| `fail2ban.unban` | `oyst-cli fail2ban unban <ip> --confirm` |
+| `audit.list` | `oyst-cli audit list --json` |
+| `clamonacc.status` | `oyst-cli clamonacc status --json` |
+| `clamonacc.enable` | `oyst-cli clamonacc enable` |
+| `clamonacc.disable` | `oyst-cli clamonacc disable` |
+| `clamonacc.add_path` | `oyst-cli clamonacc paths add` |
+| `clamonacc.remove_path` | `oyst-cli clamonacc paths remove` |
+| `clamonacc.ensure_fdpass` | `oyst-cli clamonacc ensure-fdpass --confirm` |
+| `clamonacc.ensure_prevention` | `oyst-cli clamonacc ensure-prevention --confirm` |
+| `virusevent.ensure` | `oyst-cli virusevent ensure --confirm` |
+| `clamav.ensure_disable_cache` | `oyst-cli clamav ensure-disable-cache --confirm` |
 | `news.list` | `oyst-cli news list [--json] [--sources …] [--max-age-days …]` |
 | `news.refresh` | `oyst-cli news refresh [--json] [--sources …]` |
 

@@ -7,9 +7,10 @@ Quick reference for internal production use. All commands support `-v` / `--verb
 ```bash
 oyst-cli setup check --json          # wizard gate: exit 1 if attention needed
 oyst-cli setup status --json         # completion state + missing packs
-oyst-cli setup run --json            # guided batch setup (wizard equivalent)
-oyst-cli setup run --enable-linger   # also enable linger when schedule advises it
-oyst-cli setup run --skip-harden     # omit safe ClamAV/rkhunter host hardenings
+oyst-cli setup run --confirm --json            # guided batch setup (wizard equivalent)
+oyst-cli setup run --confirm --enable-linger   # also enable linger when schedule advises it
+oyst-cli setup run --confirm --skip-harden     # omit safe ClamAV/rkhunter host hardenings
+oyst-cli setup run --dry-run --json            # print privilege plan only
 oyst-cli firewall ensure-enable --confirm  # SSH-safe UFW/firewalld enable
 oyst-cli setup reset --confirm       # clear completion to re-run setup
 oyst-cli status assess --json
@@ -108,10 +109,10 @@ oyst-cli quarantine delete <id> --dry-run
 oyst-cli quarantine verify --json
 oyst-cli quarantine reconcile --json
 oyst-cli quarantine reconcile --delete-orphans --confirm --json
-oyst-cli quarantine add <path>
+oyst-cli quarantine add <path> --confirm
 ```
 
-Restore/delete require `--confirm` (or `--dry-run` to preview). `add` is additive and does not require confirmation.
+Restore/delete/add require `--confirm` (or `--dry-run` to preview for restore/delete).
 `verify` reports hash-invalid DB rows and vault orphans (files with no DB row);
 `reconcile --delete-orphans --confirm` removes those orphans.
 
@@ -239,8 +240,8 @@ oyst-cli helper-status --json
 ```
 
 Installs `oyst-helper` and fine-grained polkit actions (`io.github.asafelobotomy.helper.*` via
-`pkexec` argv1), including policy **v11** `scan-concert`. Re-run after upgrades when
-`helper-status` reports an outdated policy.
+`pkexec` argv1), including policy **v12** `update-concert` (and earlier `scan-concert`).
+Re-run after upgrades when `helper-status` reports an outdated policy.
 From Flatpak GUI, elevation uses `flatpak-spawn --host pkexec` against the host
 `oyst-cli` — see `packaging/oysterav/flatpak/README.md`.
 
@@ -296,12 +297,16 @@ See [rpc-schema.md](rpc-schema.md) for JSON-RPC v2 methods and authentication.
 
 ## Shell completion
 
+Requires `oyst-cli` on `PATH` (packaged/`~/.local/bin` install). After a uv-only
+checkout, use the venv binary or prefix with `uv run`:
+
 ```bash
-# bash
-eval "$(_OYST_CLI_COMPLETE=bash_source oyst-cli)"
+# bash (uv checkout)
+eval "$(_OYST_CLI_COMPLETE=bash_source uv run oyst-cli)"
+# or: eval "$(_OYST_CLI_COMPLETE=bash_source .venv/bin/oyst-cli)"
 
 # zsh
-eval "$(_OYST_CLI_COMPLETE=zsh_source oyst-cli)"
+eval "$(_OYST_CLI_COMPLETE=zsh_source uv run oyst-cli)"
 ```
 
 ## Exit codes

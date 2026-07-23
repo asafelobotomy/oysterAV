@@ -51,15 +51,20 @@
 
 ```bash
 uv sync --extra all
-uv run oyst-cli setup run --json
+uv run oyst-cli setup run --confirm --json
 uv run oyst-cli status assess --json
 uv run oyst-cli scan ~/Downloads --json
 ```
 
 `setup run` can take several minutes on a cold machine (signatures / packs). Soft-failed steps (schedule, rkhunter) are non-fatal — check `--json` output.
 
+Privileged helper install (`install-privileged-helper`) needs a root-owned
+`oyst_core` prefix (distro package) or `sudo uv run oyst-cli install-privileged-helper --dev`
+for a checkout. See [docs/cli/reference.md](docs/cli/reference.md#helper).
+
 ```bash
 ./scripts/check.sh --quick   # local validation
+./scripts/check.sh --format  # also enforce ruff format
 ```
 
 ## GUI

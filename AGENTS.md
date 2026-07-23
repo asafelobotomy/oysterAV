@@ -113,9 +113,9 @@ See [docs/packaging/release.md](docs/packaging/release.md).
 ## Learned User Preferences
 
 - Prefer CLI/RPC surfaces first for new features; wire the GUI only after matching commands exist.
-- Prefer a detailed plan before implementing large multi-surface or security-sensitive changes.
+- Prefer a detailed plan before implementing large multi-surface or security-sensitive changes; for audits, deliver findings-only reports first and remediate only after a separate approved plan.
 - Prefer recognizing host-installed tools as installed (system vs private runtime) without forcing a pack reinstall.
-- Prefer a single password/auth prompt at the start of each user-initiated action (Privilege Concert), including multi-pack scans, hardenings, and bulk resolve/quarantine—not mid-flow or per-item prompts; order disclosed steps by priority.
+- Prefer a single password/auth prompt at the start of each user-initiated action (Privilege Concert), including multi-pack scans, hardenings, Update all, and bulk resolve/quarantine—not mid-flow or per-item prompts; order disclosed steps by priority.
 - Prefer Settings options that autosave; avoid redundant Save buttons when individual controls already persist.
 - Prefer a lean GUI that does not duplicate Settings controls onto Scan or other tabs; bulk Update/Apply/Install All actions should use one collapsible itemized checklist with per-item controls (no duplicate lists).
 - Prefer distro-portable host integration over distro-specific one-offs.
@@ -133,4 +133,4 @@ See [docs/packaging/release.md](docs/packaging/release.md).
 - Status-bar pack/service update notices take priority over the security-news ticker.
 - Security-news ticker freshness is configurable in Settings (7/14/30 days; default 14).
 - Privileged-helper install refuses to embed a user-writable oysterAV checkout; `oyst_core` must live under a root-owned prefix (distro package or root install), which matters on externally-managed Python distros (e.g. Arch/CachyOS).
-- Privilege Concert ([ADR-009](docs/adr/009-privilege-concert.md)) is the unified single-admin-auth-per-user-action model for privileged multi-step flows (scans, setup hardenings, resolve, bulk install).
+- Privilege Concert ([ADR-009](docs/adr/009-privilege-concert.md)) is the unified single-admin-auth-per-user-action model for privileged multi-step flows (scans, setup hardenings, Update all / update-concert, resolve, bulk install).

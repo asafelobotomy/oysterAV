@@ -31,15 +31,16 @@ remote attackers without a local foothold; formal verification / fuzzing campaig
 | H-02 | P1 | `lynis --profile` accepted absolute `/usr`/`/etc` paths without fd checks | **Fixed** — `O_NOFOLLOW`, regular file, root-owned |
 | H-03 | P1 | No `SECURITY.md` / Scorecard / Dependabot; CI Actions on mutable tags; no top-level `permissions: contents: read` | **Fixed** — this pass |
 | H-04 | P1 | XDG data dir created without forcing `0700` (token/socket rely on file modes alone) | **Fixed** — `data_dir()` chmod `0700` |
-| H-05 | P2 | Non-pkexec `run_command` inherits full process env (session secrets visible to child scanners) | **Accepted residual** — document; pkexec paths scrubbed |
-| H-06 | P2 | Audit redaction covers `/home/…` only; other user paths may remain in logs | Deferred |
+| H-05 | P2 | Non-pkexec `run_command` inherits full process env (session secrets visible to child scanners) | **Fixed** — `command_scrubbed_env` on `run_command` / non-pkexec install |
+| H-06 | P2 | Audit redaction covers `/home/…` only; other user paths may remain in logs | **Fixed** — `/var/home`, `/run/user`, oysterAV tmp prefixes |
 | H-07 | Info | Auth grant YES for `systemctl-up` + `maldet-config` only (active/local, 7d TTL); stop/disable stay passworded | OK — do not expand scope |
 | H-08 | Info | RPC: token `0600`, peercred UID match, `compare_digest`; in-process fallback = same-UID CLI trust | OK |
 | H-09 | Info | ClamAV: path-scoped includes, prevention opt-in, owned VirusEvent, no MountPath auto | Docs/GUI copy refreshed |
 | H-10 | P0 | None found this pass (no confirmed priv-esc / auth bypass / root exec from user-writable embed path when site_root rules hold) | — |
 | A-01 | P1 | `run-sealed` executed sealed binary with unvalidated argv | **Fixed** — `_validate_scanner_argv` in `helper_sealed_scanner` / `scanner_exec` |
 | A-02 | P1 | `install-script` sealed only `install.sh`; siblings mutable before pkexec | **Fixed** — helper re-verifies tarball SHA and extracts under root seal |
-| A-06–A-07 | P2 | Concert disclosure argv mismatch; scan-concert silent unknown `--pack=` | Tracked in remediation (Phase 2) |
+| A-06 | P2 | Concert disclosure argv mismatch (empty-argv / fake preview) | **Mostly fixed** — `disclosure_only`; residual C-02 addressed in 2026-07-23 remediation Wave 1 |
+| A-07 | P2 | scan-concert silent unknown `--pack=` | **Fixed** — helper raises `ValueError`; covered by unit tests |
 
 ## Privileged helper matrix (summary)
 
@@ -51,7 +52,7 @@ remote attackers without a local foothold; formal verification / fuzzing campaig
 | `firewall` / ufw / firewalld | Rule builders | Concert / harden paths |
 | `clamd-cocontrol` | Conf path regex under `/etc/clamav` | Surgical keys only (ADR-008) |
 | `clamonacc` (scanner run) | Flags + list paths | H-01 remediation |
-| `setup-harden` / `setup-concert` / `scan-concert` | Sealed tarball SHA; pack allowlists; policy v11 | Concert recipes (ADR-009) |
+| `setup-harden` / `setup-concert` / `scan-concert` / `update-concert` | Sealed tarball SHA; pack allowlists; policy v12 | Concert recipes (ADR-009) |
 | `install-script` | Tarball SHA-256 + extract under seal | Do not accept install.sh-only |
 | `rkhunter-whitelist` / scanners / `run-sealed` | Flag allowlists; lynis profile; sealed argv | A-01 remediation |
 | Helper install / site_root | Root-owned site_root (tests may relax) | Confirm after policy bumps |
@@ -69,7 +70,10 @@ Empty argv and env injection into helper: scrubbed pkexec env + helper `_secure_
 
 - Token atomic create + `0600`; socket expected under data dir; peercred rejects cross-UID.
 - In-process `OystClient` fallback inherits CLI trust (same UID) — not a network surface.
-- Residual H-05: catalog future scrub for long-lived scanner children if needed.
+- H-05: `run_command` and non-pkexec install paths use `command_scrubbed_env` (PATH +
+  locale/TZ); pkexec paths keep display/runtime vars via `pkexec_scrubbed_env`.
+- H-06: audit `redact_paths` covers `/home`, `/var/home`, `/run/user`, and oysterAV
+  tmp job prefixes.
 
 ## ClamAV co-control vs community
 

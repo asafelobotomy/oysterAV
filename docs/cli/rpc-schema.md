@@ -140,7 +140,10 @@ Error:
 oyst-cli serve --foreground
 ```
 
-Systemd user unit template:
+Systemd user unit template (packaged install with `oyst-cli` on PATH under
+`~/.local/bin`). After a uv-only checkout, point `ExecStart` at the venv binary
+instead, e.g. `%h/…/oysterAV/.venv/bin/oyst-cli serve --foreground`, or use
+`uv run oyst-cli serve --foreground` from a user service wrapper.
 
 ```ini
 [Unit]
