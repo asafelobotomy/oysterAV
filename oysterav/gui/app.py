@@ -15,6 +15,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 from oyst_core.client import OystClient
 from oyst_core.config import load_config
 from oyst_core.serve import ensure_rpc_server
+from oysterav.gui.rpc_actions import request_updates_check
 from oysterav.gui.tray import OysterTray, create_tray
 from oysterav.gui.theme import apply_theme
 from oysterav.gui.widgets import (
@@ -178,7 +179,7 @@ class OysterWindow(Adw.ApplicationWindow):
 
         self.status_bar = StatusBar(
             load_headlines=lambda: self.client.news_list(),
-            load_updates=lambda: self.client.updates_check(),
+            load_updates=lambda: request_updates_check(self.client),
             news_enabled=lambda: bool(load_config().ui.security_news),
         )
 

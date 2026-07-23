@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
 import gi
 
@@ -329,15 +330,21 @@ class ScanPage:
 
         profile = self._profile()
         expected = expected_packs_for_profile(profile, packs)
-        plan = build_scan_privileged_plan(expected, job_id="preview")
+        job_id = str(uuid4())
+        plan = build_scan_privileged_plan(expected, job_id=job_id)
         confirm_privilege_plan(
             self._window,
             plan,
-            on_continue=lambda: self._launch_scan(packs, expected),
+            on_continue=lambda: self._launch_scan(packs, expected, job_id),
             continue_label="Continue",
         )
 
-    def _launch_scan(self, packs: list[str] | None, expected: list[str]) -> None:
+    def _launch_scan(
+        self,
+        packs: list[str] | None,
+        expected: list[str],
+        job_id: str,
+    ) -> None:
         self._expected_packs = expected
         self._scanning = True
         self._last_scan = None
@@ -355,6 +362,7 @@ class ScanPage:
                 paths=paths,
                 packs=packs,
                 quarantine=False,
+                job_id=job_id,
             )
 
         run_in_thread(

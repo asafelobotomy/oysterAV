@@ -17,7 +17,11 @@ def on_apply_harden(wizard: SetupWizard, *_args: object) -> None:
     if wizard._harden_busy:
         return
     step_ids = enabled_harden_step_ids(wizard)
-    plan = build_harden_plan(["--preview"], step_ids=step_ids or ["harden"])
+    plan = build_harden_plan(
+        [],
+        step_ids=step_ids or ["harden"],
+        disclosure_only=True,
+    )
     confirm_privilege_plan(
         wizard.dialog,
         plan,

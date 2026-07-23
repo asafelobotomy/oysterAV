@@ -21,7 +21,7 @@ LONG_RPC_METHODS = frozenset(
         "runtime.bootstrap",
         "runtime.update",
         "maintenance.bootstrap",
-        "maintenance.post_update",
+        "maintenance.post-update",
         "updates.apply",
         "schedule.run",
         "clamav.clamd.ensure",
@@ -29,7 +29,6 @@ LONG_RPC_METHODS = frozenset(
         "helper.install",
         "auth.grant_service_lifecycle",
         "auth.revoke_service_lifecycle",
-        "lynis.audit",
         "fail2ban.unban",
         "clamonacc.enable",
         "clamonacc.disable",
@@ -43,7 +42,6 @@ LONG_RPC_METHODS = frozenset(
         "clamav.ensure_disable_cache",
         "schedule.apply",
         "schedule.enable_linger",
-        "schedule.disable_linger",
     }
 )
 

@@ -74,8 +74,9 @@ class JobOrchestrator(OrchestratorHelpersMixin):
         backend: str = "auto",
         quarantine: bool = False,
         on_progress: Callable[[str, float], None] | None = None,
+        job_id: str | None = None,
     ) -> tuple[ScanResult, ExitCode]:
-        job_id = str(uuid.uuid4())
+        job_id = job_id or str(uuid.uuid4())
         if not self.events.acquire_job_lock(job_id):
             result = ScanResult(
                 job_id=job_id,

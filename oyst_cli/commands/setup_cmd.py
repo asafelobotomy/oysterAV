@@ -17,8 +17,9 @@ Examples:
 
 _RUN_EPILOG = """
 Examples:
-  oyst-cli setup run --json
-  oyst-cli setup run --skip-packs --maintenance-only --json
+  oyst-cli setup run --confirm --json
+  oyst-cli setup run --skip-packs --maintenance-only --confirm --json
+  oyst-cli setup run --dry-run --json
 
 Primary first-run path. See also: runtime bootstrap, maintenance bootstrap.
 """
@@ -112,6 +113,8 @@ def setup_reset_cmd(confirm: bool, json_mode: bool) -> None:
     is_flag=True,
     help="Run steps without marking setup.completed (dry orchestration)",
 )
+@click.option("--confirm", is_flag=True, help="Confirm privilege elevation for setup concert")
+@click.option("--dry-run", is_flag=True, help="Print privilege plan only; do not run setup")
 @json_option
 def setup_run_cmd(
     skip_packs: bool,
@@ -125,9 +128,55 @@ def setup_run_cmd(
     maintenance_only: bool,
     enable_linger: bool,
     no_mark_complete: bool,
+    confirm: bool,
+    dry_run: bool,
     json_mode: bool,
 ) -> None:
     """Run guided first-time setup (wizard equivalent)."""
+    from oyst_core.privilege import build_setup_plan, preflight_body, preflight_dict
+
+    privileged_labels: list[tuple[str, str]] = []
+    local_labels: list[tuple[str, str]] = []
+    if not skip_packs:
+        privileged_labels.append(("packs", "Install missing required and recommended packs"))
+    if enable_linger:
+        privileged_labels.append(("linger", "Enable systemd user linger for scheduled scans"))
+    if not skip_harden:
+        privileged_labels.append(("harden", "Apply recommended host hardenings"))
+        if enable_firewall:
+            privileged_labels.append(("firewall", "Enable host firewall (SSH-safe)"))
+    if not skip_schedule:
+        local_labels.append(("schedule", "Install daily scheduled scan timer"))
+    if not skip_bootstrap:
+        local_labels.append(("bootstrap", "Runtime / maintenance bootstrap"))
+
+    needs_concert = bool(privileged_labels)
+    plan = build_setup_plan(
+        [],
+        step_labels=privileged_labels or None,
+        local_step_labels=local_labels or None,
+        disclosure_only=True,
+    )
+    if needs_concert or plan.local_steps:
+        if json_mode and (dry_run or (needs_concert and not confirm)):
+            emit(preflight_dict(plan), json_mode=True)
+        elif not json_mode:
+            click.echo(preflight_body(plan))
+        if dry_run:
+            raise SystemExit(0)
+        if needs_concert:
+            require_confirm(
+                confirm,
+                message="--confirm required when setup needs administrator authentication",
+            )
+    elif dry_run:
+        payload = preflight_dict(plan)
+        if json_mode:
+            emit(payload, json_mode=True)
+        else:
+            click.echo(preflight_body(plan))
+        raise SystemExit(0)
+
     result = run_setup(
         skip_packs=skip_packs,
         skip_schedule=skip_schedule,

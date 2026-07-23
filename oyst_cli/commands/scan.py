@@ -63,7 +63,8 @@ def scan_cmd(
         selected.extend(PROFILE_AUDIT_PACKS.get(scan_profile, []))
     else:
         selected = pack_list
-    plan = build_scan_privileged_plan(selected, job_id=str(uuid.uuid4()))
+    job_id = str(uuid.uuid4())
+    plan = build_scan_privileged_plan(selected, job_id=job_id)
     if plan.needs_elevation:
         if json_mode and (dry_run or not confirm):
             emit(preflight_dict(plan), json_mode=True)
@@ -90,6 +91,7 @@ def scan_cmd(
         packs=pack_list,
         backend=resolved_backend,
         quarantine=quarantine,
+        job_id=job_id,
     )
     if json_mode:
         emit(result.model_dump(mode="json"), json_mode=True)

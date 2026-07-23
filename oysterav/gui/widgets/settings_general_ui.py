@@ -122,7 +122,7 @@ def build_general_section(page: SettingsPage) -> None:
     page.backend_row.connect("notify::selected", lambda *a: on_backend_saved(page, *a))
     general_scan.add(page.backend_row)
 
-    appearance = Adw.PreferencesGroup(title="Appearance & desktop")
+    appearance = Adw.PreferencesGroup(title="Appearance &amp; desktop")
 
     page.theme_row = Adw.ComboRow(title="Theme")
     page.theme_row.set_subtitle("Application colors (default: Gruvbox Dark Hard)")

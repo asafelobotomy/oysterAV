@@ -22,6 +22,8 @@ from oysterav.gui.rpc_actions import (
     request_rkhunter_resolve,
     request_services_set,
     request_services_status,
+    request_updates_apply,
+    request_updates_check,
 )
 
 
@@ -172,3 +174,13 @@ def test_request_history_delete_and_export() -> None:
     client.history_export.assert_called_once_with("job", "/tmp/a.json", fmt="json")
     assert request_history_export_all(client, "/tmp/all.md", fmt="md")["count"] == 3
     client.history_export_all.assert_called_once_with("/tmp/all.md", fmt="md", limit=500)
+
+
+def test_request_updates_check_and_apply() -> None:
+    client = MagicMock()
+    client.updates_check.return_value = {"ok": True, "updates": [], "message": ""}
+    client.updates_apply.return_value = {"ok": True, "steps": []}
+    assert request_updates_check(client)["ok"] is True
+    client.updates_check.assert_called_once_with()
+    assert request_updates_apply(client)["ok"] is True
+    client.updates_apply.assert_called_once_with()

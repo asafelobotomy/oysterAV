@@ -34,7 +34,7 @@ def test_setup_run_non_interactive_json() -> None:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["setup", "run", "--skip-packs", "--skip-schedule", "--json"],
+            ["setup", "run", "--skip-packs", "--skip-schedule", "--confirm", "--json"],
         )
     assert result.exit_code == 0
     assert "steps" in result.output

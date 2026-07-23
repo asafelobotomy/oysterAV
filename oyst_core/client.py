@@ -108,18 +108,20 @@ class OystClient(OystClientApi):
         paths: list[str] | None = None,
         quarantine: bool = False,
         packs: list[str] | None = None,
+        *,
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         cfg = load_config()
-        raw = self._request(
-            "job.start",
-            {
-                "profile": profile,
-                "paths": paths,
-                "quarantine": quarantine,
-                "packs": packs,
-                "backend": cfg.scan.backend,
-            },
-        )
+        params: dict[str, Any] = {
+            "profile": profile,
+            "paths": paths,
+            "quarantine": quarantine,
+            "packs": packs,
+            "backend": cfg.scan.backend,
+        }
+        if job_id:
+            params["job_id"] = job_id
+        raw = self._request("job.start", params)
         result = self._result(raw)
         if isinstance(result, dict) and "scan" in result:
             return result

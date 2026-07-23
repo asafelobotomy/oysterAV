@@ -27,6 +27,7 @@ def handle_job_start(params: dict[str, Any], ctx: RpcContext) -> Any:
         packs=params.get("packs"),
         quarantine=bool(params.get("quarantine")),
         backend=backend,
+        job_id=str(params["job_id"]) if params.get("job_id") else None,
     )
     return {"scan": scan_result.model_dump(mode="json"), "exit_code": int(code)}
 

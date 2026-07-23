@@ -14,28 +14,40 @@ if TYPE_CHECKING:
     from oysterav.gui.widgets.setup_wizard import SetupWizard
 
 
-def _recipe_labels(wizard: SetupWizard) -> list[tuple[str, str]]:
+def _recipe_labels(
+    wizard: SetupWizard,
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """Return (privileged_labels, local_labels) for Auto-Install disclosure."""
     switches = getattr(wizard, "auto_recipe_switches", {})
-    labels: list[tuple[str, str]] = []
+    privileged: list[tuple[str, str]] = []
+    local: list[tuple[str, str]] = []
     mapping = [
-        ("packs", "Install missing required and recommended packs"),
-        ("linger", "Enable systemd user linger for scheduled scans"),
-        ("schedule", "Install daily scheduled scan timer"),
-        ("harden", "Apply recommended host hardenings"),
-        ("firewall", "Enable host firewall (SSH-safe)"),
+        ("packs", "Install missing required and recommended packs", True),
+        ("linger", "Enable systemd user linger for scheduled scans", True),
+        ("schedule", "Install daily scheduled scan timer", False),
+        ("harden", "Apply recommended host hardenings", True),
+        ("firewall", "Enable host firewall (SSH-safe)", True),
     ]
-    for key, label in mapping:
+    for key, label, elevated in mapping:
         row = switches.get(key)
         if row is None or row.get_active():
-            labels.append((key, label))
-    return labels
+            if elevated:
+                privileged.append((key, label))
+            else:
+                local.append((key, label))
+    return privileged, local
 
 
 def on_auto_install(wizard: SetupWizard, *_args: object) -> None:
     if wizard._auto_install_busy:
         return
-    labels = _recipe_labels(wizard)
-    plan = build_setup_plan(["--preview"], step_labels=labels or None)
+    privileged, local = _recipe_labels(wizard)
+    plan = build_setup_plan(
+        [],
+        step_labels=privileged or None,
+        local_step_labels=local or None,
+        disclosure_only=True,
+    )
     confirm_privilege_plan(
         wizard.dialog,
         plan,
