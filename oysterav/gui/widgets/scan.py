@@ -16,8 +16,7 @@ from gi.repository import Adw, Gtk  # noqa: E402
 from oyst_core.client import OystClient
 from oyst_core.models import ScanProfile
 from oyst_core.privilege import build_scan_privileged_plan
-from oyst_core.runtime.bootstrap import PACK_DESCRIPTIONS
-from oysterav.gui.scan_helpers import PackCardState, expected_packs_for_profile
+from oysterav.gui.scan_helpers import PackCardState, expected_packs_for_profile, pack_card_title
 from oysterav.gui.widgets.common import (
     PreferencesGroup,
     StatusCard,
@@ -45,24 +44,6 @@ from oysterav.gui.widgets.scan_const import (
 )
 
 
-def _custom_pack_row(pack_name: str) -> tuple[Gtk.Box, Gtk.CheckButton]:
-    """Checkbox + info tooltip for one custom scan pack."""
-    row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-    row.set_halign(Gtk.Align.CENTER)
-    check = Gtk.CheckButton(label=pack_name)
-    check.set_active(pack_name == "clamav")
-    info = Gtk.Button()
-    info.set_icon_name("dialog-information-symbolic")
-    info.add_css_class("flat")
-    info.add_css_class("circular")
-    info.set_valign(Gtk.Align.CENTER)
-    info.set_can_focus(False)
-    info.set_tooltip_text(PACK_DESCRIPTIONS.get(pack_name, f"{pack_name} security pack"))
-    row.append(check)
-    row.append(info)
-    return row, check
-
-
 class ScanPage:
     def __init__(
         self,
@@ -81,6 +62,7 @@ class ScanPage:
         self._poll_id = 0
         self._last_scan: dict[str, Any] | None = None
         self._expected_packs: list[str] = []
+        self._job_percent = 0.0
         self._card_states: dict[str, PackCardState] = {
             name: PackCardState.IDLE for name in RESULT_PACKS
         }
@@ -162,24 +144,7 @@ class ScanPage:
             "notify::selected", lambda *a: scan_path_ui.on_path_preset_changed(self, *a)
         )
         options_group.add(self.path_row)
-
-        self.packs_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        self.packs_box.set_halign(Gtk.Align.CENTER)
-        self.packs_box.set_visible(False)
-        packs_label = make_section_heading("Custom packs")
-        packs_label.set_xalign(0.5)
-        packs_label.set_halign(Gtk.Align.CENTER)
-        self.packs_box.append(packs_label)
-        self._pack_checks: dict[str, Gtk.CheckButton] = {}
-        for pack_name in CUSTOM_PACK_CHOICES:
-            row, check = _custom_pack_row(pack_name)
-            self._pack_checks[pack_name] = check
-            self.packs_box.append(row)
-
-        options_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        options_box.append(options_group)
-        options_box.append(self.packs_box)
-        options_section.append(options_box)
+        options_section.append(options_group)
 
         self.integrity_note = Gtk.Label(
             label="System-wide integrity tools; paths ignored",
@@ -222,6 +187,7 @@ class ScanPage:
         results_section.append(results_heading)
 
         self._pack_cards: dict[str, StatusCard] = {}
+        self._pack_checks: dict[str, Gtk.CheckButton] = {}
         row1 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         row1.set_homogeneous(True)
         row2 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
@@ -230,12 +196,33 @@ class ScanPage:
         def _bind(pack_name: str) -> Callable[[], None]:
             return lambda: scan_job_ui.on_pack_card_activated(self, pack_name)
 
+        def _on_pack_toggled(*_a: object) -> None:
+            scan_job_ui.sync_result_cards_for_profile(self)
+
         for name in ("clamav", "maldet", "rkhunter"):
-            card = StatusCard(name, on_activate=_bind(name), compact=True)
+            card = StatusCard(
+                pack_card_title(name),
+                on_activate=_bind(name),
+                compact=True,
+                selectable=True,
+            )
+            assert card.select_check is not None
+            card.select_check.set_active(name == "clamav")
+            card.select_check.connect("toggled", _on_pack_toggled)
+            self._pack_checks[name] = card.select_check
             self._pack_cards[name] = card
             row1.append(card)
         for name in ("chkrootkit", "unhide", "lynis"):
-            card = StatusCard(name, on_activate=_bind(name), compact=True)
+            card = StatusCard(
+                pack_card_title(name),
+                on_activate=_bind(name),
+                compact=True,
+                selectable=True,
+            )
+            assert card.select_check is not None
+            card.select_check.set_active(False)
+            card.select_check.connect("toggled", _on_pack_toggled)
+            self._pack_checks[name] = card.select_check
             self._pack_cards[name] = card
             row2.append(card)
         cards_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)

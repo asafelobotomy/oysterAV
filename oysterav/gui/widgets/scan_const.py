@@ -16,7 +16,7 @@ PROFILE_LABELS = {
     ScanProfile.FULL: "Full",
     ScanProfile.SUITE: "Suite (malware + rootkits + hardening audit)",
     ScanProfile.INTEGRITY: "Integrity (rkhunter + chkrootkit + unhide)",
-    ScanProfile.CUSTOM: "Custom (choose packs)",
+    ScanProfile.CUSTOM: "Custom (choose packs on the cards)",
 }
 
 # Display order (education): malware packs first. Execution order is privileged-first

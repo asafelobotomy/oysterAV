@@ -13,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from oyst_core.models import PROFILE_PATHS, ScanProfile
+from oysterav.gui.widgets import scan_job_ui
 from oysterav.gui.widgets.common import default_paths_for_profile
 from oysterav.gui.widgets.scan_const import PATH_PRESETS
 
@@ -21,7 +22,6 @@ class _ScanPathHost(Protocol):
     path_row: Adw.ComboRow
     path_controls: Gtk.Box
     integrity_note: Gtk.Label
-    packs_box: Gtk.Box
     path_label: Gtk.Label
     clear_path_btn: Gtk.Button
     _custom_path: str | None
@@ -37,11 +37,10 @@ class _ScanPathHost(Protocol):
 
 def sync_profile_path_ui(page: _ScanPathHost) -> None:
     integrity = page._is_integrity()
-    custom = page._profile() is ScanProfile.CUSTOM
     page.path_row.set_visible(not integrity)
     page.path_controls.set_visible(not integrity)
     page.integrity_note.set_visible(integrity)
-    page.packs_box.set_visible(custom)
+    scan_job_ui.sync_custom_pack_select_ui(page)  # type: ignore[arg-type]
 
 
 def selected_custom_packs(page: _ScanPathHost) -> list[str]:
@@ -52,6 +51,7 @@ def on_profile_changed(page: _ScanPathHost, *_args: object) -> None:
     sync_profile_path_ui(page)
     if not page._is_integrity() and page.path_row.get_selected() != 3:
         update_path_label(page)
+    scan_job_ui.sync_result_cards_for_profile(page)  # type: ignore[arg-type]
 
 
 def on_path_preset_changed(page: _ScanPathHost, *_args: object) -> None:

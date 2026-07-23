@@ -13,8 +13,18 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
+from oyst_core.models import ScanProfile
 from oysterav.gui.rpc_actions import request_job_cancel, request_job_status
-from oysterav.gui.scan_helpers import PackCardState, pack_result_summary
+from oysterav.gui.scan_helpers import (
+    PackCardState,
+    advance_pack_card_states,
+    expected_packs_for_profile,
+    pack_card_progress_fraction,
+    pack_card_purpose,
+    pack_card_title,
+    pack_progress_status_text,
+    pack_result_summary,
+)
 from oysterav.gui.widgets.common import StatusCard, run_in_thread
 from oysterav.gui.widgets.scan_const import POLL_MS, RESULT_PACKS
 from oysterav.gui.widgets.scan_result_dialog import present_pack_result_dialog
@@ -28,7 +38,6 @@ class _ScanJobHost(Protocol):
     browse_file_btn: Gtk.Button
     clear_path_btn: Gtk.Button
     scan_btn: Gtk.Button
-    packs_box: Gtk.Box
     cancel_btn: Gtk.Button
     progress: Gtk.ProgressBar
     result_banner: Adw.Banner
@@ -43,9 +52,13 @@ class _ScanJobHost(Protocol):
     _pack_findings: dict[str, list[dict[str, Any]]]
     _pack_errors: dict[str, str]
     _pack_cards: dict[str, StatusCard]
+    _pack_checks: dict[str, Gtk.CheckButton]
     _last_scan: dict[str, Any] | None
+    _job_percent: float
 
     def _set_status(self, text: str) -> None: ...
+
+    def _profile(self) -> ScanProfile: ...
 
 
 def set_scan_controls_sensitive(page: _ScanJobHost, sensitive: bool) -> None:
@@ -55,9 +68,21 @@ def set_scan_controls_sensitive(page: _ScanJobHost, sensitive: bool) -> None:
     page.browse_file_btn.set_sensitive(sensitive)
     page.clear_path_btn.set_sensitive(sensitive)
     page.scan_btn.set_sensitive(sensitive)
-    page.packs_box.set_sensitive(sensitive)
+    for check in page._pack_checks.values():
+        check.set_sensitive(sensitive)
     page.cancel_btn.set_visible(not sensitive and page._scanning)
     page.cancel_btn.set_sensitive(not sensitive and page._scanning)
+    sync_custom_pack_select_ui(page)
+
+
+def sync_custom_pack_select_ui(page: _ScanJobHost) -> None:
+    """Show per-card checkboxes only for the Custom scan profile."""
+    custom = page._profile() is ScanProfile.CUSTOM
+    for name, card in page._pack_cards.items():
+        card.set_select_visible(custom)
+        check = page._pack_checks.get(name)
+        if check is not None:
+            check.set_sensitive(custom and not page._scanning)
 
 
 def on_cancel_scan(page: _ScanJobHost, *_args: object) -> None:
@@ -83,11 +108,28 @@ def on_cancel_scan(page: _ScanJobHost, *_args: object) -> None:
 
 
 def reset_cards_idle(page: _ScanJobHost) -> None:
+    sync_result_cards_for_profile(page)
+
+
+def sync_result_cards_for_profile(page: _ScanJobHost) -> None:
+    """Grey out packs not used by the selected profile; keep included packs active."""
+    if page._scanning:
+        return
+    custom: list[str] | None = None
+    if page._profile() is ScanProfile.CUSTOM:
+        custom = [name for name, check in page._pack_checks.items() if check.get_active()]
+    expected = expected_packs_for_profile(page._profile(), custom)
     for name in RESULT_PACKS:
-        set_card_state(page, name, PackCardState.IDLE)
+        page._pack_findings[name] = []
+        page._pack_errors[name] = ""
+        if name in expected:
+            set_card_state(page, name, PackCardState.IDLE)
+        else:
+            set_card_state(page, name, PackCardState.EXCLUDED)
 
 
 def prepare_cards_for_scan(page: _ScanJobHost, expected: list[str]) -> None:
+    page._job_percent = 0.0
     for name in RESULT_PACKS:
         if name in expected:
             set_card_state(page, name, PackCardState.PENDING)
@@ -111,23 +153,44 @@ def set_card_state(
     if error:
         page._pack_errors[pack] = error
     card = page._pack_cards[pack]
+    purpose = pack_card_purpose(pack)
+    selecting = page._profile() is ScanProfile.CUSTOM
+    # Custom mode: keep cards bright so checkboxes stay easy to toggle.
+    active = selecting or state not in (PackCardState.EXCLUDED, PackCardState.SKIPPED)
     match state:
         case PackCardState.IDLE:
-            card.set_values("No scan yet", "")
+            card.set_values("Will run", purpose)
+        case PackCardState.EXCLUDED:
+            card.set_values("Not used", "Not part of this profile")
         case PackCardState.PENDING:
-            card.set_values("Pending", "Waiting…", css_class="warning")
+            card.set_values("Waiting", "Starts after earlier packs", css_class="warning")
         case PackCardState.RUNNING:
-            card.set_values("Running…", "In progress", css_class="warning")
+            card.set_values("Scanning…", "In progress now", css_class="warning")
+        case PackCardState.DONE:
+            card.set_values("Done", "Waiting for other packs", css_class="success")
         case PackCardState.SKIPPED:
-            card.set_values("Skipped", "Not in this scan")
+            card.set_values("Not used", "Not part of this scan")
         case PackCardState.CLEAN:
-            card.set_values("Clean", "No threats", css_class="success")
+            card.set_values("Clean", "No threats found", css_class="success")
         case PackCardState.THREATS:
             n = len(page._pack_findings.get(pack) or [])
-            card.set_values(f"{n} threat(s)", "Open for details", css_class="error")
+            label = "1 threat" if n == 1 else f"{n} threats"
+            card.set_values(label, "Open for details", css_class="error")
         case PackCardState.ERROR:
             err = page._pack_errors.get(pack) or "Pack error"
-            card.set_values("Error", err, css_class="error")
+            card.set_values("Failed", err, css_class="error")
+    card.set_active_appearance(active)
+    refresh_card_progress(page, pack)
+
+
+def refresh_card_progress(page: _ScanJobHost, pack: str) -> None:
+    state = page._card_states.get(pack, PackCardState.IDLE)
+    if not page._scanning and state in (PackCardState.IDLE, PackCardState.EXCLUDED):
+        page._pack_cards[pack].set_progress(None)
+        return
+    overall = float(getattr(page, "_job_percent", 0.0) or 0.0)
+    frac = pack_card_progress_fraction(pack, state, page._expected_packs, overall)
+    page._pack_cards[pack].set_progress(frac)
 
 
 def on_pack_card_activated(page: _ScanJobHost, pack: str) -> None:
@@ -137,11 +200,11 @@ def on_pack_card_activated(page: _ScanJobHost, pack: str) -> None:
     label = {
         PackCardState.CLEAN: "Clean",
         PackCardState.THREATS: "Threats found",
-        PackCardState.ERROR: "Error",
+        PackCardState.ERROR: "Failed",
     }[state]
     present_pack_result_dialog(
         page._window,
-        pack=pack,
+        pack=pack_card_title(pack),
         state=label,
         findings=page._pack_findings.get(pack) or [],
         error=page._pack_errors.get(pack) or "",
@@ -180,18 +243,26 @@ def apply_job_status(page: _ScanJobHost, status: dict[str, Any]) -> None:
     pack = str(status.get("pack") or "")
     message = str(status.get("message") or "Scanning…")
     percent = float(status.get("percent") or 0)
-    page._set_status(message if message else f"Running {pack}")
+    page._job_percent = percent
+    progress_text = pack_progress_status_text(
+        page._expected_packs,
+        pack,
+        fallback=message if message else "Scanning…",
+    )
+    page._set_status(progress_text)
     page.progress.set_visible(True)
     if percent > 0:
         page.progress.set_fraction(min(1.0, max(0.0, percent / 100.0)))
     else:
         page.progress.pulse()
     if pack and pack in page._pack_cards:
+        updated = advance_pack_card_states(page._expected_packs, pack, page._card_states)
         for name in page._expected_packs:
-            if name == pack:
-                set_card_state(page, name, PackCardState.RUNNING)
-            elif page._card_states.get(name) == PackCardState.RUNNING:
-                set_card_state(page, name, PackCardState.PENDING)
+            new_state = updated.get(name)
+            if new_state is not None and page._card_states.get(name) != new_state:
+                set_card_state(page, name, new_state)
+    for name in page._expected_packs:
+        refresh_card_progress(page, name)
 
 
 def on_scan_done(page: _ScanJobHost, result: dict[str, Any]) -> bool:
