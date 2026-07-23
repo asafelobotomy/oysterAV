@@ -11,6 +11,18 @@ def test_redact_paths_home() -> None:
     assert redact_paths(nested) == {"cmd": "/home/<redacted>/bin/oyst-virusevent", "n": 1}
 
 
+def test_redact_paths_var_home_and_runtime() -> None:
+    assert (
+        redact_paths("/var/home/alice/.config/oysterav") == "/var/home/<redacted>/.config/oysterav"
+    )
+    assert redact_paths("/run/user/1000/bus") == "/run/user/<redacted>/bus"
+    assert (
+        redact_paths("/var/tmp/oysterav-scan/job-abc/out")
+        == "/var/tmp/oysterav-<redacted>/job-abc/out"
+    )
+    assert redact_paths("/tmp/oysterav-xyz/file") == "/tmp/oysterav-<redacted>/file"
+
+
 def test_security_audit_redacts_on_log(tmp_path) -> None:
     db = tmp_path / "events.db"
     audit = SecurityAudit(db_path=db)

@@ -43,13 +43,22 @@ AUDIT_KINDS = frozenset(
     },
 )
 
-_HOME_PATH_RE = re.compile(r"/home/[^/\s\"']+")
+_PATH_REDACT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"/home/[^/\s\"']+"), "/home/<redacted>"),
+    (re.compile(r"/var/home/[^/\s\"']+"), "/var/home/<redacted>"),
+    (re.compile(r"/run/user/\d+"), "/run/user/<redacted>"),
+    (re.compile(r"/tmp/oysterav-[^/\s\"']+"), "/tmp/oysterav-<redacted>"),
+    (re.compile(r"/var/tmp/oysterav-[^/\s\"']+"), "/var/tmp/oysterav-<redacted>"),
+)
 
 
 def redact_paths(value: Any) -> Any:
-    """Replace ``/home/<user>`` with ``/home/<redacted>`` in nested data."""
+    """Redact user path prefixes in nested data (home, XDG runtime, oysterAV tmp)."""
     if isinstance(value, str):
-        return _HOME_PATH_RE.sub("/home/<redacted>", value)
+        text = value
+        for pattern, repl in _PATH_REDACT_RULES:
+            text = pattern.sub(repl, text)
+        return text
     if isinstance(value, dict):
         return {str(k): redact_paths(v) for k, v in value.items()}
     if isinstance(value, list):

@@ -99,6 +99,14 @@ def pkexec_scrubbed_env() -> dict[str, str]:
     return env
 
 
+def command_scrubbed_env() -> dict[str, str]:
+    """Minimal env for allowlisted run_command children (no session secrets)."""
+    keep = ("LANG", "LC_ALL", "LC_CTYPE", "TZ")
+    env = {k: v for k, v in os.environ.items() if k in keep}
+    env.setdefault("PATH", "/usr/bin:/usr/sbin:/bin:/sbin")
+    return env
+
+
 def run_install_command(
     argv: Sequence[str],
     *,
@@ -109,7 +117,7 @@ def run_install_command(
     base = _resolve_install_base(argv)
     if base not in INSTALL_ALLOWED_COMMANDS:
         raise ValueError(f"install command not allowlisted: {base}")
-    env = pkexec_scrubbed_env() if base in ("pkexec", "oyst-helper") else None
+    env = pkexec_scrubbed_env() if base in ("pkexec", "oyst-helper") else command_scrubbed_env()
     proc = subprocess.run(
         list(argv),
         capture_output=True,
@@ -143,6 +151,7 @@ def run_command(
         check=False,
         input=input_text,
         cwd=cwd,
+        env=command_scrubbed_env(),
     )
     if check and proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, list(argv), proc.stdout, proc.stderr)
