@@ -2,41 +2,26 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from oyst_core.events import EventLog
-from oyst_core.pack_install import PACK_AUR_ONLY_ARCH, PACK_PACKAGES
+from oyst_core.pack_install import PACK_AUR_ONLY_ARCH
 from oyst_core.packs.base import detect_distro_family
 from oyst_core.packs.fangfrisch import FangfrischPack
 from oyst_core.packs.freshclam import FreshclamPack
 from oyst_core.packs.maldet import MaldetPack
 from oyst_core.packs.rkhunter import RKHunterPack
-from oyst_core.privileged.helper import run_privileged_aur_install, run_privileged_install
-from oyst_core.privileged.runner import CommandResult, run_command
-from oyst_core.registry import get_registry
+from oyst_core.privilege import build_update_all_plan, run_privilege_concert
+from oyst_core.privilege.plan import PrivilegePlan
+from oyst_core.privileged.helper import run_privileged_aur_install
+from oyst_core.privileged.runner import CommandResult
 from oyst_core.runtime.bootstrap import update_runtime
 from oyst_core.runtime.manifest import is_full_mode
-from oyst_core.services import SERVICE_NAMES, services_status
-
-# Logical service → oysterAV pack name (for enabled-service filtering).
-_SERVICE_TO_PACK: dict[str, str] = {
-    "clamd": "clamav",
-    "clamonacc": "clamonacc",
-    "freshclam-timer": "freshclam",
-    "fail2ban": "fail2ban",
-    "maldet-monitor": "maldet",
-}
-
-_PACMAN_QU_RE = re.compile(
-    r"^(\S+)\s+(\S+)\s+->\s+(\S+)\s*$",
-)
-_APT_UPGRADABLE_RE = re.compile(
-    r"^(\S+)/[^\s]+\s+(\S+)\s+\S+\s+\[upgradable from:\s*(\S+)\]",
-    re.IGNORECASE,
-)
-_DNF_LINE_RE = re.compile(
-    r"^(\S+)\s+(\S+)\s+(\S+)\s*$",
+from oyst_core.updates_query import (
+    installed_pack_names,
+    query_package_upgrades,
+    relevant_pack_names,
+    tracked_packages,
 )
 
 
@@ -55,19 +40,19 @@ def check_available_updates() -> dict[str, Any]:
     packs without a system package are skipped.
     """
     family = detect_distro_family()
-    installed_packs = _installed_pack_names()
-    relevant_packs = _relevant_pack_names(installed_packs)
-    tracked_packages = _tracked_packages(family, relevant_packs)
-    if not tracked_packages:
+    installed_packs = installed_pack_names()
+    relevant_packs = relevant_pack_names(installed_packs)
+    tracked = tracked_packages(family, relevant_packs)
+    if not tracked:
         return {"ok": True, "updates": [], "message": ""}
 
-    raw = _query_package_upgrades(family)
+    raw = query_package_upgrades(family)
     updates: list[dict[str, Any]] = []
     seen_names: set[str] = set()
     for pkg, current, available in raw:
-        if pkg not in tracked_packages:
+        if pkg not in tracked:
             continue
-        display = tracked_packages[pkg]
+        display = tracked[pkg]
         if display in seen_names:
             continue
         seen_names.add(display)
@@ -85,12 +70,29 @@ def check_available_updates() -> dict[str, Any]:
     return {"ok": True, "updates": updates, "message": message}
 
 
-def apply_all_updates() -> dict[str, Any]:
-    """Check package upgrades, install them, then refresh definitions and baseline.
+def plan_update_all() -> PrivilegePlan:
+    """Build the PrivilegePlan for Update all (GUI/CLI disclosure)."""
+    check = check_available_updates()
+    updates_raw = check.get("updates") or []
+    updates = [u for u in updates_raw if isinstance(u, dict)]
+    family = detect_distro_family()
+    packages = _unique_packages(updates)
+    official, _aur = _split_official_and_aur(packages, updates, family)
+    rkh = RKHunterPack()
+    rkh_installed = bool(rkh.doctor().installed)
+    return build_update_all_plan(
+        official_packages=official,
+        family=family,
+        include_rkh_update=rkh_installed,
+        include_rkh_propupd=rkh_installed,
+    )
 
-    Steps (skipped when the tool is not installed):
-    packages → freshclam/runtime → fangfrisch → rkhunter --update →
-    maldet sigs → rkhunter --propupd
+
+def apply_all_updates() -> dict[str, Any]:
+    """Check package upgrades, elevate once for packages+rkh, then refresh definitions.
+
+    Steps: update-concert (official packages, rkhunter --update/--propupd) →
+    AUR (user-mode) → freshclam/runtime → fangfrisch → maldet sigs.
     """
     events = EventLog()
     check = check_available_updates()
@@ -98,14 +100,41 @@ def apply_all_updates() -> dict[str, Any]:
     updates = [u for u in updates_raw if isinstance(u, dict)]
     steps: list[dict[str, Any]] = []
 
-    pkg_step = _apply_package_upgrades(updates)
-    steps.append(pkg_step)
+    family = detect_distro_family()
+    packages = _unique_packages(updates)
+    official, aur = _split_official_and_aur(packages, updates, family)
+    rkh = RKHunterPack()
+    rkh_installed = bool(rkh.doctor().installed)
+    plan = build_update_all_plan(
+        official_packages=official,
+        family=family,
+        include_rkh_update=rkh_installed,
+        include_rkh_propupd=rkh_installed,
+    )
+    if plan.needs_elevation:
+        concert_steps = run_privilege_concert(plan)
+        steps.extend(_normalize_concert_steps(concert_steps))
+    else:
+        steps.append(
+            {
+                "step": "packages",
+                "ok": True,
+                "skipped": True,
+                "packages": packages,
+                "message": "No elevated package upgrades",
+            }
+        )
+
+    if aur:
+        steps.append(_apply_aur_upgrades(aur))
 
     steps.append(_step_freshclam_or_runtime())
     steps.append(_step_fangfrisch())
-    steps.append(_step_rkhunter_update())
+    if not rkh_installed:
+        steps.append(_step_rkhunter_update())
     steps.append(_step_maldet_sigs())
-    steps.append(_step_rkhunter_propupd())
+    if not rkh_installed:
+        steps.append(_step_rkhunter_propupd())
 
     failed = [s for s in steps if not s.get("ok") and not s.get("skipped")]
     ok = not failed
@@ -119,7 +148,7 @@ def apply_all_updates() -> dict[str, Any]:
     result = {
         "ok": ok,
         "updates": updates,
-        "packages_upgraded": list(pkg_step.get("packages") or []),
+        "packages_upgraded": list(official) + list(aur),
         "steps": steps,
         "message": message,
     }
@@ -127,39 +156,33 @@ def apply_all_updates() -> dict[str, Any]:
     return result
 
 
-def _apply_package_upgrades(updates: list[dict[str, Any]]) -> dict[str, Any]:
-    packages = _unique_packages(updates)
+def _normalize_concert_steps(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        step = dict(item)
+        if "step" not in step and "id" in step:
+            step["step"] = step["id"]
+        out.append(step)
+    return out
+
+
+def _apply_aur_upgrades(packages: list[str]) -> dict[str, Any]:
     if not packages:
         return {
-            "step": "packages",
+            "step": "packages-aur",
             "ok": True,
             "skipped": True,
             "packages": [],
-            "message": "No package upgrades",
+            "message": "No AUR upgrades",
         }
-
-    family = detect_distro_family()
-    official, aur = _split_official_and_aur(packages, updates, family)
-    messages: list[str] = []
-    ok = True
-
-    if official:
-        res = run_privileged_install(official, family, sync=True)
-        messages.append(_command_message("install", res))
-        if res.returncode != 0:
-            ok = False
-
-    if aur:
-        res = run_privileged_aur_install(aur)
-        messages.append(_command_message("aur", res))
-        if res.returncode != 0:
-            ok = False
-
+    res = run_privileged_aur_install(packages)
     return {
-        "step": "packages",
-        "ok": ok,
+        "step": "packages-aur",
+        "ok": res.returncode == 0,
         "packages": packages,
-        "message": "; ".join(messages)[:500] if messages else "Packages upgraded",
+        "message": _command_message("aur", res),
     }
 
 
@@ -248,124 +271,3 @@ def _step_rkhunter_propupd() -> dict[str, Any]:
         ok, msg = rkh.propupd()
         return {"step": "rkhunter-propupd", "ok": ok, "message": str(msg)[:200]}
     return {"step": "rkhunter-propupd", "ok": True, "skipped": True}
-
-
-def _installed_pack_names() -> set[str]:
-    names: set[str] = set()
-    for pack in get_registry().all():
-        try:
-            status = pack.doctor()
-        except (OSError, ValueError, RuntimeError):
-            continue
-        if status.installed:
-            names.add(pack.name)
-    return names
-
-
-def _relevant_pack_names(installed: set[str]) -> set[str]:
-    """Installed packs, plus packs tied to enabled services."""
-    relevant = set(installed)
-    try:
-        status = services_status()
-    except (OSError, ValueError, RuntimeError):
-        return relevant
-    services = status.get("services")
-    if not isinstance(services, dict):
-        return relevant
-    for svc_name in SERVICE_NAMES:
-        info = services.get(svc_name)
-        if not isinstance(info, dict):
-            continue
-        if not (info.get("enabled") or info.get("running")):
-            continue
-        pack = _SERVICE_TO_PACK.get(svc_name)
-        if pack:
-            relevant.add(pack)
-    return relevant
-
-
-def _tracked_packages(family: str, pack_names: set[str]) -> dict[str, str]:
-    """Map distro package name → oysterAV display name (first pack wins)."""
-    tracked: dict[str, str] = {}
-    for pack_name in sorted(pack_names):
-        packages = PACK_PACKAGES.get(pack_name, {}).get(family, [])
-        for pkg in packages:
-            tracked.setdefault(pkg, pack_name)
-    return tracked
-
-
-def _query_package_upgrades(family: str) -> list[tuple[str, str, str]]:
-    if family == "arch":
-        return _query_pacman_upgrades()
-    if family == "debian":
-        return _query_apt_upgrades()
-    if family == "fedora":
-        return _query_dnf_upgrades()
-    return []
-
-
-def _query_pacman_upgrades() -> list[tuple[str, str, str]]:
-    # Prefer checkupdates (safe, no root) when present.
-    for argv in (["checkupdates"], ["pacman", "-Qu"]):
-        try:
-            res = run_command(argv, timeout=60)
-        except (ValueError, OSError):
-            continue
-        # checkupdates exits 2 when updates exist; pacman -Qu exits 0/1.
-        text = (res.stdout or "") + "\n" + (res.stderr or "")
-        out: list[tuple[str, str, str]] = []
-        for line in text.splitlines():
-            match = _PACMAN_QU_RE.match(line.strip())
-            if match:
-                out.append((match.group(1), match.group(2), match.group(3)))
-        if out or argv[0] == "checkupdates":
-            return out
-    return []
-
-
-def _query_apt_upgrades() -> list[tuple[str, str, str]]:
-    try:
-        res = run_command(["apt", "list", "--upgradable"], timeout=90)
-    except (ValueError, OSError):
-        return []
-    out: list[tuple[str, str, str]] = []
-    for line in (res.stdout or "").splitlines():
-        match = _APT_UPGRADABLE_RE.match(line.strip())
-        if not match:
-            continue
-        # apt: name, new_version, old_version
-        out.append((match.group(1), match.group(3), match.group(2)))
-    return out
-
-
-def _query_dnf_upgrades() -> list[tuple[str, str, str]]:
-    try:
-        res = run_command(["dnf", "check-update", "--quiet"], timeout=120)
-    except (ValueError, OSError):
-        return []
-    # dnf returns 100 when updates are available.
-    out: list[tuple[str, str, str]] = []
-    for line in (res.stdout or "").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("Last metadata"):
-            continue
-        match = _DNF_LINE_RE.match(stripped)
-        if not match:
-            continue
-        name = match.group(1)
-        available = match.group(2)
-        # dnf check-update does not print the installed version; probe it.
-        current = _rpm_installed_version(name) or "?"
-        out.append((name, current, available))
-    return out
-
-
-def _rpm_installed_version(package: str) -> str | None:
-    try:
-        res = run_command(["rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", package], timeout=15)
-    except (ValueError, OSError):
-        return None
-    if res.returncode != 0:
-        return None
-    text = (res.stdout or "").strip()
-    return text or None

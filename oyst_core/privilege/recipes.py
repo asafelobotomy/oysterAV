@@ -10,12 +10,10 @@ from oyst_core.privilege.plan import (
 )
 from oyst_core.privilege.priority import (
     PRIORITY_HARDEN,
-    PRIORITY_PROPUPD,
     PRIORITY_REQUIRED,
     harden_step_priority,
     pack_priority,
     sort_pack_names,
-    update_step_priority,
 )
 
 _SCAN_LABELS = {
@@ -27,16 +25,6 @@ _SCAN_LABELS = {
     "maldet": "Linux Malware Detect scan",
 }
 
-_UPDATE_STEP_LABELS = {
-    "packages": "Upgrade security-related packages",
-    "freshclam": "Refresh ClamAV signatures (freshclam)",
-    "runtime-signatures": "Refresh runtime ClamAV signatures",
-    "fangfrisch": "Refresh Fangfrisch signature providers",
-    "rkhunter-update": "Update rkhunter data files",
-    "maldet-sigs": "Update Linux Malware Detect signatures",
-    "rkhunter-propupd": "Refresh rkhunter property baseline",
-}
-
 
 def build_scan_privileged_plan(
     packs: list[str],
@@ -45,6 +33,10 @@ def build_scan_privileged_plan(
     unhide_mode: str = "sys",
 ) -> PrivilegePlan:
     """Plan one scan-concert for integrity/audit packs; local malware packs after."""
+    known = PRIVILEGED_SCAN_PACKS | LOCAL_SCAN_PACKS
+    unknown = [p for p in packs if p not in known]
+    if unknown:
+        raise ValueError(f"unknown scan pack(s): {', '.join(unknown)}")
     privileged = [p for p in packs if p in PRIVILEGED_SCAN_PACKS]
     order = ["rkhunter", "chkrootkit", "unhide", "lynis"]
     privileged = [p for p in order if p in privileged]
@@ -111,10 +103,13 @@ def build_setup_plan(
     helper_argv: list[str],
     *,
     step_labels: list[tuple[str, str]] | None = None,
+    local_step_labels: list[tuple[str, str]] | None = None,
+    disclosure_only: bool = False,
 ) -> PrivilegePlan:
     """Plan for setup-concert (install packs + harden + linger).
 
     ``step_labels`` is optional (id, label) pairs for Auto-Install disclosure.
+    ``local_step_labels`` are post-concert steps (e.g. schedule timer) shown as local.
     """
     if step_labels:
         steps = [
@@ -133,6 +128,29 @@ def build_setup_plan(
                 priority=PRIORITY_REQUIRED,
             ),
         ]
+    local_steps = [
+        PrivilegeStep(
+            id=sid,
+            label=label,
+            privileged=False,
+            priority=PRIORITY_REQUIRED + 100 + i,
+        )
+        for i, (sid, label) in enumerate(local_step_labels or [])
+    ]
+    if disclosure_only:
+        return PrivilegePlan(
+            recipe="setup",
+            title="Auto-Install",
+            summary=(
+                "Administrator authentication is required once to install security packs "
+                "and apply recommended host hardenings."
+            ),
+            argv1="",
+            helper_argv=[],
+            privileged_steps=steps,
+            local_steps=local_steps,
+            disclosure_only=True,
+        )
     return PrivilegePlan(
         recipe="setup",
         title="Auto-Install",
@@ -143,6 +161,7 @@ def build_setup_plan(
         argv1="setup-concert",
         helper_argv=list(helper_argv),
         privileged_steps=steps if helper_argv else [],
+        local_steps=local_steps,
     )
 
 
@@ -150,6 +169,7 @@ def build_harden_plan(
     helper_argv: list[str],
     *,
     step_ids: list[str] | None = None,
+    disclosure_only: bool = False,
 ) -> PrivilegePlan:
     """Plan for setup-harden (safe host hardenings only)."""
     labels = {
@@ -170,6 +190,19 @@ def build_harden_plan(
         )
         for sid in ids
     ]
+    if disclosure_only:
+        return PrivilegePlan(
+            recipe="harden",
+            title="Apply hardenings",
+            summary=(
+                "Administrator authentication is required once to apply "
+                "recommended host hardenings."
+            ),
+            argv1="",
+            helper_argv=[],
+            privileged_steps=steps,
+            disclosure_only=True,
+        )
     return PrivilegePlan(
         recipe="harden",
         title="Apply hardenings",
@@ -254,62 +287,5 @@ def build_install_packs_plan(
         helper_argv=helper_argv,
         privileged_steps=steps if elevate else [],
         local_steps=steps if not elevate else [],
-        disclosure_only=True,
-    )
-
-
-def build_update_all_plan(
-    *,
-    package_names: list[str] | None = None,
-    step_ids: list[str] | None = None,
-    needs_package_elevation: bool = False,
-) -> PrivilegePlan:
-    """Disclosure plan for Update all (packages + signature/baseline pipeline)."""
-    pkgs = list(package_names or [])
-    default_steps = [
-        "packages",
-        "freshclam",
-        "fangfrisch",
-        "rkhunter-update",
-        "maldet-sigs",
-        "rkhunter-propupd",
-    ]
-    steps_ids = list(step_ids or default_steps)
-    priv: list[PrivilegeStep] = []
-    local: list[PrivilegeStep] = []
-    if pkgs and needs_package_elevation:
-        shown = ", ".join(pkgs[:6]) + (f" (+{len(pkgs) - 6} more)" if len(pkgs) > 6 else "")
-        priv.append(
-            PrivilegeStep(
-                id="packages",
-                label=f"Upgrade packages: {shown}" if shown else "Upgrade packages",
-                priority=update_step_priority("packages"),
-            )
-        )
-    for sid in steps_ids:
-        if sid == "packages" and needs_package_elevation:
-            continue
-        label = _UPDATE_STEP_LABELS.get(sid, sid)
-        step = PrivilegeStep(
-            id=sid,
-            label=label,
-            privileged=False,
-            priority=(PRIORITY_PROPUPD if sid == "rkhunter-propupd" else update_step_priority(sid)),
-        )
-        local.append(step)
-    summary = (
-        "Update all upgrades related packages (one authentication when needed), "
-        "then refreshes signatures and baselines without further password prompts."
-        if needs_package_elevation
-        else "Update all refreshes signatures and baselines. No package upgrades need elevation."
-    )
-    return PrivilegePlan(
-        recipe="update-all",
-        title="Update all",
-        summary=summary,
-        argv1="",
-        helper_argv=[],
-        privileged_steps=priv,
-        local_steps=local,
         disclosure_only=True,
     )

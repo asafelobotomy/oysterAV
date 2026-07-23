@@ -26,6 +26,14 @@ from oyst_core.privileged.helper_concert import run_concert, run_scan_concert_al
 from oyst_core.privileged.helper_scan_concert import run_scan_privileged_steps
 
 
+def test_build_scan_privileged_plan_rejects_unknown_packs() -> None:
+    with pytest.raises(ValueError, match="unknown scan pack"):
+        build_scan_privileged_plan(
+            ["clamav", "not-a-pack"],
+            job_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        )
+
+
 def test_split_scan_packs_orders_privileged_first() -> None:
     priv, local = split_scan_packs(["clamav", "lynis", "rkhunter", "maldet", "chkrootkit"])
     assert priv == ["rkhunter", "chkrootkit", "lynis"]
@@ -181,16 +189,21 @@ def test_build_install_packs_plan_orders_and_elevates() -> None:
 
 def test_build_update_all_plan_preflight_labels() -> None:
     plan = build_update_all_plan(
-        package_names=["clamav", "rkhunter"],
-        needs_package_elevation=True,
+        official_packages=["clamav", "rkhunter"],
+        family="arch",
+        include_rkh_update=True,
+        include_rkh_propupd=True,
     )
     assert plan.needs_elevation
-    assert plan.disclosure_only
-    assert plan.argv1 == ""
+    assert not plan.disclosure_only
+    assert plan.argv1 == "update-concert"
+    assert "--upgrade=clamav,rkhunter" in plan.helper_argv
+    assert "--rkh-update" in plan.helper_argv
+    assert "--rkh-propupd" in plan.helper_argv
     body = preflight_body(plan)
     assert "clamav" in body or "Upgrade packages" in body
     assert "freshclam" in body.lower() or "ClamAV" in body
-    no_pkgs = build_update_all_plan(needs_package_elevation=False)
+    no_pkgs = build_update_all_plan()
     assert not no_pkgs.needs_elevation
     assert no_pkgs.local_steps
     assert no_pkgs.disclosure_only

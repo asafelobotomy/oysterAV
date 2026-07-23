@@ -12,6 +12,7 @@ from oyst_core.privileged.helper_concert import (
     run_scan_concert_alias,
     run_setup_concert_alias,
     run_setup_harden_alias,
+    run_update_concert_alias,
 )
 from oyst_core.privileged.helper_fail2ban import (
     _build_fail2ban_argv,
@@ -122,7 +123,7 @@ def run_helper_argv(argv: Sequence[str]) -> int:
         print(
             "usage: oyst-helper run|run-sealed|install-script|firewall|fail2ban|"
             "systemctl|systemctl-up|maldet-config|rkhunter-whitelist|"
-            "clamd-cocontrol|setup-harden|setup-concert|scan-concert",
+            "clamd-cocontrol|setup-harden|setup-concert|scan-concert|update-concert",
             file=sys.stderr,
         )
         return 2
@@ -133,6 +134,8 @@ def run_helper_argv(argv: Sequence[str]) -> int:
         return run_setup_harden_alias(argv[1:])
     if subcommand == "scan-concert":
         return run_scan_concert_alias(argv[1:])
+    if subcommand == "update-concert":
+        return run_update_concert_alias(argv[1:])
     if subcommand == "run":
         try:
             cmd = resolve_trusted_argv(_validate_run_argv(argv[1:]))

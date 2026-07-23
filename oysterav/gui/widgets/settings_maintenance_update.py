@@ -11,9 +11,10 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw  # noqa: E402
 
-from oyst_core.privilege import build_update_all_plan, preflight_body
-from oysterav.gui.rpc_actions import request_updates_apply
+from oyst_core.updates import plan_update_all
+from oysterav.gui.rpc_actions import request_updates_apply, request_updates_check
 from oysterav.gui.widgets.common import run_in_thread
+from oyst_core.privilege import preflight_body
 
 if TYPE_CHECKING:
     from oysterav.gui.widgets.settings import SettingsPage
@@ -24,23 +25,13 @@ def on_update_all(page: SettingsPage, *_args: object) -> None:
     page.maintenance_status_row.set_subtitle("Checking updates…")
 
     def load() -> dict[str, Any]:
-        check = page.client.updates_check()
+        check = request_updates_check(page.client)
         return dict(check) if isinstance(check, dict) else {"updates": []}
 
     def done(check: dict[str, Any]) -> bool:
         page.update_all_btn.set_sensitive(True)
         page.maintenance_status_row.set_subtitle("Ready")
-        updates_raw = check.get("updates") or []
-        updates = [u for u in updates_raw if isinstance(u, dict)]
-        pkg_names = [
-            str(u.get("package") or u.get("name") or "")
-            for u in updates
-            if str(u.get("package") or u.get("name") or "")
-        ]
-        plan = build_update_all_plan(
-            package_names=pkg_names,
-            needs_package_elevation=bool(pkg_names),
-        )
+        plan = plan_update_all()
         dialog = Adw.MessageDialog(
             transient_for=page._window,
             heading=plan.title,

@@ -28,15 +28,15 @@ def test_check_available_updates_pacman() -> None:
     with (
         patch("oyst_core.updates.detect_distro_family", return_value="arch"),
         patch(
-            "oyst_core.updates._installed_pack_names",
+            "oyst_core.updates_query.installed_pack_names",
             return_value={"rkhunter", "clamav"},
         ),
         patch(
-            "oyst_core.updates._relevant_pack_names",
+            "oyst_core.updates_query.relevant_pack_names",
             side_effect=lambda installed: set(installed),
         ),
         patch(
-            "oyst_core.updates.run_command",
+            "oyst_core.updates_query.run_command",
             return_value=CommandResult(
                 0,
                 "rkhunter 1.4.6-3 -> 1.4.6-4\nextra/foo 1-1 -> 2-1\n",
@@ -56,13 +56,13 @@ def test_check_available_updates_pacman() -> None:
 def test_check_available_updates_apt() -> None:
     with (
         patch("oyst_core.updates.detect_distro_family", return_value="debian"),
-        patch("oyst_core.updates._installed_pack_names", return_value={"fail2ban"}),
+        patch("oyst_core.updates_query.installed_pack_names", return_value={"fail2ban"}),
         patch(
-            "oyst_core.updates._relevant_pack_names",
+            "oyst_core.updates_query.relevant_pack_names",
             side_effect=lambda installed: set(installed),
         ),
         patch(
-            "oyst_core.updates.run_command",
+            "oyst_core.updates_query.run_command",
             return_value=CommandResult(
                 0,
                 "fail2ban/stable 1.1.0-1 amd64 [upgradable from: 1.0.2-1]\n",
@@ -119,20 +119,27 @@ def test_apply_all_updates_no_packages() -> None:
         patch("oyst_core.updates.RKHunterPack", return_value=rkh),
         patch("oyst_core.updates.MaldetPack", return_value=maldet),
         patch("oyst_core.updates.EventLog"),
+        patch(
+            "oyst_core.updates.run_privilege_concert",
+            return_value=[
+                {"step": "rkhunter-update", "ok": True, "message": "ok"},
+                {"step": "rkhunter-propupd", "ok": True, "message": "ok"},
+            ],
+        ) as concert,
     ):
         result = apply_all_updates()
 
     assert result["ok"] is True
     steps = {s["step"]: s for s in result["steps"]}
-    assert steps["packages"].get("skipped") is True
     assert steps["freshclam"]["ok"] is True
     assert steps["fangfrisch"].get("skipped") is True
     assert steps["rkhunter-update"]["ok"] is True
     assert steps["maldet-sigs"].get("skipped") is True
     assert steps["rkhunter-propupd"]["ok"] is True
     fresh.update.assert_called_once()
-    rkh.update.assert_called_once()
-    rkh.propupd.assert_called_once()
+    concert.assert_called_once()
+    rkh.update.assert_not_called()
+    rkh.propupd.assert_not_called()
 
 
 def test_apply_all_updates_installs_packages() -> None:
@@ -166,9 +173,13 @@ def test_apply_all_updates_installs_packages() -> None:
         ),
         patch("oyst_core.updates.detect_distro_family", return_value="arch"),
         patch(
-            "oyst_core.updates.run_privileged_install",
-            return_value=CommandResult(0, "ok", ""),
-        ) as install,
+            "oyst_core.updates.run_privilege_concert",
+            return_value=[
+                {"step": "packages", "ok": True, "message": "upgraded"},
+                {"step": "rkhunter-update", "ok": True, "message": "ok"},
+                {"step": "rkhunter-propupd", "ok": True, "message": "ok"},
+            ],
+        ) as concert,
         patch(
             "oyst_core.updates.run_privileged_aur_install",
             return_value=CommandResult(0, "ok", ""),
@@ -183,7 +194,10 @@ def test_apply_all_updates_installs_packages() -> None:
 
     assert result["ok"] is True
     assert result["packages_upgraded"] == ["rkhunter", "chkrootkit"]
-    install.assert_called_once_with(["rkhunter"], "arch", sync=True)
+    concert.assert_called_once()
+    plan = concert.call_args[0][0]
+    assert plan.argv1 == "update-concert"
+    assert any(a.startswith("--upgrade=") and "rkhunter" in a for a in plan.helper_argv)
     aur.assert_called_once_with(["chkrootkit"])
     fang.refresh.assert_called_once()
     maldet.update_sigs.assert_called_once()

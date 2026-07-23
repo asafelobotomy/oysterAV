@@ -136,6 +136,16 @@ def build_polkit_policy() -> str:
             allow_active="auth_admin",
         ),
         _action_xml(
+            action_id="io.github.asafelobotomy.helper.update-concert",
+            description="Run oysterAV Update all privileged steps",
+            message=(
+                "Authentication is required to upgrade security packages and refresh "
+                "rkhunter data/baseline"
+            ),
+            argv1="update-concert",
+            allow_active="auth_admin",
+        ),
+        _action_xml(
             action_id="io.github.asafelobotomy.helper.install-script",
             description="Run oysterAV vetted install scripts",
             message="Authentication is required to install security tools",

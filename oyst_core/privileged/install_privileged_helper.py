@@ -24,7 +24,7 @@ HELPER_PATH_LEGACY = Path("/usr/local/lib/oysterav/oyst-helper")
 POLKIT_PATH = Path("/usr/share/polkit-1/actions/io.github.asafelobotomy.policy")
 
 # Bump when action IDs / argv1 annotations / exec.path change (helper-status reports this).
-POLICY_VERSION = 11
+POLICY_VERSION = 12
 
 POLKIT_ACTION_IDS = (
     "io.github.asafelobotomy.helper.systemctl",
@@ -38,6 +38,7 @@ POLKIT_ACTION_IDS = (
     "io.github.asafelobotomy.helper.setup-harden",
     "io.github.asafelobotomy.helper.setup-concert",
     "io.github.asafelobotomy.helper.scan-concert",
+    "io.github.asafelobotomy.helper.update-concert",
     "io.github.asafelobotomy.helper.install-script",
     "io.github.asafelobotomy.helper.run-sealed",
 )
