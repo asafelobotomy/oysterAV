@@ -25,6 +25,8 @@ from oysterav.gui.widgets import (
     ScanPage,
     SettingsPage,
 )
+from oysterav.gui.widgets.shield import ShieldPage
+
 from oysterav.gui.widgets.common import run_in_thread, show_command_dialog
 from oysterav.gui.widgets.setup_wizard import SetupWizard, should_show_wizard
 from oysterav.gui.widgets.status_bar import StatusBar
@@ -118,6 +120,11 @@ class OysterWindow(Adw.ApplicationWindow):
             on_status=self._set_status,
             on_scan_complete=self._on_scan_complete,
         )
+        self.shield = ShieldPage(
+            client,
+            window=self,
+            on_status=self._set_status,
+        )
         self.reports = ReportsPage(
             client,
             window=self,
@@ -148,6 +155,12 @@ class OysterWindow(Adw.ApplicationWindow):
             "scan",
             "Scan",
             "system-search-symbolic",
+        )
+        self.stack.add_titled_with_icon(
+            self.shield.widget,
+            "shield",
+            "Shield",
+            "channel-secure-symbolic",
         )
         self.stack.add_titled_with_icon(
             self.reports.widget,
@@ -310,6 +323,8 @@ class OysterWindow(Adw.ApplicationWindow):
             self.settings.refresh()
         elif tab == "scan":
             self.scan.refresh()
+        elif tab == "shield":
+            self.shield.refresh()
         return False
 
     def _on_scan_complete(self) -> None:

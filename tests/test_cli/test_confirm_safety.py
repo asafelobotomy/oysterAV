@@ -121,6 +121,16 @@ def test_firewalld_add_port_dry_run_ok() -> None:
     ops.return_value.firewalld_port.assert_called_once()
 
 
+def test_firewall_select_requires_confirm() -> None:
+    runner = CliRunner()
+    with patch(
+        "oyst_cli.commands.packs.firewall_cmd_manage.select_managed_backend",
+    ) as sel:
+        result = runner.invoke(cli, ["firewall", "select", "ufw"])
+    assert result.exit_code == 4
+    sel.assert_not_called()
+
+
 def test_setup_reset_missing_confirm_exits_4() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["setup", "reset"])

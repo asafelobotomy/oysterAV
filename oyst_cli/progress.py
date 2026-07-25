@@ -31,6 +31,25 @@ def make_cli_progress(*, show_progress: bool, json_mode: bool) -> ProgressCallba
     def report(stage: str, percent: int) -> None:
         nonlocal last_line_len
         percent = max(0, min(100, int(percent)))
+        try:
+            from oyst_core.terminal_log import log_raw, log_structured
+
+            log_structured(
+                "cli",
+                "progress",
+                f"{stage}… {percent}%",
+                {"stage": stage, "percent": percent},
+            )
+            if show_progress:
+                log_raw(
+                    "cli",
+                    "progress",
+                    json.dumps({"stage": stage, "percent": percent}, separators=(",", ":")),
+                )
+            else:
+                log_raw("cli", "progress", f"{stage}… {percent}%")
+        except Exception:  # noqa: BLE001 — never break progress for transcript
+            pass
         if show_progress:
             print(
                 json.dumps({"stage": stage, "percent": percent}, separators=(",", ":")),

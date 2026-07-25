@@ -60,6 +60,11 @@ class SetupWizard:
     schedule_label: Gtk.Label
     schedule_btn: Gtk.Button
     enable_firewall_row: Adw.SwitchRow
+    firewall_status_label: Gtk.Label
+    firewall_backend_row: Adw.ComboRow
+    firewall_hint: Gtk.Label
+    firewall_apply_btn: Gtk.Button
+    _firewall_detect: dict[str, Any]
     harden_switches: dict[str, Adw.SwitchRow]
     harden_label: Gtk.Label
     harden_btn: Gtk.Button
@@ -96,6 +101,7 @@ class SetupWizard:
         self._harden_busy = False
         self._schedule_installed = False
         self._finish_pending = False
+        self._firewall_detect = {}
 
         self.dialog = Adw.Window()
         self.dialog.set_title("oysterAV Setup")

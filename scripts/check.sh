@@ -15,7 +15,10 @@ Usage: scripts/check.sh [--quick] [--pytest-args ...]
   --quick   Skip coverage and run a faster pytest subset (tests/test_core tests/test_cli)
   --format  Also run ruff format --check
 
-Gates (in order): version sync, 400-line LOC hard limit (ratchet), ruff, mypy, pytest.
+Gates (in order): version sync, 400-line LOC hard limit (ratchet), ruff, mypy,
+pytest, security marker suite, security-module coverage (≥85%), Bandit, pip-audit.
+
+See docs/security/test-gates.md for ASVS-oriented mapping.
 
 Environment:
   Prefer: uv sync --extra all   (or --extra dev; add --extra gui for full GUI tests)
@@ -75,10 +78,22 @@ uv run mypy "${SCOPE_MYPY[@]}"
 
 if [[ "${QUICK}" -eq 1 ]]; then
   echo "==> pytest (quick)"
-  uv run pytest tests/test_core tests/test_cli --no-cov "${PYTEST_EXTRA[@]}"
+  uv run pytest tests/test_core tests/test_cli tests/test_security --no-cov "${PYTEST_EXTRA[@]}"
 else
   echo "==> pytest (with coverage)"
   uv run pytest tests/ --cov=oyst_core --cov=oyst_cli --cov-report=term-missing "${PYTEST_EXTRA[@]}"
 fi
+
+echo "==> pytest security marker"
+uv run pytest -m security -q --no-cov
+
+echo "==> security module coverage (≥85%)"
+uv run python scripts/check_security_coverage.py
+
+echo "==> bandit (medium+)"
+uv tool run bandit -c bandit.yaml -r oyst_core oyst_cli -ll -ii
+
+echo "==> pip-audit"
+uv tool run pip-audit
 
 echo "OK: check.sh passed"

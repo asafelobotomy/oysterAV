@@ -89,6 +89,7 @@ def pkexec_scrubbed_env() -> dict[str, str]:
         "WAYLAND_DISPLAY",
         "XAUTHORITY",
         "XDG_RUNTIME_DIR",
+        "DBUS_SESSION_BUS_ADDRESS",
         "LANG",
         "LC_ALL",
         "LC_CTYPE",
@@ -105,6 +106,61 @@ def command_scrubbed_env() -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k in keep}
     env.setdefault("PATH", "/usr/bin:/usr/sbin:/bin:/sbin")
     return env
+
+
+def user_session_scrubbed_env() -> dict[str, str]:
+    """Scrubbed env that can reach the caller's systemd/D-Bus user session.
+
+    Needed for ``systemctl --user`` (schedule timers). Still omits secrets;
+    synthesizes ``XDG_RUNTIME_DIR`` / bus address from ``/run/user/<uid>`` when
+    the parent process dropped those variables but the sockets exist.
+    """
+    env = command_scrubbed_env()
+    for key in (
+        "DBUS_SESSION_BUS_ADDRESS",
+        "XDG_RUNTIME_DIR",
+        "USER",
+        "HOME",
+        "LOGNAME",
+    ):
+        val = os.environ.get(key)
+        if val:
+            env[key] = val
+
+    uid = os.getuid()
+    runtime = env.get("XDG_RUNTIME_DIR") or f"/run/user/{uid}"
+    if "XDG_RUNTIME_DIR" not in env and os.path.isdir(runtime):
+        env["XDG_RUNTIME_DIR"] = runtime
+    if "DBUS_SESSION_BUS_ADDRESS" not in env:
+        bus_path = os.path.join(env.get("XDG_RUNTIME_DIR", runtime), "bus")
+        if os.path.exists(bus_path):
+            env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={bus_path}"
+    if "HOME" not in env:
+        env["HOME"] = os.path.expanduser("~")
+    if "USER" not in env:
+        try:
+            import pwd
+
+            env["USER"] = pwd.getpwuid(uid).pw_name
+        except KeyError:
+            pass
+    return env
+
+
+def _argv_needs_user_session(argv: Sequence[str]) -> bool:
+    """True when argv talks to the user systemd manager (needs session bus)."""
+    for index, arg in enumerate(argv):
+        if os.path.basename(arg) != "systemctl":
+            continue
+        return "--user" in argv[index + 1 :]
+    return False
+
+
+def scrubbed_env_for_argv(argv: Sequence[str]) -> dict[str, str]:
+    """Pick scrubbed env for an allowlisted command argv."""
+    if _argv_needs_user_session(argv):
+        return user_session_scrubbed_env()
+    return command_scrubbed_env()
 
 
 def run_install_command(
@@ -151,7 +207,7 @@ def run_command(
         check=False,
         input=input_text,
         cwd=cwd,
-        env=command_scrubbed_env(),
+        env=scrubbed_env_for_argv(argv),
     )
     if check and proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, list(argv), proc.stdout, proc.stderr)

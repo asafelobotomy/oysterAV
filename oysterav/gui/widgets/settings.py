@@ -18,6 +18,7 @@ from oysterav.gui.widgets import (
     settings_host_audit_ui,
     settings_maintenance_ui,
     settings_schedule_ui,
+    settings_terminal_ui,
 )
 from oysterav.gui.widgets.clamonacc_ui import (
     add_clamonacc_path_from_dialog,
@@ -69,7 +70,6 @@ class SettingsPage:
     sched_backend_row: Adw.ComboRow
     sched_persistent_row: Adw.SwitchRow
     _schedule_run_btn: Gtk.Button
-    firewall_row: Adw.ActionRow
     audit_status_row: Adw.ActionRow
     _audit_detail_rows: list[Adw.ActionRow]
     _audit_group: Adw.PreferencesGroup
@@ -85,6 +85,12 @@ class SettingsPage:
     _path_action_rows: list[Adw.ActionRow]
     services_group: Adw.PreferencesGroup
     _refresh_services: Callable[[], None]
+    terminal_show_raw_row: Adw.SwitchRow
+    terminal_view: Gtk.TextView
+    terminal_buffer: Gtk.TextBuffer
+    _terminal_since_id: int
+    _terminal_poll_id: int
+    _terminal_entries: list[dict[str, Any]]
 
     def __init__(
         self,
@@ -106,7 +112,10 @@ class SettingsPage:
         self._schedule_apply_timeout = 0
         self._schedule_applying = False
         self._linger_prompted = False
-        self._section_pages: dict[str, Adw.PreferencesPage] = {}
+        self._section_pages: dict[str, Gtk.Widget] = {}
+        self._terminal_since_id = 0
+        self._terminal_poll_id = 0
+        self._terminal_entries = []
 
         self.pack_list = PackListWidget(
             client,
@@ -135,6 +144,7 @@ class SettingsPage:
         self._build_realtime_section()
         settings_schedule_ui.build_schedule_group(self)
         settings_host_audit_ui.build_host_audit_section(self)
+        settings_terminal_ui.build_terminal_section(self)
         settings_maintenance_ui.build_maintenance_group(self)
         self._build_packs_section()
 
@@ -161,7 +171,9 @@ class SettingsPage:
             return
         index = row.get_index()
         if 0 <= index < len(SETTINGS_SECTIONS):
-            self._stack.set_visible_child_name(SETTINGS_SECTIONS[index][0])
+            section_id = SETTINGS_SECTIONS[index][0]
+            self._stack.set_visible_child_name(section_id)
+            self._on_section_shown(section_id)
 
     def show_section(self, section: str | None = None) -> None:
         """Select a Settings sidebar section (default: General)."""
@@ -173,6 +185,13 @@ class SettingsPage:
                 if row is not None:
                     self._sidebar.select_row(row)
                 break
+        self._on_section_shown(section_id)
+
+    def _on_section_shown(self, section_id: str) -> None:
+        if section_id == "terminal":
+            settings_terminal_ui.start_terminal_poll(self)
+        else:
+            settings_terminal_ui.stop_terminal_poll(self)
 
     def _build_services_section(self) -> None:
         page = Adw.PreferencesPage()

@@ -284,6 +284,14 @@ def set_config_value(key: str, value: str) -> None:
                 "ui.theme must be one of: " + ", ".join(sorted(UI_THEME_ID_SET)),
             )
         cfg.ui.theme = cast(UiThemeId, value)
+    elif key == "firewall.managed_backend":
+        raw = value.strip().lower()
+        if raw in ("", "null", "none"):
+            cfg.firewall.managed_backend = None if raw in ("", "null") else "none"
+        elif raw in ("ufw", "firewalld"):
+            cfg.firewall.managed_backend = raw
+        else:
+            raise KeyError("firewall.managed_backend must be ufw|firewalld|none")
     else:
         raise KeyError(f"Unknown config key: {key}")
     save_config(cfg)

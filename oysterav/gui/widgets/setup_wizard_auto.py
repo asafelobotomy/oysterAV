@@ -76,15 +76,39 @@ def _run_auto_install(wizard: SetupWizard) -> None:
     enable_firewall = _on("firewall") and _on("harden", True)
 
     def worker() -> dict[str, Any]:
-        return wizard.client.setup_run(
+        from oysterav.gui.widgets.setup_wizard_firewall import selected_firewall_backend
+
+        result = wizard.client.setup_run(
             confirm_aur=True,
-            enable_linger=enable_linger,
-            auto_quarantine=auto_quarantine,
-            enable_firewall=enable_firewall,
             skip_packs=skip_packs,
             skip_schedule=skip_schedule,
             skip_harden=skip_harden,
+            enable_linger=enable_linger,
+            enable_firewall=False,
+            auto_quarantine=auto_quarantine,
+            mark_complete=True,
         )
+        if enable_firewall:
+            backend = selected_firewall_backend(wizard)
+            if backend != "none":
+                sel = wizard.client.firewall_select(backend)
+                steps = list(result.get("steps") or [])
+                steps.append(
+                    {
+                        "step": "firewall-select",
+                        "ok": bool(sel.get("ok")),
+                        "message": sel.get("message"),
+                        "skipped": sel.get("skipped"),
+                    },
+                )
+                result["steps"] = steps
+                if not sel.get("ok"):
+                    result["ok"] = False
+            try:
+                wizard.client.config_set("firewall.managed_backend", backend)
+            except Exception:
+                pass
+        return result
 
     def done(result: dict[str, Any]) -> bool:
         wizard._auto_install_busy = False

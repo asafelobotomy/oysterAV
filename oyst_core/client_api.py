@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from oyst_core.client_api_shield import OystClientShieldApi
 
-class OystClientApi:
+
+class OystClientApi(OystClientShieldApi):
     """Public method façade; subclasses implement `_call` / `_as_dict` / `_as_list`."""
 
     def _call(self, method: str, params: dict[str, Any] | None = None) -> Any:
@@ -126,6 +128,30 @@ class OystClientApi:
 
     def audit_list(self, limit: int = 50) -> list[dict[str, Any]]:
         return self._as_list("audit.list", {"limit": limit})
+
+    def terminal_list(
+        self,
+        limit: int = 500,
+        *,
+        since_id: int = 0,
+        layers: list[str] | None = None,
+        all_layers: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit, "since_id": since_id}
+        if all_layers:
+            params["all_layers"] = True
+        elif layers is not None:
+            params["layers"] = layers
+        return self._as_list("terminal.list", params)
+
+    def terminal_clear(self) -> dict[str, Any]:
+        return self._as_dict("terminal.clear", {"confirm": True})
+
+    def terminal_export(self, path: str, *, fmt: str = "txt") -> dict[str, Any]:
+        return self._as_dict(
+            "terminal.export",
+            {"path": path, "format": fmt},
+        )
 
     def quarantine_list(self) -> list[dict[str, Any]]:
         return self._as_list("quarantine.list")

@@ -131,6 +131,23 @@ def test_request_audit_and_news() -> None:
     assert request_news_refresh(client)["ok"] is True
 
 
+def test_request_terminal_actions() -> None:
+    from oysterav.gui.rpc_actions import (
+        request_terminal_clear,
+        request_terminal_export,
+        request_terminal_list,
+    )
+
+    client = MagicMock()
+    client.terminal_list.return_value = []
+    client.terminal_clear.return_value = {"ok": True}
+    client.terminal_export.return_value = {"ok": True}
+    assert request_terminal_list(client, layers=["structured"]) == []
+    client.terminal_list.assert_called_once()
+    assert request_terminal_clear(client)["ok"] is True
+    assert request_terminal_export(client, "t.txt")["ok"] is True
+
+
 def test_request_history_list_and_get() -> None:
     client = MagicMock()
     client.history_list.return_value = [{"job_id": "a"}]

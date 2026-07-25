@@ -36,10 +36,36 @@ from oyst_cli.commands.schedule_cmd import schedule_group
 from oyst_cli.commands.services_cmd import services_group
 from oyst_cli.commands.setup_cmd import setup_group
 from oyst_cli.commands.status import history_group, status_group
+from oyst_cli.commands.terminal_cmd import terminal_group
 from oyst_cli.commands.updates_cmd import updates_group
 from oyst_cli.commands.virusevent_cmd import virusevent_group
 from oyst_core.logging_util import setup_logging
 from oyst_core.serve import SCHEMA_VERSION, RpcServer
+
+
+def _is_terminal_mgmt(ctx: click.Context) -> bool:
+    if ctx.invoked_subcommand == "terminal":
+        return True
+    return "terminal" in (ctx.command_path or "").split()
+
+
+def _cli_label(ctx: click.Context) -> str:
+    """Best-effort command label (result callback runs on the root context)."""
+    parts: list[str] = [ctx.info_name or "cli"]
+    if ctx.invoked_subcommand:
+        parts.append(ctx.invoked_subcommand)
+    # Prefer click path; fall back to argv when nested (e.g. audit list).
+    import sys
+
+    argv_parts = [p for p in sys.argv[1:] if p not in {"-v", "--verbose"}]
+    if (
+        argv_parts
+        and not argv_parts[0].endswith(".py")
+        and not argv_parts[0].startswith("tests/")
+        and argv_parts[0] not in {"-c", "-m"}
+    ):
+        return "cli " + " ".join(argv_parts)
+    return " ".join(parts)
 
 
 @click.group()
@@ -50,6 +76,28 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
     setup_logging(verbose)
+
+
+@cli.result_callback()
+@click.pass_context
+def _cli_finished(ctx: click.Context, result: object, **_kwargs: object) -> object:
+    if not _is_terminal_mgmt(ctx):
+        try:
+            from oyst_core.terminal_log import log_structured
+
+            code = getattr(ctx, "exit_code", None)
+            if code is None:
+                code = 0
+            label = _cli_label(ctx)
+            log_structured(
+                "cli",
+                "cli.finish",
+                f"{label} finished (exit {code})",
+                {"exit_code": code},
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    return result
 
 
 _SERVE_EPILOG = """
@@ -104,6 +152,7 @@ def _register_commands() -> None:
     cli.add_command(updates_group)
     cli.add_command(setup_group)
     cli.add_command(audit_group)
+    cli.add_command(terminal_group)
     cli.add_command(install_helper_cmd)
     cli.add_command(helper_status_cmd)
     cli.add_command(services_group)

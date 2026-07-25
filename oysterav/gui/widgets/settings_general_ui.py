@@ -311,6 +311,9 @@ def apply_settings_data(page: SettingsPage, data: dict[str, Any]) -> bool:
     page.run_at_startup_row.set_active(bool(ui.get("run_at_startup")))
     page.start_minimized_row.set_active(bool(ui.get("start_minimized")))
     page.minimize_to_tray_row.set_active(bool(ui.get("minimize_to_tray")))
+    from oysterav.gui.widgets import settings_terminal_ui
+
+    settings_terminal_ui.apply_terminal_config(page, ui)
     desktop_raw = data.get("desktop")
     tray = desktop_raw if isinstance(desktop_raw, dict) else {}
     tray_info_raw = tray.get("tray")

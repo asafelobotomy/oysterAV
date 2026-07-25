@@ -37,15 +37,38 @@ def _run_apply_harden(wizard: SetupWizard) -> None:
     enable_fw = wizard.enable_firewall_row.get_active()
 
     def worker() -> dict[str, Any]:
-        return wizard.client.setup_run(
+        from oysterav.gui.widgets.setup_wizard_firewall import selected_firewall_backend
+
+        result = wizard.client.setup_run(
             skip_packs=True,
             skip_schedule=True,
             skip_bootstrap=True,
             skip_harden=False,
-            enable_firewall=enable_fw,
+            enable_firewall=False,
             mark_complete=False,
             harden_include=enabled_harden_step_ids(wizard),
         )
+        if enable_fw:
+            backend = selected_firewall_backend(wizard)
+            if backend != "none":
+                sel = wizard.client.firewall_select(backend)
+                steps = list(result.get("steps") or [])
+                steps.append(
+                    {
+                        "step": "firewall-select",
+                        "ok": bool(sel.get("ok")),
+                        "message": sel.get("message"),
+                        "skipped": sel.get("skipped"),
+                    },
+                )
+                result["steps"] = steps
+                if not sel.get("ok"):
+                    result["ok"] = False
+            try:
+                wizard.client.config_set("firewall.managed_backend", backend)
+            except Exception:
+                pass
+        return result
 
     def done(result: dict[str, Any]) -> bool:
         wizard._harden_busy = False

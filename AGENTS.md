@@ -30,10 +30,13 @@ Do not commit those paths or any credentials.
 ## Validate changes
 
 ```bash
-./scripts/check.sh           # version + LOC + ruff + mypy + pytest with coverage (CI triad)
-./scripts/check.sh --quick   # faster core/cli pytest without coverage
+./scripts/check.sh           # version + LOC + ruff + mypy + pytest + security gates
+./scripts/check.sh --quick   # faster core/cli/security pytest (no global coverage)
 ./scripts/check.sh --format  # also enforce ruff format
 ```
+
+Security gates (`pytest -m security`, module coverage ≥85%, Bandit, pip-audit):
+[`docs/security/test-gates.md`](docs/security/test-gates.md).
 
 **400-line hard limit:** production Python under `oyst_core/`, `oyst_cli/`, and
 `oysterav/` must stay ≤ 400 lines. Ceilings for intentional exceptions live in
@@ -117,13 +120,13 @@ See [docs/packaging/release.md](docs/packaging/release.md).
 - Prefer recognizing host-installed tools as installed (system vs private runtime) without forcing a pack reinstall.
 - Prefer a single password/auth prompt at the start of each user-initiated action (Privilege Concert), including multi-pack scans, hardenings, Update all, and bulk resolve/quarantine—not mid-flow or per-item prompts; order disclosed steps by priority.
 - Prefer Settings options that autosave; avoid redundant Save buttons when individual controls already persist.
-- Prefer a lean GUI that does not duplicate Settings controls onto Scan or other tabs; bulk Update/Apply/Install All actions should use one collapsible itemized checklist with per-item controls (no duplicate lists).
+- Prefer a lean GUI that does not duplicate Settings controls onto Scan or other tabs; bulk Update/Apply/Install All actions should use one collapsible itemized checklist with per-item controls (no duplicate lists). On Scan, use pack cards as the sole pack-inclusion/status surface (profile-driven mute for unused packs; Custom uses on-card checkboxes)—no separate pack list above the cards.
 - Prefer distro-portable host integration over distro-specific one-offs.
 - Prefer host co-control that works in concert with the host (surgical drop-ins / ensure-*); never wholesale override of host ClamAV or daemon config.
 - Prefer first-run/setup wizard auto-application of safe surgical hardenings; leave path-scoped on-access prevention for Real-time after the user chooses paths.
 - Prefer SSH-safe checks before enabling UFW/firewalld during setup/wizard flows.
-- Prefer user-facing system and status messages without developer notes or internal implementation jargon.
-- Prefer GUI chrome that keeps a stable default window size: primary pages (especially Scan) should fit without scrollbars, and optional UI (news ticker) or post-action refreshes must not change status-bar or window height.
+- Prefer user-facing system and status messages without developer notes or internal implementation jargon; Scan pack cards should briefly explain each pack's role and active/pending/complete state in plain language.
+- Prefer GUI chrome that keeps a stable default window size: primary pages (especially Scan) should fit without scrollbars, pack-card content should stay fully visible by enlarging cards within that height budget (not by lengthening the page), and optional UI (news ticker) or post-action refreshes must not change status-bar or window height.
 
 ## Learned Workspace Facts
 
@@ -134,3 +137,5 @@ See [docs/packaging/release.md](docs/packaging/release.md).
 - Security-news ticker freshness is configurable in Settings (7/14/30 days; default 14).
 - Privileged-helper install refuses to embed a user-writable oysterAV checkout; `oyst_core` must live under a root-owned prefix (distro package or root install), which matters on externally-managed Python distros (e.g. Arch/CachyOS).
 - Privilege Concert ([ADR-009](docs/adr/009-privilege-concert.md)) is the unified single-admin-auth-per-user-action model for privileged multi-step flows (scans, setup hardenings, Update all / update-concert, resolve, bulk install).
+- Dashboard is a quick-glance pressing-posture surface across protection layers (not ClamAV-only and not a per-pack catalog).
+- Settings Terminal is a persistent shared CLI/GUI session transcript: structured by default with an optional raw/advanced view, ring-buffer retention, Clear-only wipe, and export.

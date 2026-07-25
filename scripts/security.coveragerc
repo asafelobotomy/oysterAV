@@ -1,0 +1,21 @@
+# Isolated coverage config for scripts/check_security_coverage.py
+# (avoids inheriting pyproject.toml [tool.coverage.run] source=oyst_core).
+
+[run]
+branch = true
+include =
+    */oyst_core/privileged/validators.py
+    */oyst_core/privileged/helper_firewall.py
+    */oyst_core/privileged/helper_fw_lifecycle.py
+    */oyst_core/privileged/helper_validate.py
+    */oyst_core/rpc_auth.py
+    */oyst_core/packs/firewall.py
+    */oyst_core/packs/firewall_ops.py
+    */oyst_core/packs/firewall_select.py
+    */oyst_core/packs/firewall_ensure.py
+    */oyst_core/audit.py
+
+[report]
+fail_under = 85
+show_missing = true
+skip_empty = true

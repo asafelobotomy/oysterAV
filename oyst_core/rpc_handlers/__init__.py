@@ -10,6 +10,7 @@ from oyst_core.events import EventLog
 from oyst_core.orchestrator import JobOrchestrator
 from oyst_core.rpc_errors import RpcNotFoundError
 from oyst_core.rpc_handlers import config_schedule, data, jobs, status_pack, system
+from oyst_core.rpc_handlers import shield_fw as shield_fw
 
 Handler = Callable[[dict[str, Any], "RpcContext"], Any]
 
@@ -58,6 +59,9 @@ HANDLERS: dict[str, Handler] = {
     "history.export": data.handle_history_export,
     "history.export_all": data.handle_history_export_all,
     "audit.list": data.handle_audit_list,
+    "terminal.list": data.handle_terminal_list,
+    "terminal.clear": data.handle_terminal_clear,
+    "terminal.export": data.handle_terminal_export,
     "config.get": config_schedule.handle_config_get,
     "config.set": config_schedule.handle_config_set,
     "schedule.install": config_schedule.handle_schedule_install,
@@ -72,7 +76,25 @@ HANDLERS: dict[str, Handler] = {
     "runtime.update": system.handle_runtime_update,
     "runtime.bootstrap": system.handle_runtime_bootstrap,
     "firewall.status": system.handle_firewall_status,
+    "firewall.ensure_enable": shield_fw.handle_firewall_ensure_enable,
+    "firewall.set_enabled": shield_fw.handle_firewall_set_enabled,
+    "firewall.select": shield_fw.handle_firewall_select,
+    "firewall.recommend": shield_fw.handle_firewall_recommend,
+    "firewall.rules": shield_fw.handle_firewall_rules,
+    "firewall.export": shield_fw.handle_firewall_export,
+    "firewall.ufw_rule": shield_fw.handle_firewall_ufw_rule,
+    "firewall.ufw_default": shield_fw.handle_firewall_ufw_default,
+    "firewall.firewalld_port": shield_fw.handle_firewall_firewalld_port,
+    "firewall.firewalld_service": shield_fw.handle_firewall_firewalld_service,
+    "firewall.firewalld_reload": shield_fw.handle_firewall_firewalld_reload,
+    "firewall.firewalld_rich_rule": shield_fw.handle_firewall_firewalld_rich_rule,
     "fail2ban.unban": system.handle_fail2ban_unban,
+    "fail2ban.status": shield_fw.handle_fail2ban_status,
+    "fail2ban.banned": shield_fw.handle_fail2ban_banned,
+    "fail2ban.jail": shield_fw.handle_fail2ban_jail,
+    "fail2ban.jail_enable": shield_fw.handle_fail2ban_jail_enable,
+    "fail2ban.jail_disable": shield_fw.handle_fail2ban_jail_disable,
+    "fail2ban.reload": shield_fw.handle_fail2ban_reload,
     "clamav.clamd.ensure": system.handle_clamav_clamd_ensure,
     "services.status": system.handle_services_status,
     "services.set": system.handle_services_set,
@@ -109,8 +131,16 @@ def dispatch_rpc(
     event_log: EventLog | None = None,
     audit: SecurityAudit | None = None,
 ) -> Any:
+    from oyst_core.terminal_log import log_rpc_call
+
     handler = HANDLERS.get(method)
     if handler is None:
         raise RpcNotFoundError(f"unknown method: {method}")
     ctx = RpcContext(orchestrator=orchestrator, event_log=event_log, audit=audit)
-    return handler(params, ctx)
+    try:
+        result = handler(params, ctx)
+    except Exception as exc:
+        log_rpc_call(method, params, ok=False, result={"message": str(exc)})
+        raise
+    log_rpc_call(method, params, ok=True, result=result)
+    return result

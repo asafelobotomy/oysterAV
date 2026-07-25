@@ -51,6 +51,7 @@ SETTINGS_SECTIONS: tuple[tuple[str, str], ...] = (
     ("realtime", "Real-time"),
     ("scheduling", "Scheduling"),
     ("host_audit", "Host & audit"),
+    ("terminal", "Terminal"),
     ("maintenance", "Maintenance"),
     ("packs", "Security packs"),
 )

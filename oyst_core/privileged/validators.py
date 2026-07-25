@@ -148,12 +148,39 @@ def validate_monitor_mode(value: str) -> str:
 
 
 def validate_rich_rule(rule: str) -> str:
+    """Allow a small firewalld rich-rule subset (no shell metacharacters)."""
     cleaned = rule.strip()
-    if len(cleaned) > 512:
-        raise ValueError("rich rule too long")
-    if any(ch in cleaned for ch in (";", "|", "&", "$", "`", "(", ")")):
+    if not cleaned or len(cleaned) > 512:
+        raise ValueError("rich rule empty or too long")
+    if any(ch in cleaned for ch in (";", "|", "&", "$", "`", "(", ")", '"', "'", "\n", "\r", "\0")):
         raise ValueError("rich rule contains disallowed characters")
-    lowered = cleaned.lower()
-    if not any(token in lowered for token in ("accept", "reject", "drop")):
-        raise ValueError("rich rule must include accept, reject, or drop")
+    # rule [family=ipv4|ipv6] [source address=IP/CIDR]
+    #   (port port=N protocol=tcp|udp | service name=NAME) accept|reject|drop
+    pattern = re.compile(
+        r"^rule"
+        r"(?:\s+family=(ipv4|ipv6))?"
+        r"(?:\s+source\s+address=([0-9a-fA-F:.]+(?:/\d{1,3})?))?"
+        r"(?:"
+        r"(?:\s+port\s+port=(\d{1,5})\s+protocol=(tcp|udp))"
+        r"|"
+        r"(?:\s+service\s+name=([a-zA-Z0-9][a-zA-Z0-9._-]{0,63}))"
+        r")"
+        r"\s+(accept|reject|drop)$",
+        re.IGNORECASE,
+    )
+    match = pattern.fullmatch(cleaned)
+    if not match:
+        raise ValueError(
+            "rich rule must match: rule [family=…] [source address=…] "
+            "(port port=N protocol=tcp|udp | service name=NAME) accept|reject|drop",
+        )
+    port = match.group(3)
+    if port is not None:
+        validate_port(port)
+    src = match.group(2)
+    if src is not None:
+        if "/" in src:
+            validate_cidr(src)
+        else:
+            validate_ip(src)
     return cleaned

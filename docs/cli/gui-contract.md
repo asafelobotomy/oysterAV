@@ -24,7 +24,7 @@ Living document mapping every GTK user-facing feature to CLI-first equivalents
 | GUI feature | CLI equivalent |
 |-------------|----------------|
 | Auto-start RPC backend on launch | `oyst-cli serve` / `oyst-cli serve --foreground` (flag kept for compatibility; always foreground; or systemd user unit in docs) |
-| Tab switcher (Dashboard / Scan / Quarantine / Settings) | No single command — use tab-specific commands below |
+| Tab switcher (Dashboard / Scan / Shield / Quarantine / Settings) | No single command — use tab-specific commands below |
 | Global status bar (operational messages) | stderr/stdout from CLI commands |
 | Update alert (idle; yellow; above news) | **`oyst-cli updates check --json`** (`updates.check`) |
 | Security news ticker (idle status bar; below updates) | **`oyst-cli news list [--json] [--sources …] [--max-age-days …]`** / `oyst-cli news refresh` |
@@ -40,13 +40,16 @@ Posture-only: health cards, banner, and recent scans. Runtime bootstrap and pack
 |-------------|--------------|----------------|
 | Health banner (missing packs, stale sigs, clamd down, active job) | `status.assess` | **`oyst-cli status assess --json`** (severity, recommended actions) |
 | Banner → Open Settings | — | `oyst-cli doctor --json` then `oyst-cli packs install <name>` |
-| ClamAV status card | `status`; tap when stopped → `clamav.clamd.ensure` | `oyst-cli status --json`; **`oyst-cli clamav clamd ensure`** |
-| Signatures status card | `status` | `oyst-cli status --json` (field: `signature_age_hours`) |
-| Last Scan card | `status` | `oyst-cli status --json` + `oyst-cli history --json` |
+| Protection card (clamd) | `status`; tap when stopped → `clamav.clamd.ensure`; when running → Settings Real-time | `oyst-cli status --json`; **`oyst-cli clamav clamd ensure`** |
+| Definitions card | `status` (`signature_age_hours`, `fangfrisch_providers`) | `oyst-cli status --json` |
+| Real-time card (clamonacc) | `status` + `services.status` | `oyst-cli status --json`; `oyst-cli services status --json` |
+| Last scan card | `status` + `history.list` | `oyst-cli status --json` + `oyst-cli history --json` |
 | Quarantine count card | `quarantine.list` | `oyst-cli quarantine list --json` |
+| Host shield card | `firewall.status` + `services.status` (fail2ban) → navigate **Shield** | `oyst-cli firewall status --json`; `oyst-cli services status --json` |
+| Helper card (only if missing/stale policy) | `auth.status` | `oyst-cli helper-status --json` |
 | Recent scans list | `history.list` | `oyst-cli history --json` |
 | Recent scans → open report | navigate Reports + `history.get` | `oyst-cli history show <job_id> --json` |
-| Refresh on tab visit | `status`, `history.list`, `quarantine.list` | Same three commands |
+| Refresh on tab visit | `status`, `status.assess`, `history.list`, `quarantine.list`, `services.status`, `firewall.status`, `auth.status` | Same commands |
 
 **Dashboard one-liner (scripting):**
 
@@ -138,7 +141,7 @@ Quarantine from Reports / Scan finding rows also uses `quarantine.add` when the 
 
 Sidebar navigation (wizard-style ListBox + stack). Section order:
 
-**General → Services → Real-time → Scheduling → Host & audit → Maintenance → Security packs.**
+**General → Services → Real-time → Scheduling → Host & audit → Terminal → Maintenance → Security packs.**
 
 Dashboard “Open Settings” (missing required packs) deep-links to **Security packs**; other entry points default to **General**.
 
@@ -204,9 +207,40 @@ Schedule quarantine/backend are **timer overrides** of General defaults.
 
 | GUI feature | RPC / client | CLI equivalent |
 |-------------|--------------|----------------|
-| Firewall status | `firewall.status` | `oyst-cli firewall status --json` (full DSL remains CLI) |
-| fail2ban unban IP | `fail2ban.unban` | `oyst-cli fail2ban unban <ip> --confirm` |
 | Audit trail (recent entries) | `audit.list` | `oyst-cli audit list` (display-only in GUI) |
+
+Firewall and fail2ban controls moved to the **Shield** tab.
+
+### Shield tab
+
+Host firewall + fail2ban posture (managed UFW/firewalld toggle; structured +
+firewalld rich-rule Actions).
+
+| GUI feature | RPC / client | CLI equivalent |
+|-------------|--------------|----------------|
+| Managed firewall toggle | `firewall.set_enabled` | `firewall ensure-enable`; `firewall ufw disable` / `firewall firewalld disable` |
+| Choose / soft-swap backend | `firewall.select`, `firewall.recommend` | `firewall select ufw\|firewalld\|none`; `firewall recommend` |
+| Firewall status / Enable (compat) | `firewall.status`, `firewall.ensure_enable` | `firewall status`; `firewall ensure-enable --confirm` |
+| Rules list / refresh | `firewall.rules`, `firewall.export` | `firewall rules`; `firewall export` |
+| Add/delete allow/deny/limit | `firewall.ufw_rule` | `firewall ufw allow\|deny\|limit\|delete …` |
+| UFW defaults | `firewall.ufw_default` | `firewall ufw default …` |
+| firewalld port/service + reload | `firewall.firewalld_port`, `firewall.firewalld_service`, `firewall.firewalld_reload` | `firewall firewalld …` |
+| firewalld rich-rule add/remove | `firewall.firewalld_rich_rule` | `firewall firewalld rich-rule add\|remove …` |
+| fail2ban service | `services.set` | `services set fail2ban on\|off` |
+| Jails enable/disable | `fail2ban.status`, `fail2ban.jail_enable`, `fail2ban.jail_disable` | `fail2ban status`; `jail-control enable\|disable` |
+| Reload / clear bans | `fail2ban.reload` | `fail2ban reload [--unban] --confirm` |
+| Banned list + unban | `fail2ban.banned`, `fail2ban.unban` | `fail2ban banned`; `fail2ban unban …` |
+
+### Terminal
+
+Persistent session transcript for oysterAV / `oyst-cli` actions (structured by default; optional raw).
+
+| GUI feature | RPC / client | CLI equivalent |
+|-------------|--------------|----------------|
+| Transcript viewer (poll while visible) | `terminal.list` | `oyst-cli terminal list [--raw\|--all-layers] [--json]` |
+| Show raw output (autosave) | `config.set ui.terminal_show_raw` | `oyst-cli config set ui.terminal_show_raw true\|false` |
+| Clear log (confirm) | `terminal.clear` | `oyst-cli terminal clear --confirm` |
+| Export (.txt / .jsonl) | `terminal.export` | `oyst-cli terminal export -o FILE --format txt\|jsonl` |
 
 ### Maintenance
 
@@ -243,15 +277,15 @@ Settings Scheduling is the GUI editor for `[schedule]`; Apply materializes `oyst
 | GUI feature | RPC / client | CLI equivalent |
 |-------------|--------------|----------------|
 | **Run setup wizard** (under Maintenance) | Opens SetupWizard | Step through wizard, or use Auto-Install |
-| **Auto-Install** (wizard welcome) | `setup.run` (recipe SwitchRows → skip_* / enable_*) | **`oyst-cli setup run --enable-linger`** |
-| **Host hardening** (wizard) | `setup.run` (`harden_include`, firewall switch; per-step Ensure RPCs) | `oyst-cli setup run --skip-packs --skip-bootstrap --skip-schedule` or individual ensure-* |
-| **Enable host firewall** (wizard switch) | `setup.run` `enable_firewall` | `oyst-cli firewall ensure-enable --confirm` |
+| **Auto-Install** (wizard welcome) | `setup.run` + optional `firewall.select` | **`oyst-cli setup run --enable-linger`** then `firewall select` |
+| **Firewall** (wizard page) | `firewall.recommend`, `firewall.select` | `firewall recommend`; `firewall select ufw\|firewalld\|none --confirm` |
+| **Host hardening** (wizard) | `setup.run` (`harden_include`; optional `firewall.select`) | `oyst-cli setup run --skip-packs --skip-bootstrap --skip-schedule` or individual ensure-* |
 
 ---
 
-## Setup wizard (6 pages)
+## Setup wizard (7 pages)
 
-Pages: Welcome → Security packs → Preferences → Scheduling → **Host hardening** → Ready.
+Pages: Welcome → Security packs → Preferences → Scheduling → **Firewall** → Host hardening → Ready.
 
 | Wizard page / action | GUI RPC composition | CLI equivalent |
 |----------------------|---------------------|----------------|
@@ -339,8 +373,25 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `auth.revoke_service_lifecycle` | `oyst-cli auth revoke-service-lifecycle` |
 | `desktop.status` | `oyst-cli desktop status --json` |
 | `firewall.status` | `oyst-cli firewall status --json` |
+| `firewall.ensure_enable` | `oyst-cli firewall ensure-enable --confirm` |
+| `firewall.rules` | `oyst-cli firewall rules` |
+| `firewall.export` | `oyst-cli firewall export` |
+| `firewall.ufw_rule` | `oyst-cli firewall ufw allow\|deny\|limit\|delete` |
+| `firewall.ufw_default` | `oyst-cli firewall ufw default` |
+| `firewall.firewalld_port` | `oyst-cli firewall firewalld add-port\|remove-port` |
+| `firewall.firewalld_service` | `oyst-cli firewall firewalld add-service\|remove-service` |
+| `firewall.firewalld_reload` | `oyst-cli firewall firewalld reload` |
+| `fail2ban.status` | `oyst-cli fail2ban status --json` |
+| `fail2ban.banned` | `oyst-cli fail2ban banned` |
+| `fail2ban.jail` | `oyst-cli fail2ban jail` |
 | `fail2ban.unban` | `oyst-cli fail2ban unban <ip> --confirm` |
+| `fail2ban.jail_enable` | `oyst-cli fail2ban jail-control enable` |
+| `fail2ban.jail_disable` | `oyst-cli fail2ban jail-control disable` |
+| `fail2ban.reload` | `oyst-cli fail2ban reload` |
 | `audit.list` | `oyst-cli audit list --json` |
+| `terminal.list` | `oyst-cli terminal list [--json]` |
+| `terminal.clear` | `oyst-cli terminal clear --confirm` |
+| `terminal.export` | `oyst-cli terminal export -o FILE --format txt\|jsonl` |
 | `clamonacc.status` | `oyst-cli clamonacc status --json` |
 | `clamonacc.enable` | `oyst-cli clamonacc enable` |
 | `clamonacc.disable` | `oyst-cli clamonacc disable` |
@@ -381,10 +432,7 @@ reopens the surface.
 | Capability | CLI | GUI surface |
 |------------|-----|-------------|
 | Setup gate / reset | `setup check`, `setup reset` | None (wizard uses `setup.run` / `setup.status`) |
-| Firewall rule DSL | `firewall ufw|firewalld …` | Host security: **status only** (`firewall.status`) |
-| fail2ban unban (+ optional ignore/persist; one auth) | `fail2ban unban … --confirm [--ignore] [--persist]` | Host security: **unban IP** (`fail2ban.unban`) |
-| fail2ban jail control / reload | `fail2ban jail-control`, `reload`, … | Permanent CLI-first |
-| maldet monitor start (config + enable; one auth) | `maldet monitor start` | Services / pack monitor controls |
+| Firewall plan file / nftables mutation | `firewall plan`; (nft none) | Permanent CLI-first; Shield has structured + rich-rule for UFW/firewalld |
 | Deep pack ops | `fangfrisch`, `lynis audit`, `maldet scan`, `chkrootkit`, `unhide`, `freshclam update` | Packs list install/remove; Scan profiles; not full pack CLIs |
 | Privileged helper / auth grant | `install-privileged-helper`, `auth grant/revoke-service-lifecycle` | Services: Install button + passwordless switch (`helper.install` / `auth.grant*` / `auth.revoke*`) |
 

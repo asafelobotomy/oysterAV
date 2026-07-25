@@ -50,6 +50,24 @@ def run_privilege_concert(
             "returncode": res.returncode,
         },
     )
+    try:
+        from oyst_core.terminal_log import log_raw, log_structured
+
+        status = "ok" if ok else "failed"
+        log_structured(
+            "core",
+            "privilege.concert",
+            f"privilege concert {plan.recipe} {status}",
+            {"argv1": plan.argv1, "returncode": res.returncode},
+        )
+        log_raw(
+            "core",
+            "privilege.concert",
+            f"privilege concert {plan.recipe} steps",
+            {"steps": steps, "stderr": (res.stderr or "")[:2000]},
+        )
+    except Exception:  # noqa: BLE001 — never break concerts for transcript
+        pass
     if res.returncode != 0 and not steps:
         err = (res.stderr or res.stdout or f"{plan.argv1} failed").strip()
         return [{"step": plan.recipe, "ok": False, "message": err, "soft_fail": True}]

@@ -165,6 +165,11 @@ def save_config(config: OysterConfig) -> None:
     lines.append("[runtime]")
     lines.append(f"mode = {_toml_str(config.runtime.mode)}")
     lines.append("")
+    lines.append("[firewall]")
+    backend = config.firewall.managed_backend
+    if backend:
+        lines.append(f"managed_backend = {_toml_str(backend)}")
+    lines.append("")
     lines.append("[ui]")
     lines.append(f"run_at_startup = {'true' if config.ui.run_at_startup else 'false'}")
     lines.append(f"start_minimized = {'true' if config.ui.start_minimized else 'false'}")

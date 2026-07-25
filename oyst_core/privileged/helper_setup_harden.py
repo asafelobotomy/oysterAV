@@ -9,8 +9,6 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from oyst_core.packs.firewall import FirewallPack
-from oyst_core.packs.firewall_ops import FirewallOps
 from oyst_core.packs.rkhunter_disable_tests import apply_disable_tests_overlay
 from oyst_core.privileged.helper_clamd import (
     _ensure_disable_cache,
@@ -21,7 +19,11 @@ from oyst_core.privileged.helper_clamd import (
     _validate_wrapper_cmd,
 )
 from oyst_core.privileged.helper_clamd_unit import ensure_fdpass_dropin, restart_clam_stack
-from oyst_core.privileged.helper_firewall import _build_firewalld_argv, _build_ufw_argv
+from oyst_core.privileged.helper_fw_lifecycle import (
+    apply_firewall_lifecycle_flags,
+    ensure_firewall_as_root,
+    select_firewall_as_root,
+)
 from oyst_core.privileged.helper_services import _build_systemctl_argv
 from oyst_core.privileged.helper_validate import resolve_trusted_argv
 from oyst_core.privileged.validators import validate_unit
@@ -69,117 +71,6 @@ def _run_cmd(cmd: list[str]) -> tuple[int, str]:
     return proc.returncode, detail
 
 
-def _ufw_status_text() -> str:
-    rc, out = _run_cmd(["ufw", "status", "verbose"])
-    if rc == 0 and out:
-        return out
-    _, numbered = _run_cmd(["ufw", "status", "numbered"])
-    return numbered
-
-
-def _firewalld_ssh_ok() -> bool:
-    rc, out = _run_cmd(["firewall-cmd", "--list-all"])
-    if rc != 0:
-        rc, out = _run_cmd(["firewall-cmd", "--list-services"])
-    text = (out or "").lower()
-    return "ssh" in text or "22/tcp" in text or "22:tcp" in text
-
-
-def ensure_firewall_as_root(*, force_lockout: bool = False) -> dict[str, Any]:
-    """SSH-safe UFW/firewalld enable (already root; no nested pkexec)."""
-    det = FirewallPack().detect()
-    if det.get("conflict"):
-        return _step(
-            "firewall-ensure",
-            ok=False,
-            message="Multiple firewall managers active; resolve UFW vs firewalld first",
-            soft_fail=True,
-        )
-    active = str(det.get("active", "none"))
-    if active in ("ufw", "firewalld"):
-        return _step(
-            "firewall-ensure",
-            ok=True,
-            skipped=True,
-            message=f"{active} already active",
-        )
-    if det.get("ufw"):
-        return _ensure_ufw(force_lockout=force_lockout)
-    if det.get("firewalld"):
-        return _ensure_firewalld(force_lockout=force_lockout)
-    return _step(
-        "firewall-ensure",
-        ok=True,
-        skipped=True,
-        message="no UFW or firewalld binary installed",
-    )
-
-
-def _ensure_ufw(*, force_lockout: bool) -> dict[str, Any]:
-    before = _ufw_status_text()
-    ssh_ok = FirewallOps.parse_ssh_open(before)
-    if not ssh_ok and not force_lockout:
-        cmd = _build_ufw_argv(["allow", "--port", "22", "--proto", "tcp"])
-        rc, detail = _run_cmd(cmd)
-        if rc != 0:
-            return _step(
-                "firewall-ensure",
-                ok=False,
-                message=f"could not add SSH allow before enable: {detail}",
-                soft_fail=True,
-            )
-        ssh_ok = FirewallOps.parse_ssh_open(_ufw_status_text())
-    if not ssh_ok and not force_lockout:
-        return _step(
-            "firewall-ensure",
-            ok=False,
-            message="SSH allow rule not detected; use --force-lockout-risk to proceed",
-            soft_fail=True,
-        )
-    rc, detail = _run_cmd(_build_ufw_argv(["enable"]))
-    if rc != 0:
-        return _step(
-            "firewall-ensure",
-            ok=False,
-            message=detail or "ufw enable failed",
-            soft_fail=True,
-        )
-    return _step("firewall-ensure", ok=True, message="ufw enabled")
-
-
-def _ensure_firewalld(*, force_lockout: bool) -> dict[str, Any]:
-    rc, detail = _run_cmd(_build_systemctl_argv(["enable-now", "firewalld"]))
-    if rc != 0:
-        return _step(
-            "firewall-ensure",
-            ok=False,
-            message=detail or "firewalld enable failed",
-            soft_fail=True,
-        )
-    if not force_lockout:
-        cmd = _build_firewalld_argv(["add-service", "ssh", "--zone", "public"])
-        rc, detail = _run_cmd(cmd)
-        if rc != 0 and not _firewalld_ssh_ok():
-            return _step(
-                "firewall-ensure",
-                ok=False,
-                message=(
-                    "firewalld started but SSH service not confirmed; "
-                    "use --force-lockout-risk to proceed"
-                ),
-                soft_fail=True,
-            )
-        _run_cmd(_build_firewalld_argv(["reload"]))
-        if not _firewalld_ssh_ok():
-            return _step(
-                "firewall-ensure",
-                ok=False,
-                message="SSH allow not detected after enabling firewalld",
-                soft_fail=True,
-            )
-    return _step("firewall-ensure", ok=True, message="firewalld enabled")
-
-
 def collect_harden_steps(argv: Sequence[str]) -> list[dict[str, Any]]:
     """Apply harden flags as root; return step dicts (no JSON print)."""
     steps: list[dict[str, Any]] = []
@@ -191,11 +82,12 @@ def collect_harden_steps(argv: Sequence[str]) -> list[dict[str, Any]]:
     dc_conf = _parse_flag(argv, "dc-conf")
     rkh_raw = _parse_flag(argv, "rkh-tests")
     do_rkh = _has_bool(argv, "rkh") or rkh_raw is not None
-    with_firewall = _has_bool(argv, "with-firewall")
-    force_lockout = _has_bool(argv, "force-lockout")
     clamd_unit = _parse_flag(argv, "clamd-unit")
     clamonacc_unit = _parse_flag(argv, "clamonacc-unit")
     sockets = _parse_multi(argv, "socket") or None
+
+    # Firewall install/select/ensure (select skips with-firewall inside lifecycle).
+    steps.extend(apply_firewall_lifecycle_flags(argv))
 
     if clamd_enable:
         try:
@@ -269,8 +161,6 @@ def collect_harden_steps(argv: Sequence[str]) -> list[dict[str, Any]]:
                 _step("harden-rkhunter-defaults", ok=False, message=str(exc), soft_fail=True),
             )
 
-    if with_firewall:
-        steps.append(ensure_firewall_as_root(force_lockout=force_lockout))
     return steps
 
 
@@ -291,4 +181,5 @@ __all__ = [
     "collect_harden_steps",
     "ensure_firewall_as_root",
     "run_setup_harden",
+    "select_firewall_as_root",
 ]

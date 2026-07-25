@@ -42,6 +42,23 @@ class OrchestratorHelpersMixin:
             percent=percent,
             state=state,
         )
+        try:
+            from oyst_core.terminal_log import log_structured
+
+            label = pack or message or "scan"
+            log_structured(
+                "core",
+                "job.progress",
+                f"{label}: {message} ({percent:.0f}%)",
+                {
+                    "job_id": job_id,
+                    "pack": pack,
+                    "percent": percent,
+                    "state": state,
+                },
+            )
+        except Exception:  # noqa: BLE001 — never break scans for transcript
+            pass
         if on_progress is not None:
             on_progress(pack or message, percent)
 

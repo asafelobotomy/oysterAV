@@ -302,3 +302,10 @@ def test_ui_theme_default_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     with pytest.raises(KeyError, match="security_news_max_age_days"):
         set_config_value("ui.security_news_max_age_days", "21")
     assert load_config().ui.security_news_max_age_days == 30
+
+    set_config_value("firewall.managed_backend", "ufw")
+    assert load_config().firewall.managed_backend == "ufw"
+    set_config_value("firewall.managed_backend", "none")
+    assert load_config().firewall.managed_backend == "none"
+    with pytest.raises(KeyError, match="firewall.managed_backend"):
+        set_config_value("firewall.managed_backend", "iptables")

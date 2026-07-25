@@ -36,7 +36,7 @@ Compound one-auth helper flows (same shape as rkhunter `set-many`):
 - **maldet monitor start** → one `maldet-config start-monitor` call (config write + `systemctl enable --now`)
 - **rkhunter Resolve open** → Privilege Concert preflight + one `rkhunter-whitelist set-many` call
 
-- **Firewall:** `--confirm` required for UFW enable/disable/default and UFW/firewalld rule mutations (or `--dry-run`); SSH allow rule checked before enable unless `--force-lockout-risk`
+- **Firewall:** `--confirm` required for UFW enable/disable/default and UFW/firewalld rule mutations (or `--dry-run`); SSH allow/limit checked before enable unless `--force-lockout-risk`; `firewall select` may install the package in the same auth; soft-swap stops (does not `disable-now`) firewalld; rich-rule subset only; deny/delete port 22 needs `--force-lockout-risk`
 - **fail2ban:** `--confirm` required for unban, jail enable/disable, and `reload --unban`; optional `--ignore` / `--persist` for ignoreip
 - **rkhunter propupd:** `--confirm` required (baseline overwrite)
 - **rkhunter resolve:** `--confirm` required (writes `/etc/rkhunter.d/oysterav-whitelist.conf` only; never edits sshd or deletes files)

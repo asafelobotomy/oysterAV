@@ -11,6 +11,7 @@ PAGE_TITLES = (
     "Security packs",
     "Preferences",
     "Scheduling",
+    "Firewall",
     "Host hardening",
     "Ready",
 )

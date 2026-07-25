@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from oyst_cli.commands.packs.firewall_cmd_manage import register_manage_commands
 from oyst_cli.confirm import require_confirm
 from oyst_cli.output import emit
 from oyst_core.packs.firewall import FirewallPack
@@ -15,6 +16,9 @@ from oyst_core.packs.firewall_ops import FirewallOps
 @click.group("firewall")
 def firewall_group() -> None:
     """Firewall detection, status, and rule management."""
+
+
+register_manage_commands(firewall_group)
 
 
 @firewall_group.command("detect")
@@ -48,31 +52,6 @@ def firewall_audit(json_mode: bool) -> None:
         click.echo("fail2ban: installed")
     else:
         click.echo("fail2ban: not installed (optional)")
-
-
-@firewall_group.command("ensure-enable")
-@click.option("--confirm", is_flag=True)
-@click.option("--force-lockout-risk", is_flag=True)
-@click.option("--dry-run", is_flag=True)
-@click.option("--json", "json_mode", is_flag=True)
-def firewall_ensure_enable(
-    confirm: bool,
-    force_lockout_risk: bool,
-    dry_run: bool,
-    json_mode: bool,
-) -> None:
-    """Enable UFW or firewalld when installed but inactive (SSH-safe)."""
-    require_confirm(
-        confirm,
-        dry_run=dry_run,
-        message="--confirm required to enable host firewall",
-    )
-    result = FirewallOps().ensure_firewall_enabled(
-        force_lockout=force_lockout_risk,
-        dry_run=dry_run,
-    )
-    emit(result.__dict__, json_mode=json_mode)
-    raise SystemExit(0 if result.ok or result.skipped else 2)
 
 
 @firewall_group.command("export")
@@ -141,6 +120,7 @@ def firewall_ufw_allow(
 @click.option("--proto", default="tcp", show_default=True)
 @click.option("--from", "from_addr", default=None)
 @click.option("--confirm", is_flag=True)
+@click.option("--force-lockout-risk", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
 def firewall_ufw_deny(
@@ -148,13 +128,19 @@ def firewall_ufw_deny(
     proto: str,
     from_addr: str | None,
     confirm: bool,
+    force_lockout_risk: bool,
     dry_run: bool,
     json_mode: bool,
 ) -> None:
     """Add UFW deny rule."""
     require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate UFW rules")
     result = FirewallOps().ufw_rule(
-        "deny", port=port, proto=proto, from_addr=from_addr, dry_run=dry_run
+        "deny",
+        port=port,
+        proto=proto,
+        from_addr=from_addr,
+        dry_run=dry_run,
+        force_lockout=force_lockout_risk,
     )
     emit(result.__dict__, json_mode=json_mode)
     raise SystemExit(0 if result.ok else 2)
@@ -184,18 +170,26 @@ def firewall_ufw_limit(
 @click.option("--port")
 @click.option("--proto", default="tcp", show_default=True)
 @click.option("--confirm", is_flag=True)
+@click.option("--force-lockout-risk", is_flag=True)
 @click.option("--dry-run", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
 def firewall_ufw_delete(
     port: str | None,
     proto: str,
     confirm: bool,
+    force_lockout_risk: bool,
     dry_run: bool,
     json_mode: bool,
 ) -> None:
     """Delete UFW rule."""
     require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate UFW rules")
-    result = FirewallOps().ufw_rule("delete", port=port, proto=proto, dry_run=dry_run)
+    result = FirewallOps().ufw_rule(
+        "delete",
+        port=port,
+        proto=proto,
+        dry_run=dry_run,
+        force_lockout=force_lockout_risk,
+    )
     emit(result.__dict__, json_mode=json_mode)
     raise SystemExit(0 if result.ok else 2)
 
@@ -231,14 +225,7 @@ def firewall_ufw_default(
     raise SystemExit(0 if result.ok else 2)
 
 
-@firewall_ufw_group.command(
-    "enable",
-    epilog="""
-Examples:
-  oyst-cli firewall ufw enable --dry-run --json
-  oyst-cli firewall ufw enable --confirm --json
-""",
-)
+@firewall_ufw_group.command("enable")
 @click.option("--confirm", is_flag=True)
 @click.option("--force-lockout-risk", is_flag=True)
 @click.option("--dry-run", is_flag=True)
@@ -376,6 +363,22 @@ def firewalld_rich_rule(
     require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate firewalld")
     fw_action = "add-rich-rule" if action == "add" else "remove-rich-rule"
     result = FirewallOps().firewalld_rich_rule(fw_action, rule, zone=zone, dry_run=dry_run)
+    emit(result.__dict__, json_mode=json_mode)
+    raise SystemExit(0 if result.ok else 2)
+
+
+@firewall_firewalld_group.command("disable")
+@click.option("--confirm", is_flag=True)
+@click.option("--dry-run", is_flag=True)
+@click.option("--json", "json_mode", is_flag=True)
+def firewalld_disable(confirm: bool, dry_run: bool, json_mode: bool) -> None:
+    """Stop firewalld (managed Off; does not wipe zones)."""
+    require_confirm(
+        confirm,
+        dry_run=dry_run,
+        message="--confirm required to disable firewalld",
+    )
+    result = FirewallOps().firewalld_lifecycle("disable", dry_run=dry_run)
     emit(result.__dict__, json_mode=json_mode)
     raise SystemExit(0 if result.ok else 2)
 

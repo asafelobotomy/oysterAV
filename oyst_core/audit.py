@@ -47,8 +47,9 @@ _PATH_REDACT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"/home/[^/\s\"']+"), "/home/<redacted>"),
     (re.compile(r"/var/home/[^/\s\"']+"), "/var/home/<redacted>"),
     (re.compile(r"/run/user/\d+"), "/run/user/<redacted>"),
-    (re.compile(r"/tmp/oysterav-[^/\s\"']+"), "/tmp/oysterav-<redacted>"),
-    (re.compile(r"/var/tmp/oysterav-[^/\s\"']+"), "/var/tmp/oysterav-<redacted>"),
+    # Redaction patterns only (not temp-file I/O).
+    (re.compile(r"/tmp/oysterav-[^/\s\"']+"), "/tmp/oysterav-<redacted>"),  # nosec B108
+    (re.compile(r"/var/tmp/oysterav-[^/\s\"']+"), "/var/tmp/oysterav-<redacted>"),  # nosec B108
 )
 
 

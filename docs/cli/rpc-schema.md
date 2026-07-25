@@ -81,6 +81,9 @@ Error:
 | `history.export` | `oyst-cli history export` | |
 | `history.export_all` | `oyst-cli history export-all` | |
 | `audit.list` | `oyst-cli audit list --json` | **New in v2** |
+| `terminal.list` | `oyst-cli terminal list [--json]` | Session transcript |
+| `terminal.clear` | `oyst-cli terminal clear --confirm` | |
+| `terminal.export` | `oyst-cli terminal export` | `txt` or `jsonl` under `exports/` |
 | `config.get` | `oyst-cli config get [key]` | Omit key to dump full config |
 | `config.set` | `oyst-cli config set` | |
 | `schedule.install` | `oyst-cli schedule install` | Compat: profile + defaults then apply stable `oyst-scan.*` units |
@@ -95,7 +98,25 @@ Error:
 | `runtime.update` | `oyst-cli runtime update` | |
 | `runtime.bootstrap` | `oyst-cli runtime bootstrap [--progress]` | **New in v2** |
 | `firewall.status` | `oyst-cli firewall status --json` | Read-only backend probe |
+| `firewall.ensure_enable` | `oyst-cli firewall ensure-enable` | SSH-safe enable |
+| `firewall.set_enabled` | `ensure-enable` / `ufw disable` / `firewalld disable` | Managed toggle On/Off |
+| `firewall.select` | `oyst-cli firewall select ufw\|firewalld\|none` | Soft-swap managed backend |
+| `firewall.recommend` | `oyst-cli firewall recommend` | Distro recommendation + detect |
+| `firewall.rules` | `oyst-cli firewall rules` | Verbose rules text |
+| `firewall.export` | `oyst-cli firewall export` | Snapshot `{backend, rules}` |
+| `firewall.ufw_rule` | `oyst-cli firewall ufw allow\|deny\|limit\|delete` | Structured UFW mutate |
+| `firewall.ufw_default` | `oyst-cli firewall ufw default` | |
+| `firewall.firewalld_port` | `oyst-cli firewall firewalld add-port\|remove-port` | |
+| `firewall.firewalld_service` | `oyst-cli firewall firewalld add-service\|remove-service` | |
+| `firewall.firewalld_reload` | `oyst-cli firewall firewalld reload` | |
+| `firewall.firewalld_rich_rule` | `oyst-cli firewall firewalld rich-rule` | Params: `action` add\|remove, `rule`, optional `zone` |
+| `fail2ban.status` | `oyst-cli fail2ban status --json` | |
+| `fail2ban.banned` | `oyst-cli fail2ban banned` | |
+| `fail2ban.jail` | `oyst-cli fail2ban jail` | |
 | `fail2ban.unban` | `oyst-cli fail2ban unban` | Params: `ip`, optional `jail`, `ignore`, `persist` |
+| `fail2ban.jail_enable` | `oyst-cli fail2ban jail-control enable` | |
+| `fail2ban.jail_disable` | `oyst-cli fail2ban jail-control disable` | |
+| `fail2ban.reload` | `oyst-cli fail2ban reload` | optional `unban` |
 | `clamav.clamd.ensure` | `oyst-cli clamav clamd ensure` | Idempotent clamd start |
 | `services.status` | `oyst-cli services status --json` | Logical service status |
 | `services.set` | `oyst-cli services set` | Start/stop/enable services via helper |

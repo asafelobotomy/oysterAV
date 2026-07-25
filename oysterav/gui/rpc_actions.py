@@ -47,6 +47,16 @@ class SupportsOystClient(Protocol):
         persist: bool = False,
     ) -> dict[str, Any]: ...
     def audit_list(self, limit: int = 50) -> list[dict[str, Any]]: ...
+    def terminal_list(
+        self,
+        limit: int = 500,
+        *,
+        since_id: int = 0,
+        layers: list[str] | None = None,
+        all_layers: bool = False,
+    ) -> list[dict[str, Any]]: ...
+    def terminal_clear(self) -> dict[str, Any]: ...
+    def terminal_export(self, path: str, *, fmt: str = "txt") -> dict[str, Any]: ...
     def history_list(self, limit: int = 20) -> list[dict[str, Any]]: ...
     def history_get(self, job_id: str) -> dict[str, Any]: ...
     def history_handle_open(
@@ -175,6 +185,35 @@ def request_fail2ban_unban(
 
 def request_audit_list(client: SupportsOystClient, *, limit: int = 50) -> list[dict[str, Any]]:
     return client.audit_list(limit=limit)
+
+
+def request_terminal_list(
+    client: SupportsOystClient,
+    *,
+    limit: int = 500,
+    since_id: int = 0,
+    layers: list[str] | None = None,
+    all_layers: bool = False,
+) -> list[dict[str, Any]]:
+    return client.terminal_list(
+        limit=limit,
+        since_id=since_id,
+        layers=layers,
+        all_layers=all_layers,
+    )
+
+
+def request_terminal_clear(client: SupportsOystClient) -> dict[str, Any]:
+    return client.terminal_clear()
+
+
+def request_terminal_export(
+    client: SupportsOystClient,
+    path: str,
+    *,
+    fmt: str = "txt",
+) -> dict[str, Any]:
+    return client.terminal_export(path, fmt=fmt)
 
 
 def request_history_list(

@@ -28,6 +28,7 @@ UX that already had backend support.
 | 2 | Settings Services / Auth (helper install, passwordless grant/revoke) | **Shipped** |
 | 3 | Low-risk CLI mirrors (audit, news refresh, quarantine add, tray/desktop) | **Shipped** |
 | 4 | Advanced: firewall **status** + fail2ban **unban**; setup/deep packs / full firewall DSL remain **permanent CLI-first** | **Limited shipped**; residual permanent unless a future ADR reopens |
+| 5 | **Shield tab:** structured firewall rules + fail2ban jail control/reload (reopens Wave 4 residual for those surfaces) | **Shipped** (this remapping) |
 
 ## Consequences
 
@@ -38,5 +39,9 @@ UX that already had backend support.
   `auth.revoke_service_lifecycle`); CLI equivalents remain for scripting.
 - Host ClamAV prevention UI (if any) must follow [ADR-008](008-clamav-host-cocontrol.md)
   and still obey CLI/RPC-first.
-- Wave 4 residual (firewall rule DSL, fail2ban jail control, setup check/reset, deep
-  pack CLIs) is **permanent CLI-first** — do not build a full GUI DSL without a new ADR.
+- Wave 4 residual **reopened via Shield (Wave 5):** structured firewall rule controls
+  (list/add/delete/defaults/export/reload), managed enable/disable toggle, firewalld
+  rich-rule editor, backend soft-swap (`firewall.select`), Setup Wizard Firewall page,
+  and fail2ban jail enable/disable/reload.
+  Still permanent CLI-first: `firewall plan`, nftables mutation, setup check/reset,
+  deep pack CLIs.

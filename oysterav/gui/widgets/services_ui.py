@@ -151,7 +151,7 @@ def build_services_group(
             if grant.get("granted"):
                 expires = grant.get("expires") or "unknown"
                 auth_switch.set_subtitle(
-                    f"Start/enable ClamAV & maldet without a password until {expires}. "
+                    f"Start/enable ClamAV &amp; maldet without a password until {expires}. "
                     "Stop/disable and fail2ban still prompt. "
                     "Weakens defenses against same-user malware."
                 )
@@ -162,7 +162,7 @@ def build_services_group(
                 )
             else:
                 auth_switch.set_subtitle(
-                    "Off — opt-in allows passwordless start/enable of ClamAV & maldet "
+                    "Off — opt-in allows passwordless start/enable of ClamAV &amp; maldet "
                     "for 7 days (local session only). Stop/disable still prompt."
                 )
             state["loading"] = True

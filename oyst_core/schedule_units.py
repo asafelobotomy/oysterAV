@@ -22,6 +22,22 @@ UNIT_TIMER = "oyst-scan.timer"
 LEGACY_PROFILES = ("quick", "full", "integrity", "suite", "custom")
 
 
+def _user_systemctl_message(res: CommandResult) -> str:
+    detail = (res.stderr or res.stdout or "systemctl --user failed").strip()
+    lowered = detail.lower()
+    if (
+        "dbus_session_bus_address" in lowered
+        or "xdg_runtime_dir" in lowered
+        or "user scope bus" in lowered
+    ):
+        return (
+            "Could not reach your user systemd session (missing session bus). "
+            "Sign in to a desktop session and retry, or run: "
+            f"systemctl --user daemon-reload && systemctl --user enable --now {UNIT_TIMER}"
+        )
+    return detail
+
+
 def _run_user_systemctl(args: list[str]) -> CommandResult:
     if is_flatpak():
         spawn = which("flatpak-spawn")
@@ -147,9 +163,7 @@ WantedBy=timers.target
     reload_res = _run_user_systemctl(["daemon-reload"])
     if reload_res.returncode != 0:
         result["ok"] = False
-        result["message"] = (
-            reload_res.stderr or reload_res.stdout or "daemon-reload failed"
-        ).strip()
+        result["message"] = _user_systemctl_message(reload_res)
         result["enable_hint"] = (
             f"systemctl --user daemon-reload && systemctl --user enable --now {UNIT_TIMER}"
         )
@@ -159,7 +173,7 @@ WantedBy=timers.target
         enable_res = _run_user_systemctl(["enable", "--now", UNIT_TIMER])
         if enable_res.returncode != 0:
             result["ok"] = False
-            result["message"] = (enable_res.stderr or enable_res.stdout or "enable failed").strip()
+            result["message"] = _user_systemctl_message(enable_res)
             result["enable_hint"] = f"systemctl --user enable --now {UNIT_TIMER}"
             return result
         active_res = _run_user_systemctl(["is-active", UNIT_TIMER])

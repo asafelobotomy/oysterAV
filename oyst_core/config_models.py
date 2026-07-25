@@ -173,6 +173,12 @@ class RuntimeConfig(BaseModel):
     mode: RuntimeMode = "full"
 
 
+class FirewallConfig(BaseModel):
+    """Preferred oysterAV-managed firewall backend (ufw|firewalld|none)."""
+
+    managed_backend: str | None = None
+
+
 class UiConfig(BaseModel):
     run_at_startup: bool = False
     start_minimized: bool = False
@@ -190,6 +196,7 @@ class UiConfig(BaseModel):
     )
     security_news_max_age_days: int = 14
     theme: UiThemeId = DEFAULT_UI_THEME
+    terminal_show_raw: bool = False
 
 
 class OysterConfig(BaseModel):
@@ -204,6 +211,7 @@ class OysterConfig(BaseModel):
     rkhunter: RKHunterConfig = Field(default_factory=RKHunterConfig)
     lynis: LynisConfig = Field(default_factory=LynisConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    firewall: FirewallConfig = Field(default_factory=FirewallConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
 
     def vault_path(self) -> Path:

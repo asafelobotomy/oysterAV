@@ -18,6 +18,7 @@ from oysterav.gui.widgets.common import (
     make_section_heading,
 )
 from oysterav.gui.widgets.packs import PackListWidget
+from oysterav.gui.widgets.setup_wizard_firewall import build_firewall_page
 from oysterav.gui.widgets.setup_wizard_harden_page import build_harden_page
 
 if TYPE_CHECKING:
@@ -218,12 +219,19 @@ def build_pages(wizard: SetupWizard) -> None:
     services_box.append(wizard.schedule_btn)
     wizard._stack.add_named(wizard._wrap_scrolled(services_box), "page-3")
 
+    firewall_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+    firewall_box.set_margin_top(12)
+    firewall_box.set_margin_start(12)
+    firewall_box.set_margin_end(12)
+    build_firewall_page(wizard, firewall_box)
+    wizard._stack.add_named(wizard._wrap_scrolled(firewall_box), "page-4")
+
     harden_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
     harden_box.set_margin_top(12)
     harden_box.set_margin_start(12)
     harden_box.set_margin_end(12)
     build_harden_page(wizard, harden_box)
-    wizard._stack.add_named(wizard._wrap_scrolled(harden_box), "page-4")
+    wizard._stack.add_named(wizard._wrap_scrolled(harden_box), "page-5")
 
     ready_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
     ready_box.set_margin_top(12)
@@ -246,6 +254,6 @@ def build_pages(wizard: SetupWizard) -> None:
     scan_btn = make_button("Open Scan tab", suggested=True)
     scan_btn.connect("clicked", wizard._on_open_scan)
     ready_box.append(scan_btn)
-    wizard._stack.add_named(wizard._wrap_scrolled(ready_box), "page-5")
+    wizard._stack.add_named(wizard._wrap_scrolled(ready_box), "page-6")
 
     wizard._go_to_page(0)

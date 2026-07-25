@@ -3,10 +3,26 @@
 from __future__ import annotations
 
 import re
+import time
+from typing import Any
 
 from oyst_core.models import PackStatus, PackTier
 from oyst_core.packs.base import Pack
 from oyst_core.privileged.runner import run_command, which
+
+_DETECT_TTL_SEC = 1.5
+_detect_cache: tuple[float, dict[str, object]] | None = None
+
+_NFT_RULE_VERB_RE = re.compile(
+    r"\b(accept|drop|reject|jump|goto|return|counter|masquerade|snat|dnat)\b",
+    re.IGNORECASE,
+)
+
+
+def invalidate_firewall_detect_cache() -> None:
+    """Drop cached detect() results after mutations / select / ensure."""
+    global _detect_cache
+    _detect_cache = None
 
 
 class FirewallPack(Pack):
@@ -16,13 +32,20 @@ class FirewallPack(Pack):
 
     def doctor(self) -> PackStatus:
         detection = self.detect()
-        installed = detection["active"] != "none"
+        managed_bins = bool(detection.get("ufw") or detection.get("firewalld"))
         version = str(detection.get("version") or "") or None
-        status = self._base_status(bool(installed), version)
+        status = self._base_status(managed_bins, version)
         status.details = detection
+        active = str(detection.get("active") or "none")
         if detection.get("conflict"):
             status.message = "Multiple firewall managers detected; use only one"
-        elif not installed:
+        elif active in ("ufw", "firewalld"):
+            status.message = f"Managed firewall active ({active})"
+        elif managed_bins:
+            status.message = "UFW/firewalld installed but not enabled"
+        elif active == "nft-direct":
+            status.message = "Host nftables filtering detected (not oysterAV-managed)"
+        else:
             status.message = (
                 "No active firewall; recommended on hosts with exposed network services"
             )
@@ -36,7 +59,24 @@ class FirewallPack(Pack):
         except (ValueError, OSError):
             return None
 
+    @staticmethod
+    def _nft_filtering_active(nft_path: str) -> bool:
+        try:
+            res = run_command([nft_path, "list", "ruleset"], timeout=15)
+        except (ValueError, OSError):
+            return False
+        return bool(_NFT_RULE_VERB_RE.search(res.stdout or ""))
+
     def detect(self) -> dict[str, object]:
+        global _detect_cache
+        now = time.monotonic()
+        if _detect_cache is not None and (now - _detect_cache[0]) < _DETECT_TTL_SEC:
+            return dict(_detect_cache[1])
+        result = self._detect_uncached()
+        _detect_cache = (now, result)
+        return dict(result)
+
+    def _detect_uncached(self) -> dict[str, object]:
         ufw = which("ufw")
         fw = which("firewall-cmd")
         nft = which("nft")
@@ -45,13 +85,13 @@ class FirewallPack(Pack):
         if ufw:
             try:
                 res = run_command(["ufw", "status"], timeout=30)
-                ufw_active = "active" in res.stdout.lower()
+                ufw_active = "status: active" in res.stdout.lower()
             except (ValueError, OSError):
                 pass
         if fw:
             try:
                 res = run_command(["firewall-cmd", "--state"], timeout=30)
-                fw_active = "running" in res.stdout.lower()
+                fw_active = res.stdout.strip().lower() == "running"
             except (ValueError, OSError):
                 pass
         active = "none"
@@ -65,7 +105,7 @@ class FirewallPack(Pack):
             active = "firewalld"
             binary = fw
             version = self._tool_version(fw, ["--version"], r"([\d.]+)")
-        elif nft:
+        elif nft and self._nft_filtering_active(nft):
             active = "nft-direct"
             binary = nft
             version = self._tool_version(nft, ["--version"], r"nftables\s+v?([\d.]+)")
@@ -100,9 +140,11 @@ class FirewallPack(Pack):
             recs.append("Review rules: sudo ufw status verbose")
         elif det["active"] == "firewalld":
             recs.append("Review zones: sudo firewall-cmd --list-all")
+        elif det["active"] == "nft-direct":
+            recs.append("Host nftables filtering present; oysterAV manages UFW/firewalld only")
         return recs
 
-    def fail2ban_status(self) -> dict[str, object]:
+    def fail2ban_status(self) -> dict[str, Any]:
         if not which("fail2ban-client"):
             return {"installed": False}
         try:

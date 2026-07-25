@@ -38,7 +38,12 @@ jobs:
       - run: uv run mypy oyst_core oyst_cli oysterav
       # Coverage sources + fail_under: pyproject.toml. Do not add --cov=oysterav.
       - run: uv run pytest tests/ --cov=oyst_core --cov=oyst_cli --cov-report=term-missing
-      - run: uv tool run bandit -r oyst_core oyst_cli -ll
+      - name: Security property suite
+        run: uv run pytest -m security -q --no-cov
+      - name: Security module coverage (≥85%)
+        run: uv run python scripts/check_security_coverage.py
+      - name: Bandit (medium+ severity/confidence)
+        run: uv tool run bandit -c bandit.yaml -r oyst_core oyst_cli -ll -ii
       - run: uv tool run pip-audit
       - name: GUI must not call security binaries directly
         run: |

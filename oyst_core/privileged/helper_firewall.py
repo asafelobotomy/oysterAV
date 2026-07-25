@@ -131,6 +131,11 @@ def _build_firewalld_argv(argv: Sequence[str]) -> list[str]:
         ]
     if action == "reload":
         return ["firewall-cmd", "--reload"]
+    if action == "disable":
+        if rest:
+            raise ValueError(f"unexpected firewalld disable args: {' '.join(rest)}")
+        # Stop only (do not disable unit) so ensure-enable can start again.
+        return ["systemctl", "stop", "firewalld"]
     raise ValueError(f"unknown firewalld action: {action}")
 
 

@@ -11,7 +11,11 @@ oyst-cli setup run --confirm --json            # guided batch setup (wizard equi
 oyst-cli setup run --confirm --enable-linger   # also enable linger when schedule advises it
 oyst-cli setup run --confirm --skip-harden     # omit safe ClamAV/rkhunter host hardenings
 oyst-cli setup run --dry-run --json            # print privilege plan only
-oyst-cli firewall ensure-enable --confirm  # SSH-safe UFW/firewalld enable
+oyst-cli firewall ensure-enable --confirm  # SSH-safe UFW/firewalld enable (honors firewall.managed_backend)
+oyst-cli firewall select ufw --confirm     # soft-swap; installs package in same auth if missing
+oyst-cli firewall recommend --json         # distro recommendation + detect
+oyst-cli firewall ufw disable --confirm    # managed Off (UFW)
+oyst-cli firewall firewalld disable --confirm  # managed Off (stop firewalld; does not disable unit)
 oyst-cli setup reset --confirm       # clear completion to re-run setup
 oyst-cli status assess --json
 ```
@@ -150,7 +154,10 @@ Use `--confirm` (or `--dry-run`) for UFW/firewalld rule mutations, UFW enable/di
 fail2ban unban/jail control/`reload --unban`, rkhunter propupd, rkhunter resolve,
 `history handle-open --resolve`, runtime remove, schedule disable, and path removes.
 Resolve / handle-open `--resolve` print a Privilege Concert plan before `--confirm`.
-Firewall enable checks for an SSH allow rule unless `--force-lockout-risk`.
+Firewall enable checks for an SSH **allow/limit** rule (deny lines do not count) unless `--force-lockout-risk`.
+`firewall select` soft-stops the other manager (`systemctl stop firewalld` / `ufw disable`), may install `ufw`/`firewalld` in the same polkit prompt, and does not flush host nftables.
+firewalld rich rules must match a small grammar (`rule … port|service … accept|reject|drop`).
+UFW `deny`/`delete` of port 22 requires `--force-lockout-risk`.
 
 ## Schedule
 
@@ -285,6 +292,15 @@ oyst-cli helper-status --json   # policy_current should be true
 
 ```bash
 oyst-cli audit list --limit 50 --json
+```
+
+## Terminal (session transcript)
+
+```bash
+oyst-cli terminal list --limit 200 --json
+oyst-cli terminal list --raw          # structured + raw layers
+oyst-cli terminal export -o ~/.local/share/oysterav/exports/terminal.txt --format txt
+oyst-cli terminal clear --confirm
 ```
 
 ## RPC server

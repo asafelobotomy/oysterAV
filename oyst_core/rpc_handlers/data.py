@@ -123,3 +123,40 @@ def handle_history_export_all(params: dict[str, Any], _ctx: RpcContext) -> Any:
 
 def handle_audit_list(params: dict[str, Any], ctx: RpcContext) -> Any:
     return ctx.audit.list_entries(limit=int(params.get("limit", 50)))
+
+
+def handle_terminal_list(params: dict[str, Any], _ctx: RpcContext) -> Any:
+    from oyst_core import terminal_log
+
+    layers_raw = params.get("layers")
+    layers: list[str] | None
+    if layers_raw is None:
+        layers = ["structured"]
+    elif isinstance(layers_raw, list):
+        layers = [str(x) for x in layers_raw]
+    else:
+        layers = ["structured"]
+    include_all = bool(params.get("all_layers"))
+    return terminal_log.list_entries(
+        limit=int(params.get("limit", 500)),
+        since_id=int(params.get("since_id", 0)),
+        layers=None if include_all else layers,
+    )
+
+
+def handle_terminal_clear(params: dict[str, Any], _ctx: RpcContext) -> Any:
+    from oyst_core import terminal_log
+    from oyst_core.rpc_errors import RpcValidationError
+
+    if not bool(params.get("confirm")):
+        raise RpcValidationError("terminal.clear requires confirm=true")
+    return terminal_log.clear()
+
+
+def handle_terminal_export(params: dict[str, Any], _ctx: RpcContext) -> Any:
+    from oyst_core import terminal_log
+
+    return terminal_log.export(
+        str(params.get("path") or ""),
+        fmt=str(params.get("format") or "txt"),
+    )

@@ -92,9 +92,17 @@ def build_harden_page(wizard: SetupWizard, harden_box: Gtk.Box) -> None:
     harden_box.append(expander)
 
     harden_group = Adw.PreferencesGroup(title="Host firewall")
-    wizard.enable_firewall_row = Adw.SwitchRow(title="Enable host firewall (SSH-safe)")
+    note = Gtk.Label(
+        label="Choose and apply a managed firewall on the Firewall page (previous step).",
+        xalign=0,
+        wrap=True,
+    )
+    note.add_css_class("dim-label")
+    harden_box.append(note)
+    # Keep row for Auto-Install / harden recipe compatibility (hidden from focus).
+    wizard.enable_firewall_row = Adw.SwitchRow(title="Include firewall in harden apply")
     wizard.enable_firewall_row.set_subtitle(
-        "Enables UFW or firewalld only when an SSH allow can be ensured; never forces lockout",
+        "When on, Apply hardenings also ensures the Firewall page selection",
     )
     wizard.enable_firewall_row.set_active(True)
     harden_group.add(wizard.enable_firewall_row)
@@ -136,7 +144,8 @@ def enabled_harden_step_ids(wizard: SetupWizard) -> list[str]:
         if switches.get(key) is None or switches[key].get_active()
     ]
     if wizard.enable_firewall_row.get_active():
-        ids.append("firewall-ensure")
+        # Firewall page Apply / Auto-Install call firewall.select separately.
+        pass
     return ids
 
 

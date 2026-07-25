@@ -24,6 +24,15 @@ uv run oyst-cli status assess --json
 
 First bootstrap can take several minutes (network + signature updates). Soft-failed steps (schedule timer, linger) are non-fatal; fix later with `oyst-cli schedule apply`.
 
+The setup wizard includes a **Firewall** page: choose UFW, firewalld, or keep the host as-is. Prefer one manager only (never UFW and firewalld together). Soft-swap with:
+
+```bash
+uv run oyst-cli firewall select ufw --confirm   # or firewalld|none
+uv run oyst-cli firewall recommend --json
+```
+
+Managed rules are edited in the GUI **Shield** tab once UFW or firewalld is active.
+
 Or step-by-step:
 
 ```bash
