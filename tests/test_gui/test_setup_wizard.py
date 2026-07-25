@@ -20,11 +20,14 @@ def test_page_titles_include_host_hardening() -> None:
         "Security packs",
         "Preferences",
         "Scheduling",
+        "Firewall",
         "Host hardening",
         "Ready",
     )
-    assert len(PAGE_TITLES) == 6
+    assert len(PAGE_TITLES) == 7
     assert "Bootstrap" not in PAGE_TITLES
+    assert "Firewall" in PAGE_TITLES
+    assert "Host hardening" in PAGE_TITLES
 
 
 def test_format_check_summary_lists_names() -> None:

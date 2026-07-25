@@ -11,8 +11,11 @@ automatable controls (not a Level 2 certification claim).
 | Security module coverage ≥85% | `uv run python scripts/check_security_coverage.py` | Regressions in privileged modules cannot drop below floor |
 | Bandit MEDIUM+ | `uv tool run bandit -c bandit.yaml -r oyst_core oyst_cli -ll -ii` | SAST (injection / unsafe subprocess patterns) |
 | pip-audit | `uv tool run pip-audit` | Known dependency CVEs |
+| Gitleaks | `.github/workflows/security-scan.yml` | Secrets in git history / working tree |
+| Semgrep | `.github/workflows/security-scan.yml` (`p/python`, `p/security-audit`) | Additional SAST on `oyst_core` / `oyst_cli` |
+| OpenSSF Scorecard | `.github/workflows/scorecard.yml` (blocking) | Supply-chain / repo hygiene score |
 | GUI subprocess ban | CI `rg` + `test_no_security_subprocess_in_gui` | ADR-002: GUI uses `OystClient` only |
-| Global coverage | `fail_under = 58` in `pyproject.toml` | Broader quality (not a security floor) |
+| Global coverage | `fail_under = 65` in `pyproject.toml` | Broader quality (not a security floor) |
 
 `scripts/check.sh` (non-`--quick`) and GitHub CI run the security marker suite,
 security coverage, Bandit, and pip-audit after the usual triad.
@@ -44,9 +47,14 @@ allowlisted `subprocess` argv construction in the privileged helper. Inline
 
 ## Residuals
 
-- OpenSSF Scorecard remains informational (`continue-on-error`).
-- Full ASVS Level 2 / DAST / live GUI fuzzing are out of scope for this gate set.
+- Full ASVS Level 2 certification and live GUI DAST/ZAP remain out of scope
+  (commit-time gates only; no Level 2 claim).
 - Peercred cross-UID is covered in `test_rpc_auth_hardening` via mocked
   `SO_PEERCRED` (no live cross-UID socket required).
 - Dependency CVE exceptions (if ever needed) go in
   [`dependency-exceptions.md`](dependency-exceptions.md) with an expiry note.
+- Gitleaks/Semgrep run in GitHub Actions (`security-scan.yml`); they are not
+  duplicated in `scripts/check.sh` (no heavy local deps).
+- Semgrep excludes `insecure-file-permissions` (intentional `0o700`/`0o750`/`0o711`
+  hardening) and `dynamic-urllib-use-detected` (HTTPS scheme-gated fetches of
+  pinned upstream URLs; Bandit B310 skips apply). XML parsing uses `defusedxml`.

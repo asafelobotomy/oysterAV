@@ -9,6 +9,7 @@ import shutil
 import tarfile
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from oyst_core.privileged.helper import run_privileged_install_script
@@ -23,7 +24,10 @@ MALDET_SHA256 = "76f1d260dac5e0bb3ca487f8d3e119655196de87b08ec89dfd73155e083feb5
 
 
 def _download(url: str, dest: Path) -> None:
-    with urlopen(url, timeout=120) as response:  # noqa: S310 — fixed upstream URL  # nosec B310
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError(f"refusing non-https download URL: {url!r}")
+    with urlopen(url, timeout=120) as response:  # noqa: S310  # nosec B310
         dest.write_bytes(response.read())
 
 

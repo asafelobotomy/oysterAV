@@ -6,7 +6,9 @@ import re
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
-from xml.etree import ElementTree as ET
+from xml.etree.ElementTree import Element
+
+import defusedxml.ElementTree as ET
 
 from oyst_core.security_news_sources import SEVERITY_RULES
 
@@ -25,7 +27,7 @@ def _local_tag(tag: str) -> str:
     return local_tag(tag)
 
 
-def child_text(parent: ET.Element, names: set[str]) -> str:
+def child_text(parent: Element, names: set[str]) -> str:
     for child in parent:
         if local_tag(child.tag) in names:
             text = (child.text or "").strip()
@@ -34,7 +36,7 @@ def child_text(parent: ET.Element, names: set[str]) -> str:
             # Atom link may be empty with href=
             href = child.attrib.get("href")
             if href:
-                return href.strip()
+                return str(href).strip()
             # content:encoded / description may nest HTML text in descendants
             joined = "".join(child.itertext()).strip()
             if joined:
@@ -42,23 +44,23 @@ def child_text(parent: ET.Element, names: set[str]) -> str:
     return ""
 
 
-def child_link(parent: ET.Element) -> str:
+def child_link(parent: Element) -> str:
     for child in parent:
         if local_tag(child.tag) != "link":
             continue
         href = child.attrib.get("href")
         if href:
-            return href.strip()
+            return str(href).strip()
         text = (child.text or "").strip()
         if text:
             return text
     # RDF / RSS 1.0 often uses rdf:about on the item
     about = parent.attrib.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about")
     if about:
-        return about.strip()
+        return str(about).strip()
     about = parent.attrib.get("about")
     if about:
-        return about.strip()
+        return str(about).strip()
     return ""
 
 
@@ -81,7 +83,7 @@ def parse_datetime(raw: str) -> datetime | None:
         return None
 
 
-def entry_published(entry: ET.Element) -> str:
+def entry_published(entry: Element) -> str:
     for name in ("published", "updated", "pubDate", "date"):
         value = child_text(entry, {name})
         if value:
@@ -89,7 +91,7 @@ def entry_published(entry: ET.Element) -> str:
     return ""
 
 
-def entry_description(entry: ET.Element) -> str:
+def entry_description(entry: Element) -> str:
     raw = child_text(entry, {"description", "summary", "content", "encoded"})
     if not raw:
         return ""
@@ -125,7 +127,7 @@ def parse_feed_xml(source: str, xml_text: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     root_name = local_tag(root.tag)
 
-    entries: list[ET.Element] = []
+    entries: list[Element] = []
     if root_name == "feed":
         entries = [el for el in root if local_tag(el.tag) == "entry"]
     elif root_name in ("rss", "RDF"):

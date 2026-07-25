@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.0",
+    "defusedxml>=0.7.1",
     "pydantic>=2.0.0",
 ]
 
@@ -34,6 +35,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "mypy>=1.11.0",
     "ruff>=0.6.0",
+    "types-defusedxml>=0.7.0.20260504",
 ]
 all = ["oysterav[gui,dev]"]
 
@@ -64,7 +66,7 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
-fail_under = 58
+fail_under = 65
 
 [tool.ruff]
 line-length = 100
@@ -91,6 +93,11 @@ packages = ["oyst_core", "oyst_cli", "oysterav"]
 [[tool.mypy.overrides]]
 module = ["gi.*", "gi.repository.*"]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "types-defusedxml>=0.7.0.20260504",
+]
 
 [tool.hatch.envs.default.scripts]
 check = "scripts/check.sh"

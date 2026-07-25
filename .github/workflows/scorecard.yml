@@ -1,6 +1,6 @@
 # OpenSSF Scorecard
 
-# Informational / non-blocking until score stabilizes (see docs/security/).
+# Blocking on default branch (see docs/security/test-gates.md).
 name: Scorecard
 
 on:
@@ -17,8 +17,6 @@ jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
-    # Do not fail the default branch on Scorecard regressions yet.
-    continue-on-error: true
     permissions:
       security-events: write
       id-token: write

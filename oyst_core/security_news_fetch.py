@@ -10,8 +10,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
-from xml.etree import ElementTree as ET
 
 from oyst_core.security_news_parse import parse_datetime, parse_feed_xml
 from oyst_core.security_news_sources import (
@@ -54,13 +54,16 @@ def resolve_max_age_days_from_config() -> int:
 
 
 def _fetch_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError(f"refusing non-https news URL: {url!r}")
     req = Request(
         url,
         headers={
             "User-Agent": "oysterAV/security-news (+https://github.com/asafelobotomy/oysterAV)"
         },
     )
-    with urlopen(req, timeout=FETCH_TIMEOUT_S) as response:  # noqa: S310 — fixed official URLs  # nosec B310
+    with urlopen(req, timeout=FETCH_TIMEOUT_S) as response:  # noqa: S310  # nosec B310
         raw = response.read()
         if isinstance(raw, bytes):
             return raw.decode("utf-8", errors="replace")
@@ -220,7 +223,7 @@ def fetch_security_news(
         try:
             xml_text = _fetch_url(src.url)
             batches.append(parse_feed_xml(src.label, xml_text))
-        except (OSError, URLError, ET.ParseError, TimeoutError, ValueError) as exc:
+        except (OSError, URLError, TimeoutError, ValueError) as exc:
             _logger.warning("security news fetch failed for %s: %s", src.label, exc)
             errors.append({"source": src.label, "error": str(exc)})
 

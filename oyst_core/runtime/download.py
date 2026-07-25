@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from oyst_core.runtime.checksums import verify_file_sha256
@@ -20,8 +21,11 @@ def download_file(
     expected_sha256: str | None = None,
     on_progress: ProgressCallback | None = None,
 ) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError(f"refusing non-https download URL: {url!r}")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with urlopen(url, timeout=180) as response:  # noqa: S310 — fixed upstream URLs  # nosec B310
+    with urlopen(url, timeout=180) as response:  # noqa: S310  # nosec B310
         total_header = response.headers.get("Content-Length")
         total = int(total_header) if total_header and total_header.isdigit() else 0
         written = 0
