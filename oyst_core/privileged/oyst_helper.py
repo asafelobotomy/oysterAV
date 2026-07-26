@@ -26,6 +26,7 @@ from oyst_core.privileged.helper_firewall import (
     _has_flag,
     _parse_flag,
 )
+from oyst_core.privileged.helper_firewall_batch import run_ufw_batch
 from oyst_core.privileged.helper_install_script import seal_and_run_install_tarball
 from oyst_core.privileged.helper_sealed_scanner import seal_and_run_scanner
 from oyst_core.privileged.helper_services import (
@@ -38,6 +39,7 @@ from oyst_core.privileged.helper_services import (
 from oyst_core.privileged.helper_setup_concert import run_setup_concert
 from oyst_core.privileged.helper_setup_harden import run_setup_harden
 from oyst_core.privileged.helper_validate import (
+    ALLOWED_OYSTERAV_PACKAGES,
     ALLOWED_PACKAGE_MANAGERS,
     ALLOWED_SCANNER_BINARIES,
     CLAMONACC_FLAGS,
@@ -57,6 +59,7 @@ from oyst_core.privileged.helper_validate import (
 )
 
 __all__ = [
+    "ALLOWED_OYSTERAV_PACKAGES",
     "ALLOWED_PACKAGE_MANAGERS",
     "ALLOWED_SCANNER_BINARIES",
     "CLAMONACC_FLAGS",
@@ -177,6 +180,8 @@ def run_helper_argv(argv: Sequence[str]) -> int:
         "rkhunter-whitelist": _build_rkhunter_whitelist_argv,
         "clamd-cocontrol": _build_clamd_cocontrol_argv,
     }
+    if subcommand == "firewall" and len(argv) >= 3 and argv[1] == "ufw" and argv[2] == "batch":
+        return run_ufw_batch(argv[3:])
     if subcommand in builders:
         if subcommand in ("systemctl-up", "maldet-config"):
             print(

@@ -38,6 +38,7 @@ LONG_RPC_METHODS = frozenset(
         "firewall.set_enabled",
         "firewall.select",
         "firewall.ufw_rule",
+        "firewall.ufw_batch",
         "firewall.ufw_default",
         "firewall.firewalld_port",
         "firewall.firewalld_service",
@@ -55,6 +56,11 @@ LONG_RPC_METHODS = frozenset(
         "clamav.ensure_disable_cache",
         "schedule.apply",
         "schedule.enable_linger",
+        "schedule.install",
+        "news.refresh",
+        "updates.check",
+        "history.export",
+        "history.export_all",
     }
 )
 

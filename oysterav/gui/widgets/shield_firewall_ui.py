@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import gi
 
@@ -22,6 +22,11 @@ from oysterav.gui.widgets.shield_firewall_dialogs import (
     present_add_rule_dialog,
     present_ufw_default_dialog,
 )
+from oysterav.gui.widgets.shield_firewall_rules_ui import (
+    build_rules_list,
+    present_delete_selected,
+    rebuild_rule_rows,
+)
 
 if TYPE_CHECKING:
     from oysterav.gui.widgets.shield import ShieldPage
@@ -32,7 +37,9 @@ __all__ = [
     "on_managed_toggled",
     "present_add_rule_dialog",
     "present_backend_picker",
+    "present_delete_selected",
     "present_ufw_default_dialog",
+    "rebuild_rule_rows",
     "update_firewall_posture",
     "wire_rich_rule_buttons",
 ]
@@ -67,22 +74,29 @@ def update_firewall_posture(page: ShieldPage, active: str, *, conflict: bool) ->
             continue
         if key == "add":
             btn.set_visible(managed and not conflict)
+        elif key == "delete_selected":
+            btn.set_visible(active == "ufw" and not conflict)
         elif key == "ufw_defaults":
             btn.set_visible(active == "ufw" and not conflict)
         elif key == "fw_reload":
             btn.set_visible(active == "firewalld" and not conflict)
+    from oysterav.gui.widgets.shield_firewall_rules_ui import update_delete_selected_sensitive
+
+    update_delete_selected_sensitive(page)
 
 
 def build_rules_section(
     *,
     on_export: Callable[[], None],
     on_add: Callable[[], None],
+    on_delete_selected: Callable[[], None],
     on_default: Callable[[], None],
     on_fw_reload: Callable[[], None],
     on_choose: Callable[[], None] | None = None,
 ) -> tuple[
     Gtk.Box,
-    Gtk.TextView,
+    Adw.PreferencesGroup,
+    Gtk.ScrolledWindow,
     Gtk.TextBuffer,
     Adw.PreferencesGroup,
     Adw.EntryRow,
@@ -94,21 +108,24 @@ def build_rules_section(
     group = Adw.PreferencesGroup(
         title="Firewall rules",
         description=(
-            "Structured allow/deny when UFW or firewalld is managed. "
-            "firewalld rich rules below; plan/nft stay CLI."
+            "Allow/deny ports when UFW or firewalld is managed. "
+            "Select rules to delete several at once; firewalld uses Add rule… or rich rules."
         ),
     )
     actions = Adw.ActionRow(title="Actions")
     btns: dict[str, Gtk.Button] = {}
-    for key, label, cb in (
-        ("refresh", "Refresh", on_export),
-        ("add", "Add rule…", on_add),
-        ("ufw_defaults", "UFW defaults…", on_default),
-        ("fw_reload", "firewalld reload", on_fw_reload),
-        ("choose", "Choose managed firewall…", on_choose or (lambda: None)),
+    for key, label, cb, destructive in (
+        ("refresh", "Refresh", on_export, False),
+        ("add", "Add rule…", on_add, False),
+        ("delete_selected", "Delete selected", on_delete_selected, True),
+        ("ufw_defaults", "UFW defaults…", on_default, False),
+        ("fw_reload", "firewalld reload", on_fw_reload, False),
+        ("choose", "Choose managed firewall…", on_choose or (lambda: None), False),
     ):
-        btn = make_button(label, row_suffix=True)
+        btn = make_button(label, row_suffix=True, destructive=destructive)
         btn.connect("clicked", lambda *_a, c=cb: c())
+        if key == "delete_selected":
+            btn.set_sensitive(False)
         actions.add_suffix(btn)
         btns[key] = btn
     group.add(actions)
@@ -127,15 +144,10 @@ def build_rules_section(
     rich.add(btn_row)
     outer.append(rich)
 
-    scrolled = Gtk.ScrolledWindow()
-    scrolled.set_min_content_height(160)
-    scrolled.set_vexpand(True)
-    view = Gtk.TextView(editable=False, cursor_visible=False, monospace=True)
-    view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-    buf = view.get_buffer()
-    scrolled.set_child(view)
-    outer.append(scrolled)
-    return outer, view, buf, rich, entry, add_btn, rem_btn, btns
+    rules_list, fallback, buf = build_rules_list()
+    outer.append(rules_list)
+    outer.append(fallback)
+    return outer, rules_list, fallback, buf, rich, entry, add_btn, rem_btn, btns
 
 
 def present_backend_picker(page: ShieldPage) -> None:
@@ -178,21 +190,41 @@ def wire_rich_rule_buttons(
     add_btn: Gtk.Button,
     rem_btn: Gtk.Button,
 ) -> None:
+    from oyst_core.privileged.validators import rich_rule_ssh_lockout_risk
 
     def _run(action: str) -> None:
         rule = entry.get_text().strip()
         if not rule:
             page._set_status("Enter a rich rule first")
             return
+        force = False
+        if action == "add":
+            try:
+                force = rich_rule_ssh_lockout_risk(rule)
+            except ValueError:
+                force = False
         confirm_and_run(
             page,
             heading=f"{action.title()} rich rule?",
-            body=rule,
-            action_id=action,
-            action_label=action.title(),
-            destructive=action == "remove",
-            worker=lambda: request_firewall_firewalld_rich_rule(page.client, action, rule),
-            cli_hint=(f"oyst-cli firewall firewalld rich-rule {action} '{rule}' --confirm"),
+            body=(
+                f"{rule}\n\nThis rule drops/rejects SSH; force lockout risk required."
+                if force
+                else rule
+            ),
+            action_id="force" if force else action,
+            action_label="Apply (force lockout risk)" if force else action.title(),
+            destructive=action == "remove" or force,
+            worker=lambda: request_firewall_firewalld_rich_rule(
+                page.client,
+                action,
+                rule,
+                force_lockout_risk=force,
+            ),
+            cli_hint=(
+                f"oyst-cli firewall firewalld rich-rule {action} '{rule}'"
+                + (" --force-lockout-risk" if force else "")
+                + " --confirm"
+            ),
         )
 
     add_btn.connect("clicked", lambda *_: _run("add"))
@@ -204,20 +236,36 @@ def on_managed_toggled(page: ShieldPage, row: Adw.SwitchRow) -> None:
         return
     want = row.get_active()
     if want:
+        active = getattr(page, "_fw_active", "") or ""
+        nft_note = ""
+        if active == "nft-direct":
+            nft_note = (
+                " Host nftables may already filter traffic; enabling adds a managed "
+                "layer oysterAV can edit."
+            )
+
+        def _cancel_enable() -> None:
+            _clear_expect(page)
+            _revert_switch(page, False)
+
+        def _start_enable() -> dict[str, Any]:
+            page._expect_managed = True
+            return request_firewall_set_enabled(page.client, True)
+
         confirm_and_run(
             page,
             heading="Enable managed firewall?",
             body=(
                 "Enables UFW or firewalld when installed (SSH-safe). "
                 "Host nftables tables are not edited; a managed layer may start "
-                "alongside existing host filtering."
+                f"alongside existing host filtering.{nft_note}"
             ),
             action_id="enable",
             action_label="Enable",
-            worker=lambda: request_firewall_set_enabled(page.client, True),
+            worker=_start_enable,
             cli_hint="oyst-cli firewall ensure-enable --confirm",
-            on_cancel=lambda: _revert_switch(page, False),
-            on_fail=lambda: _revert_switch(page, False),
+            on_cancel=_cancel_enable,
+            on_fail=_cancel_enable,
             after_ok=lambda _r: _after_managed_enable(page),
         )
         return
@@ -229,11 +277,19 @@ def on_managed_toggled(page: ShieldPage, row: Adw.SwitchRow) -> None:
         action_label="Disable",
         destructive=True,
         worker=lambda: request_firewall_set_enabled(page.client, False),
-        cli_hint="oyst-cli firewall ufw disable --confirm",
+        cli_hint=(
+            "oyst-cli firewall firewalld disable --confirm"
+            if getattr(page, "_fw_active", "") == "firewalld"
+            else "oyst-cli firewall ufw disable --confirm"
+        ),
         on_cancel=lambda: _revert_switch(page, True),
         on_fail=lambda: _revert_switch(page, True),
         after_ok=lambda _r: page.refresh(),
     )
+
+
+def _clear_expect(page: ShieldPage) -> None:
+    page._expect_managed = False
 
 
 def _after_managed_enable(page: ShieldPage) -> None:

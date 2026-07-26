@@ -10,6 +10,7 @@ from oyst_core.privileged.validators import (
     FIREWALLD_SERVICE_ACTIONS,
     UFW_DEFAULT_DIRS,
     UFW_DEFAULT_POLICIES,
+    UFW_DELETE_VERBS,
     UFW_LIFECYCLE,
     UFW_RULE_ACTIONS,
     validate_cidr,
@@ -49,9 +50,21 @@ def _build_ufw_argv(argv: Sequence[str]) -> list[str]:
         proto, rest = _parse_flag(rest, "--proto")
         from_addr, rest = _parse_flag(rest, "--from")
         to_port, rest = _parse_flag(rest, "--to-port")
+        rule_action, rest = _parse_flag(rest, "--rule-action")
         if rest:
             raise ValueError(f"unexpected ufw args: {' '.join(rest)}")
-        cmd = ["ufw", action]
+        # ufw wants: delete allow 123/tcp  (not: delete 123/tcp)
+        if action == "delete":
+            verb = (rule_action or "allow").lower()
+            if verb not in UFW_DELETE_VERBS:
+                raise ValueError(
+                    "delete --rule-action must be allow|deny|limit|reject",
+                )
+            cmd = ["ufw", "delete", verb]
+        else:
+            if rule_action is not None:
+                raise ValueError("--rule-action is only valid with delete")
+            cmd = ["ufw", action]
         port_val = port or to_port
         if from_addr:
             # Full syntax: proto must precede "to" (ufw rejects "... port 22 tcp").
@@ -72,14 +85,20 @@ def _build_ufw_argv(argv: Sequence[str]) -> list[str]:
         raise ValueError("ufw rule requires --port or --to-port")
     if action == "default":
         if len(rest) < 2:
-            raise ValueError("usage: ufw default <incoming|outgoing|routed> <allow|deny|reject>")
-        direction = rest[0]
-        policy = rest[1]
-        if direction not in UFW_DEFAULT_DIRS:
-            raise ValueError(f"invalid default direction: {direction}")
-        if policy not in UFW_DEFAULT_POLICIES:
-            raise ValueError(f"invalid default policy: {policy}")
-        return ["ufw", "default", direction, policy]
+            raise ValueError(
+                "usage: ufw default <allow|deny|reject> <incoming|outgoing|routed>",
+            )
+        # Accept either CLI order; emit ufw's required policy-then-direction.
+        a, b = rest[0], rest[1]
+        if a in UFW_DEFAULT_POLICIES and b in UFW_DEFAULT_DIRS:
+            policy, direction = a, b
+        elif a in UFW_DEFAULT_DIRS and b in UFW_DEFAULT_POLICIES:
+            direction, policy = a, b
+        else:
+            raise ValueError(
+                "usage: ufw default <allow|deny|reject> <incoming|outgoing|routed>",
+            )
+        return ["ufw", "default", policy, direction]
     if action in UFW_LIFECYCLE:
         if rest:
             raise ValueError(f"unexpected ufw args: {' '.join(rest)}")

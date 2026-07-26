@@ -72,10 +72,22 @@ def handle_firewall_recommend(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 
 
 def handle_firewall_rules(params: dict[str, Any], _ctx: RpcContext) -> Any:
+    from oyst_core.packs.firewall import FirewallPack
     from oyst_core.packs.firewall_ops import FirewallOps
+    from oyst_core.packs.firewall_ufw_read import (
+        parse_ufw_status_entries,
+        ufw_rule_entries_from_files,
+    )
 
     text = FirewallOps().verbose_status()
-    return {"rules": text, "verbose": bool(params.get("verbose", True))}
+    entries: list[dict[str, object]] = []
+    if str(FirewallPack().detect().get("active", "none")) == "ufw":
+        entries = parse_ufw_status_entries(text) or ufw_rule_entries_from_files()
+    return {
+        "rules": text,
+        "entries": entries,
+        "verbose": bool(params.get("verbose", True)),
+    }
 
 
 def handle_firewall_export(_params: dict[str, Any], _ctx: RpcContext) -> Any:
@@ -91,15 +103,33 @@ def handle_firewall_ufw_rule(params: dict[str, Any], _ctx: RpcContext) -> Any:
     if action not in {"allow", "deny", "limit", "delete"}:
         raise RpcValidationError("action must be allow|deny|limit|delete")
     port = params.get("port")
+    rule_action = params.get("rule_action")
     return _fw_dict(
         FirewallOps().ufw_rule(
             action,
             port=str(port) if port is not None else None,
             proto=str(params.get("proto") or "tcp"),
             from_addr=(str(params["from_addr"]) if params.get("from_addr") else None),
+            rule_action=(str(rule_action) if rule_action is not None else None),
             dry_run=bool(params.get("dry_run", False)),
             force_lockout=bool(params.get("force_lockout_risk", False)),
         ),
+    )
+
+
+def handle_firewall_ufw_batch(params: dict[str, Any], _ctx: RpcContext) -> Any:
+    from oyst_core.packs.firewall_batch import ufw_batch
+
+    rules_raw = params.get("rules")
+    if not isinstance(rules_raw, list) or not rules_raw:
+        raise RpcValidationError("rules must be a non-empty list")
+    rules = [r for r in rules_raw if isinstance(r, dict)]
+    if len(rules) != len(rules_raw):
+        raise RpcValidationError("each rule must be an object")
+    return ufw_batch(
+        rules,
+        force_lockout=bool(params.get("force_lockout_risk", False)),
+        dry_run=bool(params.get("dry_run", False)),
     )
 
 
@@ -134,6 +164,7 @@ def handle_firewall_firewalld_port(params: dict[str, Any], _ctx: RpcContext) -> 
             str(params.get("port_spec") or ""),
             zone=str(params.get("zone") or "public"),
             dry_run=bool(params.get("dry_run", False)),
+            force_lockout=bool(params.get("force_lockout_risk", False)),
         ),
     )
 
@@ -150,6 +181,7 @@ def handle_firewall_firewalld_service(params: dict[str, Any], _ctx: RpcContext) 
             str(params.get("service") or ""),
             zone=str(params.get("zone") or "public"),
             dry_run=bool(params.get("dry_run", False)),
+            force_lockout=bool(params.get("force_lockout_risk", False)),
         ),
     )
 
@@ -178,6 +210,7 @@ def handle_firewall_firewalld_rich_rule(params: dict[str, Any], _ctx: RpcContext
             rule,
             zone=str(params.get("zone") or "public"),
             dry_run=bool(params.get("dry_run", False)),
+            force_lockout=bool(params.get("force_lockout_risk", False)),
         ),
     )
 

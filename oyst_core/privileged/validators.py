@@ -36,6 +36,7 @@ ALLOWED_SYSTEMCTL_ACTIONS = frozenset(
 )
 
 UFW_RULE_ACTIONS = frozenset({"allow", "deny", "limit", "delete"})
+UFW_DELETE_VERBS = frozenset({"allow", "deny", "limit", "reject"})
 UFW_DEFAULT_DIRS = frozenset({"incoming", "outgoing", "routed"})
 UFW_DEFAULT_POLICIES = frozenset({"allow", "deny", "reject"})
 UFW_LIFECYCLE = frozenset({"enable", "disable", "reload"})
@@ -55,7 +56,10 @@ def validate_cidr(value: str) -> str:
 
 
 def validate_port(value: str) -> str:
-    port = int(value)
+    cleaned = value.strip()
+    if not cleaned.isdigit():
+        raise ValueError(f"port must be an integer 1-65535, got {value!r}")
+    port = int(cleaned)
     if port < 1 or port > 65535:
         raise ValueError(f"port out of range: {port}")
     return str(port)
@@ -184,3 +188,14 @@ def validate_rich_rule(rule: str) -> str:
         else:
             validate_ip(src)
     return cleaned
+
+
+def rich_rule_ssh_lockout_risk(rule: str) -> bool:
+    """True when a validated rich rule would drop/reject SSH (service or port 22)."""
+    cleaned = validate_rich_rule(rule)
+    lowered = cleaned.lower()
+    if not lowered.endswith((" drop", " reject")):
+        return False
+    if "service name=ssh" in lowered:
+        return True
+    return "port port=22 " in lowered

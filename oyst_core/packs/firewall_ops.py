@@ -11,6 +11,7 @@ from oyst_core.packs.firewall import FirewallPack, invalidate_firewall_detect_ca
 from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.runner import run_command, which
 from oyst_core.privileged.validators import (
+    rich_rule_ssh_lockout_risk,
     validate_cidr,
     validate_ip,
     validate_port,
@@ -54,11 +55,9 @@ class FirewallOps:
 
     def _snapshot(self, backend: str) -> str:
         if backend == "ufw":
-            try:
-                res = run_command(["ufw", "status", "verbose"], timeout=30)
-                return res.stdout.strip()
-            except (ValueError, OSError):
-                return ""
+            from oyst_core.packs.firewall_ufw_read import ufw_status_or_files
+
+            return ufw_status_or_files(run_command, ["ufw", "status", "verbose"])
         try:
             res = run_command(["firewall-cmd", "--list-all"], timeout=30)
             return res.stdout.strip()
@@ -66,11 +65,9 @@ class FirewallOps:
             return ""
 
     def _ufw_rules_text(self) -> str:
-        try:
-            res = run_command(["ufw", "status", "verbose"], timeout=30)
-            return res.stdout.strip()
-        except (ValueError, OSError):
-            return ""
+        from oyst_core.packs.firewall_ufw_read import ufw_status_or_files
+
+        return ufw_status_or_files(run_command, ["ufw", "status", "verbose"])
 
     def _ssh_allowed(self, backend: str) -> bool:
         if backend == "ufw":
@@ -183,24 +180,39 @@ class FirewallOps:
         port: str | None = None,
         proto: str = "tcp",
         from_addr: str | None = None,
+        rule_action: str | None = None,
         dry_run: bool = False,
         force_lockout: bool = False,
     ) -> FirewallResult:
-        self._active_backend()
-        port_val = validate_port(port) if port else None
-        if action in {"delete", "deny"} and port_val == "22" and not force_lockout and not dry_run:
-            return FirewallResult(
-                ok=False,
-                message="refusing to delete/deny SSH port 22; use --force-lockout-risk",
-            )
-        argv = ["ufw", action]
-        if port_val:
-            argv.extend(["--port", port_val, "--proto", validate_proto(proto)])
-        if from_addr:
-            src = from_addr.strip()
-            validated = validate_cidr(src) if "/" in src else validate_ip(src)
-            argv.extend(["--from", validated])
-        return self._run(f"ufw.{action}", argv, dry_run=dry_run)
+        try:
+            self._active_backend()
+            port_val = validate_port(port) if port else None
+            deny22 = action in {"delete", "deny"} and port_val == "22"
+            if deny22 and not force_lockout and not dry_run:
+                return FirewallResult(
+                    ok=False,
+                    message="refusing to delete/deny SSH port 22; use --force-lockout-risk",
+                )
+            argv = ["ufw", action]
+            if port_val:
+                argv.extend(["--port", port_val, "--proto", validate_proto(proto)])
+            if from_addr:
+                src = from_addr.strip()
+                validated = validate_cidr(src) if "/" in src else validate_ip(src)
+                argv.extend(["--from", validated])
+            if action == "delete":
+                verb = (rule_action or "allow").lower()
+                if verb not in {"allow", "deny", "limit", "reject"}:
+                    return FirewallResult(
+                        ok=False,
+                        message="rule_action must be allow|deny|limit|reject",
+                    )
+                argv.extend(["--rule-action", verb])
+            if not port_val and not from_addr:
+                return FirewallResult(ok=False, message="UFW rules require numeric --port 1-65535")
+            return self._run(f"ufw.{action}", argv, dry_run=dry_run)
+        except ValueError as exc:
+            return FirewallResult(ok=False, message=str(exc))
 
     def ufw_default(
         self,
@@ -211,7 +223,7 @@ class FirewallOps:
         force_lockout: bool = False,
     ) -> FirewallResult:
         self._active_backend()
-        argv = ["ufw", "default", direction, policy]
+        argv = ["ufw", "default", policy, direction]
         require_ssh = direction == "incoming" and policy in ("deny", "reject")
         return self._run(
             "ufw.default",
@@ -253,12 +265,24 @@ class FirewallOps:
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout: bool = False,
     ) -> FirewallResult:
         self._active_backend()
+        spec = validate_port_spec(port_spec)
+        if (
+            action == "remove-port"
+            and not force_lockout
+            and not dry_run
+            and spec.split("/", 1)[0] == "22"
+        ):
+            return FirewallResult(
+                ok=False,
+                message="refusing to remove SSH port 22; use --force-lockout-risk",
+            )
         argv = [
             "firewalld",
             action,
-            validate_port_spec(port_spec),
+            spec,
             "--zone",
             validate_zone(zone),
         ]
@@ -271,12 +295,24 @@ class FirewallOps:
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout: bool = False,
     ) -> FirewallResult:
         self._active_backend()
+        svc = validate_service_name(service)
+        if (
+            action == "remove-service"
+            and svc.lower() == "ssh"
+            and not force_lockout
+            and not dry_run
+        ):
+            return FirewallResult(
+                ok=False,
+                message="refusing to remove SSH service; use --force-lockout-risk",
+            )
         argv = [
             "firewalld",
             action,
-            validate_service_name(service),
+            svc,
             "--zone",
             validate_zone(zone),
         ]
@@ -289,12 +325,27 @@ class FirewallOps:
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout: bool = False,
     ) -> FirewallResult:
         self._active_backend()
+        cleaned = validate_rich_rule(rule)
+        if (
+            action == "add-rich-rule"
+            and not force_lockout
+            and not dry_run
+            and rich_rule_ssh_lockout_risk(cleaned)
+        ):
+            return FirewallResult(
+                ok=False,
+                message=(
+                    "refusing rich rule that drops/rejects SSH (port 22 or service ssh); "
+                    "use --force-lockout-risk"
+                ),
+            )
         argv = [
             "firewalld",
             action,
-            validate_rich_rule(rule),
+            cleaned,
             "--zone",
             validate_zone(zone),
         ]
@@ -326,8 +377,9 @@ class FirewallOps:
         det = self._pack.detect()
         active = str(det.get("active", "none"))
         if active == "ufw" and which("ufw"):
-            res = run_command(["ufw", "status", "numbered"], timeout=30)
-            return res.stdout.strip()
+            from oyst_core.packs.firewall_ufw_read import ufw_status_or_files
+
+            return ufw_status_or_files(run_command, ["ufw", "status", "numbered"])
         if active == "firewalld" and which("firewall-cmd"):
             res = run_command(["firewall-cmd", "--list-all-zones"], timeout=30)
             return res.stdout.strip()

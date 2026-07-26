@@ -21,6 +21,7 @@ from oyst_core.privilege.recipes import (
     build_setup_plan,
     split_scan_packs,
 )
+from oyst_core.privilege.recipes_firewall import build_ufw_batch_plan
 from oyst_core.privilege.recipes_update import build_update_all_plan
 from oyst_core.privilege.run import run_privilege_concert
 
@@ -34,6 +35,7 @@ __all__ = [
     "build_rkhunter_resolve_plan",
     "build_scan_privileged_plan",
     "build_setup_plan",
+    "build_ufw_batch_plan",
     "build_update_all_plan",
     "pack_priority",
     "preflight_body",

@@ -37,6 +37,15 @@ def test_build_ufw_allow_argv() -> None:
     assert argv == ["ufw", "allow", "22/tcp"]
 
 
+def test_build_ufw_delete_argv() -> None:
+    argv = _build_ufw_argv(["delete", "--port", "123", "--proto", "tcp"])
+    assert argv == ["ufw", "delete", "allow", "123/tcp"]
+    argv = _build_ufw_argv(
+        ["delete", "--port", "80", "--proto", "tcp", "--rule-action", "deny"],
+    )
+    assert argv == ["ufw", "delete", "deny", "80/tcp"]
+
+
 def test_build_ufw_allow_from_argv() -> None:
     argv = _build_ufw_argv(
         ["allow", "--port", "22", "--proto", "tcp", "--from", "192.0.2.0/24"],
@@ -76,6 +85,10 @@ def test_build_fail2ban_unban_flow_runs_compound(monkeypatch: pytest.MonkeyPatch
         fake_run,
     )
     monkeypatch.setattr(
+        "oyst_core.privileged.helper_fail2ban.resolve_trusted_argv",
+        lambda argv: list(argv),
+    )
+    monkeypatch.setattr(
         "oyst_core.privileged.helper_fail2ban._persist_fail2ban_ignoreip",
         fake_persist,
     )
@@ -113,6 +126,10 @@ def test_maldet_start_monitor_one_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "oyst_core.privileged.helper_services.subprocess.run",
         fake_run,
+    )
+    monkeypatch.setattr(
+        "oyst_core.privileged.helper_services.assert_lifecycle_grant_not_stale",
+        lambda **_k: None,
     )
     assert _build_maldet_config_argv(["start-monitor", "users"]) == ["true"]
     assert applied == ["users"]

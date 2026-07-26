@@ -83,6 +83,7 @@ HANDLERS: dict[str, Handler] = {
     "firewall.rules": shield_fw.handle_firewall_rules,
     "firewall.export": shield_fw.handle_firewall_export,
     "firewall.ufw_rule": shield_fw.handle_firewall_ufw_rule,
+    "firewall.ufw_batch": shield_fw.handle_firewall_ufw_batch,
     "firewall.ufw_default": shield_fw.handle_firewall_ufw_default,
     "firewall.firewalld_port": shield_fw.handle_firewall_firewalld_port,
     "firewall.firewalld_service": shield_fw.handle_firewall_firewalld_service,

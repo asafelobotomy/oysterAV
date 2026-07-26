@@ -73,6 +73,7 @@ class OystClientShieldApi:
         port: str | None = None,
         proto: str = "tcp",
         from_addr: str | None = None,
+        rule_action: str | None = None,
         dry_run: bool = False,
         force_lockout_risk: bool = False,
     ) -> dict[str, Any]:
@@ -86,7 +87,25 @@ class OystClientShieldApi:
             params["port"] = port
         if from_addr is not None:
             params["from_addr"] = from_addr
+        if rule_action is not None:
+            params["rule_action"] = rule_action
         return self._as_dict("firewall.ufw_rule", params)
+
+    def firewall_ufw_batch(
+        self,
+        rules: list[dict[str, Any]],
+        *,
+        dry_run: bool = False,
+        force_lockout_risk: bool = False,
+    ) -> dict[str, Any]:
+        return self._as_dict(
+            "firewall.ufw_batch",
+            {
+                "rules": rules,
+                "dry_run": dry_run,
+                "force_lockout_risk": force_lockout_risk,
+            },
+        )
 
     def firewall_ufw_default(
         self,
@@ -113,6 +132,7 @@ class OystClientShieldApi:
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout_risk: bool = False,
     ) -> dict[str, Any]:
         return self._as_dict(
             "firewall.firewalld_port",
@@ -121,6 +141,7 @@ class OystClientShieldApi:
                 "port_spec": port_spec,
                 "zone": zone,
                 "dry_run": dry_run,
+                "force_lockout_risk": force_lockout_risk,
             },
         )
 
@@ -131,6 +152,7 @@ class OystClientShieldApi:
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout_risk: bool = False,
     ) -> dict[str, Any]:
         return self._as_dict(
             "firewall.firewalld_service",
@@ -139,6 +161,7 @@ class OystClientShieldApi:
                 "service": service,
                 "zone": zone,
                 "dry_run": dry_run,
+                "force_lockout_risk": force_lockout_risk,
             },
         )
 
@@ -152,6 +175,7 @@ class OystClientShieldApi:
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout_risk: bool = False,
     ) -> dict[str, Any]:
         return self._as_dict(
             "firewall.firewalld_rich_rule",
@@ -160,6 +184,7 @@ class OystClientShieldApi:
                 "rule": rule,
                 "zone": zone,
                 "dry_run": dry_run,
+                "force_lockout_risk": force_lockout_risk,
             },
         )
 

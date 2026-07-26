@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from oyst_cli.commands.packs.firewall_cmd_firewalld import register_firewalld_commands
 from oyst_cli.commands.packs.firewall_cmd_manage import register_manage_commands
 from oyst_cli.confirm import require_confirm
 from oyst_cli.output import emit
@@ -19,6 +20,7 @@ def firewall_group() -> None:
 
 
 register_manage_commands(firewall_group)
+register_firewalld_commands(firewall_group)
 
 
 @firewall_group.command("detect")
@@ -169,6 +171,13 @@ def firewall_ufw_limit(
 @firewall_ufw_group.command("delete")
 @click.option("--port")
 @click.option("--proto", default="tcp", show_default=True)
+@click.option(
+    "--rule-action",
+    type=click.Choice(["allow", "deny", "limit", "reject"]),
+    default="allow",
+    show_default=True,
+    help="Original rule verb (ufw requires: delete allow 123/tcp)",
+)
 @click.option("--confirm", is_flag=True)
 @click.option("--force-lockout-risk", is_flag=True)
 @click.option("--dry-run", is_flag=True)
@@ -176,22 +185,68 @@ def firewall_ufw_limit(
 def firewall_ufw_delete(
     port: str | None,
     proto: str,
+    rule_action: str,
     confirm: bool,
     force_lockout_risk: bool,
     dry_run: bool,
     json_mode: bool,
 ) -> None:
-    """Delete UFW rule."""
+    """Delete UFW rule (emits ``ufw delete <rule-action> PORT/PROTO``)."""
     require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate UFW rules")
     result = FirewallOps().ufw_rule(
         "delete",
         port=port,
         proto=proto,
+        rule_action=rule_action,
         dry_run=dry_run,
         force_lockout=force_lockout_risk,
     )
     emit(result.__dict__, json_mode=json_mode)
     raise SystemExit(0 if result.ok else 2)
+
+
+@firewall_ufw_group.command("batch")
+@click.option(
+    "--rule",
+    "rules",
+    multiple=True,
+    help='JSON rule object, e.g. \'{"action":"allow","port":"443","proto":"tcp"}\'',
+)
+@click.option("--confirm", is_flag=True)
+@click.option("--force-lockout-risk", is_flag=True)
+@click.option("--dry-run", is_flag=True)
+@click.option("--json", "json_mode", is_flag=True)
+def firewall_ufw_batch(
+    rules: tuple[str, ...],
+    confirm: bool,
+    force_lockout_risk: bool,
+    dry_run: bool,
+    json_mode: bool,
+) -> None:
+    """Apply many UFW rules with one authentication."""
+    import json
+
+    from oyst_core.packs.firewall_batch import ufw_batch
+
+    require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate UFW rules")
+    if not rules:
+        raise click.UsageError("at least one --rule=… is required")
+    parsed: list[dict[str, object]] = []
+    for raw in rules:
+        try:
+            item = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise click.UsageError(f"invalid --rule JSON: {exc}") from exc
+        if not isinstance(item, dict):
+            raise click.UsageError("each --rule must be a JSON object")
+        parsed.append(item)
+    result = ufw_batch(
+        parsed,
+        force_lockout=force_lockout_risk,
+        dry_run=dry_run,
+    )
+    emit(result, json_mode=json_mode)
+    raise SystemExit(0 if result.get("ok") else 2)
 
 
 @firewall_ufw_group.command("default")
@@ -255,139 +310,5 @@ def firewall_ufw_disable(confirm: bool, dry_run: bool, json_mode: bool) -> None:
     """Disable UFW."""
     require_confirm(confirm, dry_run=dry_run, message="--confirm required to disable firewall")
     result = FirewallOps().ufw_lifecycle("disable", dry_run=dry_run)
-    emit(result.__dict__, json_mode=json_mode)
-    raise SystemExit(0 if result.ok else 2)
-
-
-@firewall_group.group("firewalld")
-def firewall_firewalld_group() -> None:
-    """firewalld rule management (when firewalld is active)."""
-
-
-@firewall_firewalld_group.command("add-port")
-@click.argument("port_spec")
-@click.option("--zone", default="public", show_default=True)
-@click.option("--confirm", is_flag=True)
-@click.option("--dry-run", is_flag=True)
-@click.option("--json", "json_mode", is_flag=True)
-def firewalld_add_port(
-    port_spec: str,
-    zone: str,
-    confirm: bool,
-    dry_run: bool,
-    json_mode: bool,
-) -> None:
-    """Add permanent port (e.g. 443/tcp)."""
-    require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate firewalld")
-    result = FirewallOps().firewalld_port("add-port", port_spec, zone=zone, dry_run=dry_run)
-    emit(result.__dict__, json_mode=json_mode)
-    raise SystemExit(0 if result.ok else 2)
-
-
-@firewall_firewalld_group.command("remove-port")
-@click.argument("port_spec")
-@click.option("--zone", default="public", show_default=True)
-@click.option("--confirm", is_flag=True)
-@click.option("--dry-run", is_flag=True)
-@click.option("--json", "json_mode", is_flag=True)
-def firewalld_remove_port(
-    port_spec: str,
-    zone: str,
-    confirm: bool,
-    dry_run: bool,
-    json_mode: bool,
-) -> None:
-    """Remove permanent port."""
-    require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate firewalld")
-    result = FirewallOps().firewalld_port("remove-port", port_spec, zone=zone, dry_run=dry_run)
-    emit(result.__dict__, json_mode=json_mode)
-    raise SystemExit(0 if result.ok else 2)
-
-
-@firewall_firewalld_group.command("add-service")
-@click.argument("service")
-@click.option("--zone", default="public", show_default=True)
-@click.option("--confirm", is_flag=True)
-@click.option("--dry-run", is_flag=True)
-@click.option("--json", "json_mode", is_flag=True)
-def firewalld_add_service(
-    service: str,
-    zone: str,
-    confirm: bool,
-    dry_run: bool,
-    json_mode: bool,
-) -> None:
-    """Add permanent service (e.g. ssh)."""
-    require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate firewalld")
-    result = FirewallOps().firewalld_service("add-service", service, zone=zone, dry_run=dry_run)
-    emit(result.__dict__, json_mode=json_mode)
-    raise SystemExit(0 if result.ok else 2)
-
-
-@firewall_firewalld_group.command("remove-service")
-@click.argument("service")
-@click.option("--zone", default="public", show_default=True)
-@click.option("--confirm", is_flag=True)
-@click.option("--dry-run", is_flag=True)
-@click.option("--json", "json_mode", is_flag=True)
-def firewalld_remove_service(
-    service: str,
-    zone: str,
-    confirm: bool,
-    dry_run: bool,
-    json_mode: bool,
-) -> None:
-    """Remove permanent service."""
-    require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate firewalld")
-    result = FirewallOps().firewalld_service("remove-service", service, zone=zone, dry_run=dry_run)
-    emit(result.__dict__, json_mode=json_mode)
-    raise SystemExit(0 if result.ok else 2)
-
-
-@firewall_firewalld_group.command("rich-rule")
-@click.argument("action", type=click.Choice(["add", "remove"]))
-@click.argument("rule")
-@click.option("--zone", default="public", show_default=True)
-@click.option("--confirm", is_flag=True)
-@click.option("--dry-run", is_flag=True)
-@click.option("--json", "json_mode", is_flag=True)
-def firewalld_rich_rule(
-    action: str,
-    rule: str,
-    zone: str,
-    confirm: bool,
-    dry_run: bool,
-    json_mode: bool,
-) -> None:
-    """Add or remove a rich rule."""
-    require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate firewalld")
-    fw_action = "add-rich-rule" if action == "add" else "remove-rich-rule"
-    result = FirewallOps().firewalld_rich_rule(fw_action, rule, zone=zone, dry_run=dry_run)
-    emit(result.__dict__, json_mode=json_mode)
-    raise SystemExit(0 if result.ok else 2)
-
-
-@firewall_firewalld_group.command("disable")
-@click.option("--confirm", is_flag=True)
-@click.option("--dry-run", is_flag=True)
-@click.option("--json", "json_mode", is_flag=True)
-def firewalld_disable(confirm: bool, dry_run: bool, json_mode: bool) -> None:
-    """Stop firewalld (managed Off; does not wipe zones)."""
-    require_confirm(
-        confirm,
-        dry_run=dry_run,
-        message="--confirm required to disable firewalld",
-    )
-    result = FirewallOps().firewalld_lifecycle("disable", dry_run=dry_run)
-    emit(result.__dict__, json_mode=json_mode)
-    raise SystemExit(0 if result.ok else 2)
-
-
-@firewall_firewalld_group.command("reload")
-@click.option("--dry-run", is_flag=True)
-@click.option("--json", "json_mode", is_flag=True)
-def firewalld_reload(dry_run: bool, json_mode: bool) -> None:
-    """Reload firewalld."""
-    result = FirewallOps().firewalld_reload(dry_run=dry_run)
     emit(result.__dict__, json_mode=json_mode)
     raise SystemExit(0 if result.ok else 2)

@@ -221,8 +221,8 @@ firewalld rich-rule Actions).
 | Managed firewall toggle | `firewall.set_enabled` | `firewall ensure-enable`; `firewall ufw disable` / `firewall firewalld disable` |
 | Choose / soft-swap backend | `firewall.select`, `firewall.recommend` | `firewall select ufw\|firewalld\|none`; `firewall recommend` |
 | Firewall status / Enable (compat) | `firewall.status`, `firewall.ensure_enable` | `firewall status`; `firewall ensure-enable --confirm` |
-| Rules list / refresh | `firewall.rules`, `firewall.export` | `firewall rules`; `firewall export` |
-| Add/delete allow/deny/limit | `firewall.ufw_rule` | `firewall ufw allow\|deny\|limit\|delete …` |
+| Rules list / refresh / remove | `firewall.rules`; `firewall.ufw_rule` / `firewall.ufw_batch` | `firewall rules`; `firewall ufw delete …`; `firewall ufw batch --rule=… --confirm` |
+| Add one or many UFW rules | `firewall.ufw_batch` | `firewall ufw batch --rule='{"action":"allow","port":"443","proto":"tcp"}' --confirm` |
 | UFW defaults | `firewall.ufw_default` | `firewall ufw default …` |
 | firewalld port/service + reload | `firewall.firewalld_port`, `firewall.firewalld_service`, `firewall.firewalld_reload` | `firewall firewalld …` |
 | firewalld rich-rule add/remove | `firewall.firewalld_rich_rule` | `firewall firewalld rich-rule add\|remove …` |
@@ -277,9 +277,9 @@ Settings Scheduling is the GUI editor for `[schedule]`; Apply materializes `oyst
 | GUI feature | RPC / client | CLI equivalent |
 |-------------|--------------|----------------|
 | **Run setup wizard** (under Maintenance) | Opens SetupWizard | Step through wizard, or use Auto-Install |
-| **Auto-Install** (wizard welcome) | `setup.run` + optional `firewall.select` | **`oyst-cli setup run --enable-linger`** then `firewall select` |
+| **Auto-Install** (wizard welcome) | `setup.run` with `firewall_backend` (single concert) | **`oyst-cli setup run --enable-linger [--firewall-backend=…] --confirm`** |
 | **Firewall** (wizard page) | `firewall.recommend`, `firewall.select` | `firewall recommend`; `firewall select ufw\|firewalld\|none --confirm` |
-| **Host hardening** (wizard) | `setup.run` (`harden_include`; optional `firewall.select`) | `oyst-cli setup run --skip-packs --skip-bootstrap --skip-schedule` or individual ensure-* |
+| **Host hardening** (wizard) | `setup.run` (`harden_include` + optional `firewall_backend`) | `oyst-cli setup run --skip-packs --skip-bootstrap --skip-schedule [--firewall-backend=…]` |
 
 ---
 
@@ -304,6 +304,9 @@ Pages: Welcome → Security packs → Preferences → Scheduling → **Firewall*
 | Cancel | — (no mark complete) | Do not run `setup run`; or `setup run --no-mark-complete` |
 
 **Auto-Install defaults:** quick profile, daily at 02:00, linger enabled, full runtime
+bootstrap path, hardenings + firewall in **one** admin authentication (`setup.run`
+with `firewall_backend` from the Firewall page). Preference
+`firewall.managed_backend` is saved only when select/ensure succeeds.
 bootstrap, safe ClamAV/rkhunter hardenings (clamd, fdpass, VirusEvent, DisableCache),
 and SSH-safe firewall enable when UFW/firewalld is available. On-access prevention
 stays on Settings → Real-time after path selection. Step-through Scheduling widgets
@@ -377,6 +380,7 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `firewall.rules` | `oyst-cli firewall rules` |
 | `firewall.export` | `oyst-cli firewall export` |
 | `firewall.ufw_rule` | `oyst-cli firewall ufw allow\|deny\|limit\|delete` |
+| `firewall.ufw_batch` | `oyst-cli firewall ufw batch --rule=… --confirm` |
 | `firewall.ufw_default` | `oyst-cli firewall ufw default` |
 | `firewall.firewalld_port` | `oyst-cli firewall firewalld add-port\|remove-port` |
 | `firewall.firewalld_service` | `oyst-cli firewall firewalld add-service\|remove-service` |

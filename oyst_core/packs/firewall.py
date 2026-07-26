@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from pathlib import Path
 from typing import Any
 
 from oyst_core.models import PackStatus, PackTier
@@ -12,6 +13,7 @@ from oyst_core.privileged.runner import run_command, which
 
 _DETECT_TTL_SEC = 1.5
 _detect_cache: tuple[float, dict[str, object]] | None = None
+_UFW_CONF = Path("/etc/ufw/ufw.conf")
 
 _NFT_RULE_VERB_RE = re.compile(
     r"\b(accept|drop|reject|jump|goto|return|counter|masquerade|snat|dnat)\b",
@@ -23,6 +25,37 @@ def invalidate_firewall_detect_cache() -> None:
     """Drop cached detect() results after mutations / select / ensure."""
     global _detect_cache
     _detect_cache = None
+
+
+def _ufw_enabled_from_conf(conf_path: Path = _UFW_CONF) -> bool | None:
+    """Parse ENABLED= from ufw.conf when ``ufw status`` needs root. None if unknown."""
+    try:
+        text = conf_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, val = stripped.partition("=")
+        if key.strip().upper() == "ENABLED":
+            return val.strip().lower() in {"yes", "true", "1"}
+    return None
+
+
+def _probe_ufw_active(ufw_bin: str) -> bool:
+    """True when UFW is enabled (status output, else world-readable ufw.conf)."""
+    try:
+        res = run_command([ufw_bin, "status"], timeout=30)
+        out = (res.stdout or "").lower()
+        if "status: active" in out:
+            return True
+        if "status: inactive" in out:
+            return False
+    except (ValueError, OSError):
+        pass
+    conf = _ufw_enabled_from_conf()
+    return bool(conf)
 
 
 class FirewallPack(Pack):
@@ -80,14 +113,8 @@ class FirewallPack(Pack):
         ufw = which("ufw")
         fw = which("firewall-cmd")
         nft = which("nft")
-        ufw_active = False
+        ufw_active = _probe_ufw_active(ufw) if ufw else False
         fw_active = False
-        if ufw:
-            try:
-                res = run_command(["ufw", "status"], timeout=30)
-                ufw_active = "status: active" in res.stdout.lower()
-            except (ValueError, OSError):
-                pass
         if fw:
             try:
                 res = run_command(["firewall-cmd", "--state"], timeout=30)

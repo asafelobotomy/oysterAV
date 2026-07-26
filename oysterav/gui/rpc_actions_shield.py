@@ -37,6 +37,14 @@ class SupportsShieldClient(Protocol):
         port: str | None = None,
         proto: str = "tcp",
         from_addr: str | None = None,
+        rule_action: str | None = None,
+        dry_run: bool = False,
+        force_lockout_risk: bool = False,
+    ) -> dict[str, Any]: ...
+    def firewall_ufw_batch(
+        self,
+        rules: list[dict[str, Any]],
+        *,
         dry_run: bool = False,
         force_lockout_risk: bool = False,
     ) -> dict[str, Any]: ...
@@ -55,6 +63,7 @@ class SupportsShieldClient(Protocol):
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout_risk: bool = False,
     ) -> dict[str, Any]: ...
     def firewall_firewalld_service(
         self,
@@ -63,6 +72,7 @@ class SupportsShieldClient(Protocol):
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout_risk: bool = False,
     ) -> dict[str, Any]: ...
     def firewall_firewalld_reload(self, *, dry_run: bool = False) -> dict[str, Any]: ...
     def firewall_firewalld_rich_rule(
@@ -72,6 +82,7 @@ class SupportsShieldClient(Protocol):
         *,
         zone: str = "public",
         dry_run: bool = False,
+        force_lockout_risk: bool = False,
     ) -> dict[str, Any]: ...
     def fail2ban_status(self) -> dict[str, Any]: ...
     def fail2ban_banned(self) -> dict[str, Any]: ...
@@ -136,6 +147,7 @@ def request_firewall_ufw_rule(
     port: str | None = None,
     proto: str = "tcp",
     from_addr: str | None = None,
+    rule_action: str | None = None,
     force_lockout_risk: bool = False,
 ) -> dict[str, Any]:
     return client.firewall_ufw_rule(
@@ -143,8 +155,18 @@ def request_firewall_ufw_rule(
         port=port,
         proto=proto,
         from_addr=from_addr,
+        rule_action=rule_action,
         force_lockout_risk=force_lockout_risk,
     )
+
+
+def request_firewall_ufw_batch(
+    client: SupportsShieldClient,
+    rules: list[dict[str, Any]],
+    *,
+    force_lockout_risk: bool = False,
+) -> dict[str, Any]:
+    return client.firewall_ufw_batch(rules, force_lockout_risk=force_lockout_risk)
 
 
 def request_firewall_ufw_default(
@@ -167,8 +189,14 @@ def request_firewall_firewalld_port(
     port_spec: str,
     *,
     zone: str = "public",
+    force_lockout_risk: bool = False,
 ) -> dict[str, Any]:
-    return client.firewall_firewalld_port(action, port_spec, zone=zone)
+    return client.firewall_firewalld_port(
+        action,
+        port_spec,
+        zone=zone,
+        force_lockout_risk=force_lockout_risk,
+    )
 
 
 def request_firewall_firewalld_service(
@@ -177,8 +205,14 @@ def request_firewall_firewalld_service(
     service: str,
     *,
     zone: str = "public",
+    force_lockout_risk: bool = False,
 ) -> dict[str, Any]:
-    return client.firewall_firewalld_service(action, service, zone=zone)
+    return client.firewall_firewalld_service(
+        action,
+        service,
+        zone=zone,
+        force_lockout_risk=force_lockout_risk,
+    )
 
 
 def request_firewall_firewalld_reload(client: SupportsShieldClient) -> dict[str, Any]:
@@ -191,8 +225,14 @@ def request_firewall_firewalld_rich_rule(
     rule: str,
     *,
     zone: str = "public",
+    force_lockout_risk: bool = False,
 ) -> dict[str, Any]:
-    return client.firewall_firewalld_rich_rule(action, rule, zone=zone)
+    return client.firewall_firewalld_rich_rule(
+        action,
+        rule,
+        zone=zone,
+        force_lockout_risk=force_lockout_risk,
+    )
 
 
 def request_fail2ban_status(client: SupportsShieldClient) -> dict[str, Any]:

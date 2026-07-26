@@ -83,6 +83,7 @@ GUI_CLIENT_TO_CLI: dict[str, list[str]] = {
     "firewall_rules": ["firewall", "rules", "--help"],
     "firewall_export": ["firewall", "export", "--help"],
     "firewall_ufw_rule": ["firewall", "ufw", "allow", "--help"],
+    "firewall_ufw_batch": ["firewall", "ufw", "batch", "--help"],
     "firewall_ufw_default": ["firewall", "ufw", "default", "--help"],
     "firewall_firewalld_port": ["firewall", "firewalld", "add-port", "--help"],
     "firewall_firewalld_service": ["firewall", "firewalld", "add-service", "--help"],

@@ -20,13 +20,8 @@ from oysterav.gui.rpc_actions_shield import (
     request_fail2ban_jail_enable,
     request_fail2ban_reload,
     request_fail2ban_status,
-    request_firewall_export,
-    request_firewall_firewalld_port,
     request_firewall_firewalld_reload,
-    request_firewall_firewalld_service,
     request_firewall_rules,
-    request_firewall_ufw_default,
-    request_firewall_ufw_rule,
 )
 from oysterav.gui.widgets.common import (
     make_button,
@@ -53,6 +48,9 @@ class ShieldPage:
         self._expect_managed = False
         self._jail_rows: list[Adw.ActionRow] = []
         self._ban_rows: list[Adw.ActionRow] = []
+        self._rule_rows: list[Adw.ActionRow] = []
+        self._rule_checks: list[tuple[Gtk.CheckButton, dict[str, Any]]] = []
+        self._rules_empty_row: Adw.ActionRow | None = None
         self._fw_action_btns: dict[str, Gtk.Button] = {}
         self._choose_fw_btn: Gtk.Button | None = None
 
@@ -74,7 +72,8 @@ class ShieldPage:
 
         (
             self._rules_box,
-            self.rules_view,
+            self._rules_list_group,
+            self._rules_fallback,
             self.rules_buffer,
             self._rich_group,
             rich_entry,
@@ -84,6 +83,7 @@ class ShieldPage:
         ) = shield_firewall_ui.build_rules_section(
             on_export=self._on_export_rules,
             on_add=self._on_add_rule,
+            on_delete_selected=lambda: shield_firewall_ui.present_delete_selected(self),
             on_default=self._on_ufw_default,
             on_fw_reload=self._on_firewalld_reload,
             on_choose=lambda: shield_firewall_ui.present_backend_picker(self),
@@ -166,7 +166,16 @@ class ShieldPage:
             shield_firewall_ui.update_firewall_posture(self, active, conflict=conflict)
             rules_raw = data.get("rules")
             rules: dict[str, Any] = rules_raw if isinstance(rules_raw, dict) else {}
-            self.rules_buffer.set_text(str(rules.get("rules") or "(no rules)"))
+            entries_raw = rules.get("entries")
+            entries = [e for e in entries_raw if isinstance(e, dict)] if isinstance(
+                entries_raw, list
+            ) else []
+            shield_firewall_ui.rebuild_rule_rows(
+                self,
+                entries,
+                fallback_text=str(rules.get("rules") or ""),
+                backend=active,
+            )
             editable = active in {"ufw", "firewalld"} and not conflict
             self._rules_box.set_sensitive(editable)
 
@@ -224,15 +233,23 @@ class ShieldPage:
 
     def _on_export_rules(self) -> None:
         def worker() -> dict[str, Any]:
-            return request_firewall_export(self.client)
+            return request_firewall_rules(self.client)
 
         def done(result: dict[str, Any]) -> bool:
-            text = str(result.get("rules") or "")
-            self.rules_buffer.set_text(text or "(empty)")
+            entries_raw = result.get("entries")
+            entries = [e for e in entries_raw if isinstance(e, dict)] if isinstance(
+                entries_raw, list
+            ) else []
+            shield_firewall_ui.rebuild_rule_rows(
+                self,
+                entries,
+                fallback_text=str(result.get("rules") or ""),
+                backend=self._fw_active,
+            )
             self._set_status("Firewall rules refreshed")
             return False
 
-        run_in_thread(worker, done, lambda m: self._fail_status(f"Export failed: {m}"))
+        run_in_thread(worker, done, lambda m: self._fail_status(f"Refresh failed: {m}"))
 
     def _on_add_rule(self) -> None:
         shield_firewall_ui.present_add_rule_dialog(self)
@@ -341,52 +358,3 @@ class ShieldPage:
                 body=str(result.get("message") or "failed"),
             )
         return False
-
-    # Used by shield_firewall_ui dialogs
-    def apply_ufw_rule(
-        self,
-        action: str,
-        *,
-        port: str,
-        proto: str,
-        from_addr: str | None,
-        force_lockout_risk: bool = False,
-    ) -> None:
-        run_in_thread(
-            lambda: request_firewall_ufw_rule(
-                self.client,
-                action,
-                port=port,
-                proto=proto,
-                from_addr=from_addr,
-                force_lockout_risk=force_lockout_risk,
-            ),
-            lambda r: self._mutation_done(r, f"UFW {action} applied"),
-            self._fail_status,
-        )
-
-    def apply_firewalld_port(self, action: str, port_spec: str) -> None:
-        run_in_thread(
-            lambda: request_firewall_firewalld_port(self.client, action, port_spec),
-            lambda r: self._mutation_done(r, f"firewalld {action} queued — reload to apply"),
-            self._fail_status,
-        )
-
-    def apply_firewalld_service(self, action: str, service: str) -> None:
-        run_in_thread(
-            lambda: request_firewall_firewalld_service(self.client, action, service),
-            lambda r: self._mutation_done(r, f"firewalld {action} queued — reload to apply"),
-            self._fail_status,
-        )
-
-    def apply_ufw_default(self, direction: str, policy: str, *, force: bool) -> None:
-        run_in_thread(
-            lambda: request_firewall_ufw_default(
-                self.client,
-                direction,
-                policy,
-                force_lockout_risk=force,
-            ),
-            lambda r: self._mutation_done(r, f"Default {direction}={policy}"),
-            self._fail_status,
-        )

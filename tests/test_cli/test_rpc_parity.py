@@ -68,6 +68,7 @@ RPC_TO_CLI: dict[str, list[str]] = {
     "firewall.rules": ["firewall", "rules", "--help"],
     "firewall.export": ["firewall", "export", "--help"],
     "firewall.ufw_rule": ["firewall", "ufw", "allow", "--help"],
+    "firewall.ufw_batch": ["firewall", "ufw", "batch", "--help"],
     "firewall.ufw_default": ["firewall", "ufw", "default", "--help"],
     "firewall.firewalld_port": ["firewall", "firewalld", "add-port", "--help"],
     "firewall.firewalld_service": ["firewall", "firewalld", "add-service", "--help"],

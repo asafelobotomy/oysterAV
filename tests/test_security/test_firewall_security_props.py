@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,6 +40,41 @@ def test_ufw_rule_delete_deny_22_requires_force() -> None:
     assert delete.ok is False
     assert deny.ok is False
     assert "force-lockout" in delete.message
+
+
+def test_firewalld_rich_rule_ssh_drop_requires_force() -> None:
+    ops = FirewallOps()
+    with patch.object(ops, "_active_backend", return_value="firewalld"):
+        drop = ops.firewalld_rich_rule(
+            "add-rich-rule",
+            "rule service name=ssh drop",
+            force_lockout=False,
+        )
+        port22 = ops.firewalld_rich_rule(
+            "add-rich-rule",
+            "rule port port=22 protocol=tcp reject",
+            force_lockout=False,
+        )
+        accept = ops.firewalld_rich_rule(
+            "add-rich-rule",
+            "rule service name=ssh accept",
+            force_lockout=False,
+            dry_run=True,
+        )
+    assert drop.ok is False
+    assert port22.ok is False
+    assert "force-lockout" in drop.message
+    assert accept.ok is True
+
+
+def test_firewalld_remove_ssh_requires_force() -> None:
+    ops = FirewallOps()
+    with patch.object(ops, "_active_backend", return_value="firewalld"):
+        svc = ops.firewalld_service("remove-service", "ssh", force_lockout=False)
+        port = ops.firewalld_port("remove-port", "22/tcp", force_lockout=False)
+    assert svc.ok is False
+    assert port.ok is False
+    assert "force-lockout" in svc.message
 
 
 def test_select_managed_backend_dry_run_includes_install_when_missing() -> None:
@@ -87,32 +123,103 @@ def test_fw_dict_omits_before_after() -> None:
     assert out["ok"] is True
 
 
-def test_detect_inactive_ufw_plus_nft_binary_is_none() -> None:
+def test_detect_inactive_ufw_plus_nft_binary_is_none(tmp_path: Path) -> None:
+    from oyst_core.packs import firewall as fw_mod
+
+    conf = tmp_path / "ufw.conf"
+    conf.write_text("ENABLED=no\n", encoding="utf-8")
     invalidate_firewall_detect_cache()
     pack = FirewallPack()
+
+    def _run(argv: list[str], timeout: int = 30) -> MagicMock:
+        if len(argv) >= 2 and argv[0].endswith("ufw") and argv[1] == "status":
+            return MagicMock(stdout="Status: inactive\n", stderr="", returncode=0)
+        return MagicMock(stdout="table inet filter {}\n", stderr="", returncode=0)
+
     with (
         patch(
             "oyst_core.packs.firewall.which",
             side_effect=lambda b: f"/usr/bin/{b}" if b in {"ufw", "nft"} else None,
         ),
-        patch(
-            "oyst_core.packs.firewall.run_command",
-            side_effect=lambda argv, timeout=30: MagicMock(
-                stdout=(
-                    "Status: inactive"
-                    if argv[:2] == ["ufw", "status"]
-                    else "table inet filter {}\n"
-                ),
-                stderr="",
-                returncode=0,
-            ),
-        ),
+        patch("oyst_core.packs.firewall.run_command", side_effect=_run),
         patch.object(FirewallPack, "_nft_filtering_active", return_value=False),
+        patch.object(fw_mod, "_UFW_CONF", conf),
     ):
         det = pack._detect_uncached()
     assert det["active"] == "none"
     assert det["ufw"] is True
     assert det["nft"] is True
+
+
+def test_detect_ufw_active_via_conf_when_status_needs_root(tmp_path: Path) -> None:
+    """Non-root ``ufw status`` fails on many hosts; ENABLED=yes still means active."""
+    from oyst_core.packs import firewall as fw_mod
+
+    conf = tmp_path / "ufw.conf"
+    conf.write_text("# comment\nENABLED=yes\n", encoding="utf-8")
+    invalidate_firewall_detect_cache()
+    pack = FirewallPack()
+
+    def _run(argv: list[str], timeout: int = 30) -> MagicMock:
+        if len(argv) >= 2 and argv[0].endswith("ufw") and argv[1] == "status":
+            return MagicMock(
+                stdout="",
+                stderr="ERROR: You need to be root to run this script",
+                returncode=1,
+            )
+        return MagicMock(stdout="ufw 0.36", stderr="", returncode=0)
+
+    with (
+        patch(
+            "oyst_core.packs.firewall.which",
+            side_effect=lambda b: "/usr/bin/ufw" if b == "ufw" else None,
+        ),
+        patch("oyst_core.packs.firewall.run_command", side_effect=_run),
+        patch.object(fw_mod, "_UFW_CONF", conf),
+    ):
+        det = pack._detect_uncached()
+    assert det["ufw_active"] is True
+    assert det["active"] == "ufw"
+
+
+def test_ufw_rules_from_files_when_status_needs_root(tmp_path: Path) -> None:
+    from oyst_core.packs.firewall_ufw_read import ufw_rules_text_from_files, ufw_status_or_files
+
+    user4 = tmp_path / "user.rules"
+    user6 = tmp_path / "user6.rules"
+    user4.write_text(
+        "### tuple ### allow tcp 123 0.0.0.0/0 any 0.0.0.0/0 in\n",
+        encoding="utf-8",
+    )
+    user6.write_text(
+        "### tuple ### allow tcp 123 ::/0 any ::/0 in\n",
+        encoding="utf-8",
+    )
+    text = ufw_rules_text_from_files(user4=user4, user6=user6)
+    assert "123/tcp" in text
+    assert "ALLOW" in text
+    assert "(v6)" in text
+
+    from oyst_core.packs.firewall_ufw_read import (
+        parse_ufw_status_entries,
+        ufw_rule_entries_from_files,
+    )
+
+    entries = ufw_rule_entries_from_files(user4=user4, user6=user6)
+    assert len(entries) == 1
+    assert entries[0]["port"] == "123"
+    assert entries[0]["removable"] is True
+    assert "IPv4+IPv6" in str(entries[0]["subtitle"])
+    assert parse_ufw_status_entries(text)[0]["port"] == "123"
+
+    def _fail(_argv: list[str], timeout: int = 30) -> MagicMock:
+        return MagicMock(stdout="", stderr="need root", returncode=1)
+
+    with patch(
+        "oyst_core.packs.firewall_ufw_read.ufw_rules_text_from_files",
+        return_value=text,
+    ):
+        assert "123/tcp" in ufw_status_or_files(_fail, ["ufw", "status", "numbered"])
 
 
 def test_detect_nft_ruleset_with_drop_is_nft_direct() -> None:
