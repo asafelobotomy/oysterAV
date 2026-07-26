@@ -84,11 +84,12 @@ describes opt-in / path-scoped / performance cost.
 ## Repo / supply-chain
 
 Added: root `SECURITY.md`, `.github/workflows/scorecard.yml` (pinned SHAs,
-`continue-on-error: true`, `publish_results`), Dependabot (Actions + pip), CI
+`publish_results`), Dependabot (Actions + pip), CI
 `permissions: contents: read` + pinned `checkout` / `setup-uv`.
 
-Treat Scorecard badge as **informational** until sustained score ≥ 7 and gating
-is an explicit product decision.
+Scorecard is **blocking** in CI (no `continue-on-error`). Treat the badge as
+an operator signal; sustained score targets remain a product decision. See also
+[full-surface-audit-2026-07-26.md](full-surface-audit-2026-07-26.md).
 
 ## Residual risk
 

@@ -282,6 +282,40 @@ def revoke_service_lifecycle(*, prefix: Path | None = None) -> dict[str, object]
     }
 
 
+def assert_lifecycle_grant_not_stale(
+    *,
+    rules_path: Path | None = None,
+    stamp_path: Path | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Fail closed when passwordless grant artifacts outlive a valid stamp (H-AUTH).
+
+    Interactive auth_admin (no rules/stamp) is allowed. If rules or stamp exist,
+    require a non-expired stamp.
+    """
+    path = rules_path or RULES_PATH
+    stamp = stamp_path or GRANT_STAMP_PATH
+    rules_present = False
+    try:
+        rules_present = path.is_file()
+    except OSError:
+        rules_present = False
+    stamp_fields = _read_grant_stamp(stamp)
+    if not rules_present and not stamp_fields:
+        return
+    if not stamp_fields.get("user"):
+        raise ValueError("service-lifecycle grant stamp missing — revoke and re-grant")
+    expires_raw = stamp_fields.get("expires")
+    exp = parse_expires(expires_raw) if expires_raw else None
+    if exp is None:
+        raise ValueError("service-lifecycle grant stamp missing expires — revoke and re-grant")
+    clock = now or datetime.now(UTC)
+    if clock.tzinfo is None:
+        clock = clock.replace(tzinfo=UTC)
+    if clock >= exp:
+        raise ValueError("service-lifecycle grant expired — revoke and re-grant")
+
+
 def migrate_grant_on_helper_install(*, prefix: Path | None = None) -> dict[str, object] | None:
     """Rewrite legacy YES grants to systemctl-up scope when stamp exists."""
     stamp = (

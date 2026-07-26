@@ -39,35 +39,33 @@ def _run_apply_harden(wizard: SetupWizard) -> None:
     def worker() -> dict[str, Any]:
         from oysterav.gui.widgets.setup_wizard_firewall import selected_firewall_backend
 
+        backend = selected_firewall_backend(wizard) if enable_fw else None
         result = wizard.client.setup_run(
             skip_packs=True,
             skip_schedule=True,
             skip_bootstrap=True,
             skip_harden=False,
-            enable_firewall=False,
+            enable_firewall=enable_fw,
+            firewall_backend=backend if enable_fw else None,
             mark_complete=False,
             harden_include=enabled_harden_step_ids(wizard),
         )
-        if enable_fw:
-            backend = selected_firewall_backend(wizard)
-            if backend != "none":
-                sel = wizard.client.firewall_select(backend)
-                steps = list(result.get("steps") or [])
-                steps.append(
-                    {
-                        "step": "firewall-select",
-                        "ok": bool(sel.get("ok")),
-                        "message": sel.get("message"),
-                        "skipped": sel.get("skipped"),
-                    },
-                )
-                result["steps"] = steps
-                if not sel.get("ok"):
-                    result["ok"] = False
-            try:
-                wizard.client.config_set("firewall.managed_backend", backend)
-            except Exception:
-                pass
+        if enable_fw and backend:
+            select_steps = [
+                s
+                for s in (result.get("steps") or [])
+                if isinstance(s, dict) and s.get("step") in {"firewall-select", "firewall-ensure"}
+            ]
+            fw_ok = (
+                all(s.get("ok") or s.get("skipped") for s in select_steps)
+                if select_steps
+                else backend == "none"
+            )
+            if fw_ok or backend == "none":
+                try:
+                    wizard.client.config_set("firewall.managed_backend", backend)
+                except Exception:
+                    pass
         return result
 
     def done(result: dict[str, Any]) -> bool:
@@ -76,7 +74,8 @@ def _run_apply_harden(wizard: SetupWizard) -> None:
         harden_steps = [
             s
             for s in steps
-            if str(s.get("step", "")).startswith("harden-") or s.get("step") == "firewall-ensure"
+            if str(s.get("step", "")).startswith("harden-")
+            or s.get("step") in {"firewall-ensure", "firewall-select", "firewall-install"}
         ]
         ok_n = sum(1 for s in harden_steps if s.get("ok") or s.get("skipped"))
         soft = [s for s in harden_steps if s.get("soft_fail")]

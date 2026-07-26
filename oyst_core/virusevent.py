@@ -22,6 +22,17 @@ ENV_FILENAME = "CLAM_VIRUSEVENT_FILENAME"
 ENV_VIRUSNAME = "CLAM_VIRUSEVENT_VIRUSNAME"
 
 
+def _resolve_oyst_cli_for_wrapper() -> str:
+    """Prefer root-owned package paths over PATH lookups (F-10)."""
+    for path in ("/usr/bin/oyst-cli", "/usr/local/bin/oyst-cli"):
+        if Path(path).is_file():
+            return path
+    found = shutil.which("oyst-cli")
+    if found and Path(found).is_absolute():
+        return found
+    return "/usr/bin/oyst-cli"
+
+
 def wrapper_path() -> Path:
     return data_dir() / "bin" / OYSTERAV_MARK
 
@@ -36,7 +47,7 @@ def install_wrapper(*, force: bool = False) -> dict[str, object]:
     """Install a small executable that invokes ``oyst-cli virusevent handle``."""
     dest = wrapper_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
-    oyst = shutil.which("oyst-cli") or "oyst-cli"
+    oyst = _resolve_oyst_cli_for_wrapper()
     body = (
         "#!/bin/sh\n"
         f"# {OYSTERAV_MARK} — oysterAV VirusEvent handler (ADR-008)\n"

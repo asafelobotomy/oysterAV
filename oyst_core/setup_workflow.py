@@ -110,6 +110,7 @@ def run_setup(
     mark_complete: bool = True,
     packs: list[str] | None = None,
     harden_include: list[str] | None = None,
+    firewall_backend: str | None = None,
 ) -> dict[str, Any]:
     """Run guided setup mirroring the GTK setup wizard.
 
@@ -117,6 +118,8 @@ def run_setup(
     polkit prompt via ``setup-concert`` (AUR/runtime installs stay outside).
 
     When ``packs`` is set, install only those names (Install All / targeted batch).
+    ``firewall_backend`` (ufw|firewalld|none) selects via one concert instead of
+    a bare ensure when set.
     """
     audit = SecurityAudit()
     steps: list[dict[str, Any]] = []
@@ -149,6 +152,7 @@ def run_setup(
         propupd=want_propupd,
         enable_linger=enable_linger,
         harden_include=include,
+        firewall_backend=firewall_backend,
     )
     steps.extend(concert_steps)
     for cstep in concert_steps:

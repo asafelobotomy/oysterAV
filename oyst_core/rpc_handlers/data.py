@@ -16,11 +16,23 @@ def handle_quarantine_list(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 
 
 def handle_quarantine_restore(params: dict[str, Any], _ctx: RpcContext) -> Any:
-    return str(QuarantineVault().restore(int(params["id"])))
+    entry_id = int(params["id"])
+    if params.get("dry_run"):
+        entry = QuarantineVault().get(entry_id)
+        if not entry:
+            raise KeyError(entry_id)
+        return {"ok": True, "dry_run": True, "id": entry_id, "path": entry.original_path}
+    return str(QuarantineVault().restore(entry_id))
 
 
 def handle_quarantine_delete(params: dict[str, Any], _ctx: RpcContext) -> Any:
-    QuarantineVault().delete(int(params["id"]))
+    entry_id = int(params["id"])
+    if params.get("dry_run"):
+        entry = QuarantineVault().get(entry_id)
+        if not entry:
+            raise KeyError(entry_id)
+        return {"ok": True, "dry_run": True, "id": entry_id}
+    QuarantineVault().delete(entry_id)
     return True
 
 
@@ -39,6 +51,17 @@ def handle_quarantine_verify(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 def handle_quarantine_add(params: dict[str, Any], ctx: RpcContext) -> Any:
     from oyst_core.history_actions import quarantine_and_patch
 
+    if params.get("dry_run"):
+        from oyst_core.quarantine_guards import quarantine_refuse_reason
+
+        path = str(params["path"])
+        refuse = quarantine_refuse_reason(path)
+        return {
+            "ok": refuse is None,
+            "dry_run": True,
+            "path": path,
+            "refuse": refuse,
+        }
     entry = quarantine_and_patch(
         str(params["path"]),
         str(params.get("threat_name") or params.get("threat") or ""),

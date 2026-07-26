@@ -228,3 +228,13 @@ def test_quarantine_refuse_scanner_basename() -> None:
 
     assert quarantine_refuse_reason("/usr/bin/clamdscan") is not None
     assert quarantine_refuse_reason("/tmp/eicar.com") is None
+
+
+def test_vault_add_refuses_scanner_basename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = _vault(tmp_path, monkeypatch)
+    scanner = tmp_path / "clamscan"
+    scanner.write_bytes(b"fake")
+    with pytest.raises(ValueError, match="scanner binary"):
+        vault.add(str(scanner), "Eicar")

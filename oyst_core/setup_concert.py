@@ -150,8 +150,11 @@ def build_concert_argv(
     propupd: bool = False,
     enable_linger: bool = False,
     harden_include: frozenset[str] | None = None,
+    firewall_backend: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], Path | None]:
     """Prepare local steps + one setup-concert argv; optional maldet work_dir to clean."""
+    from oyst_core.setup_harden_fw import prepare_firewall_argv
+
     local: list[dict[str, Any]] = []
     argv: list[str] = []
     work_dir: Path | None = None
@@ -185,44 +188,18 @@ def build_concert_argv(
             with_firewall=enable_firewall,
             force_lockout=force_lockout,
             include=harden_include,
+            firewall_backend=firewall_backend,
         )
         local.extend(harden_local)
         argv.extend(harden_argv)
-    elif enable_firewall:
-        from oyst_core.packs.firewall import FirewallPack
-
-        det = FirewallPack().detect()
-        if det.get("conflict"):
-            local.append(
-                _step(
-                    "firewall-ensure",
-                    ok=False,
-                    message="Multiple firewall managers active; resolve UFW vs firewalld first",
-                    soft_fail=True,
-                ),
-            )
-        elif str(det.get("active", "none")) in ("ufw", "firewalld"):
-            local.append(
-                _step(
-                    "firewall-ensure",
-                    ok=True,
-                    skipped=True,
-                    message=f"{det.get('active')} already active",
-                ),
-            )
-        elif not det.get("ufw") and not det.get("firewalld"):
-            local.append(
-                _step(
-                    "firewall-ensure",
-                    ok=True,
-                    skipped=True,
-                    message="no UFW or firewalld binary installed",
-                ),
-            )
-        else:
-            argv.append("--with-firewall")
-            if force_lockout:
-                argv.append("--force-lockout")
+    elif enable_firewall or firewall_backend:
+        prepare_firewall_argv(
+            argv,
+            local,
+            with_firewall=enable_firewall,
+            force_lockout=force_lockout,
+            firewall_backend=firewall_backend,
+        )
 
     if enable_linger:
         argv.append(f"--linger-user={current_username()}")
@@ -240,6 +217,7 @@ def run_setup_concert(
     propupd: bool = False,
     enable_linger: bool = False,
     harden_include: frozenset[str] | None = None,
+    firewall_backend: str | None = None,
 ) -> list[dict[str, Any]]:
     """One polkit prompt for official/tarball packs + propupd + harden + linger."""
     local, argv, work_dir = build_concert_argv(
@@ -251,6 +229,7 @@ def run_setup_concert(
         propupd=propupd,
         enable_linger=enable_linger,
         harden_include=harden_include,
+        firewall_backend=firewall_backend,
     )
     try:
         if not argv:

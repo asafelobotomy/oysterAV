@@ -21,6 +21,26 @@ ALLOWED_SCANNER_BINARIES = frozenset(
     }
 )
 PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.+_-]{0,127}$")
+# Frozen oysterAV pack/runtime catalog (C-PKG-01). Keep in sync with PACK_PACKAGES.
+ALLOWED_OYSTERAV_PACKAGES = frozenset(
+    {
+        "clamav",
+        "clamav-daemon",
+        "clamav-freshclam",
+        "clamav-update",
+        "rkhunter",
+        "chkrootkit",
+        "lynis",
+        "unhide",
+        "unhide.rb",
+        "ufw",
+        "firewalld",
+        "fail2ban",
+        "maldet",
+        "fangfrisch",
+        "python-fangfrisch",
+    }
+)
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 RKHUNTER_FLAGS = frozenset({"--update", "--propupd", "--versioncheck", "--check", "--sk", "--rwo"})
 UNHIDE_MODES = frozenset({"sys", "brute", "quick", "check", "fork", "proc", "reverse"})
@@ -68,6 +88,8 @@ def _validate_package_name(name: str) -> str:
     cleaned = name.strip()
     if not PACKAGE_NAME_RE.match(cleaned):
         raise ValueError(f"invalid package name: {name}")
+    if cleaned not in ALLOWED_OYSTERAV_PACKAGES:
+        raise ValueError(f"package not allowlisted for oysterAV: {name}")
     return cleaned
 
 

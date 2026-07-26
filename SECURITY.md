@@ -44,8 +44,16 @@ Operators who change helper policy or helper text should re-run:
 oyst-cli install-privileged-helper
 ```
 
+Reinstall is also required after install-script seal changes (A-02-R: fd-backed
+tarball extract) and auth-grant stamp enforcement on passwordless helper paths.
+
 Passwordless service-lifecycle grants (`systemctl-up` + `maldet-config` only) require
 a working systemd expire timer; grant installation fails closed if the timer cannot
 be installed. TTL is 7 days (`auth.status` reports `expire_timer_installed`).
 
-See also `docs/security/` for audit notes when present.
+See also:
+
+- [`docs/security/test-gates.md`](docs/security/test-gates.md) — commit-time gates
+- [`docs/security/asvs-checklist.md`](docs/security/asvs-checklist.md) — ASVS 5.0 coverage map (not a certification claim)
+- [`docs/security/attacker-sim.md`](docs/security/attacker-sim.md) — optional hostile-client runbook
+- Other notes under `docs/security/` when present

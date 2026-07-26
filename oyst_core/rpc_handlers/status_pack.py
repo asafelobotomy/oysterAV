@@ -62,6 +62,11 @@ def handle_setup_run(params: dict[str, Any], _ctx: RpcContext) -> Any:
     if isinstance(raw_include, list):
         harden_include = [str(s) for s in raw_include if str(s).strip()]
 
+    raw_fw = params.get("firewall_backend")
+    firewall_backend: str | None = None
+    if isinstance(raw_fw, str) and raw_fw.strip():
+        firewall_backend = raw_fw.strip().lower()
+
     result = run_setup(
         skip_packs=bool(params.get("skip_packs", False)),
         skip_schedule=bool(params.get("skip_schedule", False)),
@@ -76,6 +81,7 @@ def handle_setup_run(params: dict[str, Any], _ctx: RpcContext) -> Any:
         mark_complete=bool(params.get("mark_complete", True)),
         packs=packs,
         harden_include=harden_include,
+        firewall_backend=firewall_backend,
     )
     invalidate_doctor_cache()
     return result

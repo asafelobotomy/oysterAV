@@ -156,11 +156,17 @@ class OystClientApi(OystClientShieldApi):
     def quarantine_list(self) -> list[dict[str, Any]]:
         return self._as_list("quarantine.list")
 
-    def quarantine_restore(self, entry_id: int) -> str:
-        return str(self._call("quarantine.restore", {"id": entry_id}))
+    def quarantine_restore(self, entry_id: int, *, dry_run: bool = False) -> str | dict[str, Any]:
+        result = self._call("quarantine.restore", {"id": entry_id, "dry_run": dry_run})
+        if dry_run:
+            return dict(result) if isinstance(result, dict) else {"ok": True, "dry_run": True}
+        return str(result)
 
-    def quarantine_delete(self, entry_id: int) -> None:
-        self._call("quarantine.delete", {"id": entry_id})
+    def quarantine_delete(self, entry_id: int, *, dry_run: bool = False) -> bool | dict[str, Any]:
+        result = self._call("quarantine.delete", {"id": entry_id, "dry_run": dry_run})
+        if dry_run:
+            return dict(result) if isinstance(result, dict) else {"ok": True, "dry_run": True}
+        return bool(result)
 
     def quarantine_verify(self) -> dict[str, Any]:
         result = self._call("quarantine.verify")
@@ -174,8 +180,13 @@ class OystClientApi(OystClientShieldApi):
         job_id: str | None = None,
         pack: str = "",
         message: str = "",
+        dry_run: bool = False,
     ) -> dict[str, Any]:
-        params: dict[str, Any] = {"path": path, "threat_name": threat_name}
+        params: dict[str, Any] = {
+            "path": path,
+            "threat_name": threat_name,
+            "dry_run": dry_run,
+        }
         if job_id:
             params["job_id"] = job_id
         if pack:

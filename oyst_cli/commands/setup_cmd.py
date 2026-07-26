@@ -91,6 +91,12 @@ def setup_reset_cmd(confirm: bool, json_mode: bool) -> None:
     show_default=True,
     help="SSH-safe UFW/firewalld enable after harden (soft-fail if unsafe)",
 )
+@click.option(
+    "--firewall-backend",
+    type=click.Choice(["ufw", "firewalld", "none"], case_sensitive=False),
+    default=None,
+    help="Select managed backend in the same setup concert (install if needed)",
+)
 @click.option("--confirm-aur", is_flag=True, help="Confirm AUR installs without prompting")
 @click.option(
     "--auto-quarantine/--no-auto-quarantine",
@@ -122,6 +128,7 @@ def setup_run_cmd(
     skip_bootstrap: bool,
     skip_harden: bool,
     enable_firewall: bool,
+    firewall_backend: str | None,
     confirm_aur: bool,
     auto_quarantine: bool | None,
     schedule_profile: str,
@@ -135,6 +142,8 @@ def setup_run_cmd(
     """Run guided first-time setup (wizard equivalent)."""
     from oyst_core.privilege import build_setup_plan, preflight_body, preflight_dict
 
+    if firewall_backend:
+        enable_firewall = True
     privileged_labels: list[tuple[str, str]] = []
     local_labels: list[tuple[str, str]] = []
     if not skip_packs:
@@ -145,6 +154,8 @@ def setup_run_cmd(
         privileged_labels.append(("harden", "Apply recommended host hardenings"))
         if enable_firewall:
             privileged_labels.append(("firewall", "Enable host firewall (SSH-safe)"))
+    elif enable_firewall:
+        privileged_labels.append(("firewall", "Enable host firewall (SSH-safe)"))
     if not skip_schedule:
         local_labels.append(("schedule", "Install daily scheduled scan timer"))
     if not skip_bootstrap:
@@ -189,6 +200,7 @@ def setup_run_cmd(
         full_bootstrap=not maintenance_only,
         enable_linger=enable_linger,
         mark_complete=not no_mark_complete,
+        firewall_backend=firewall_backend,
     )
     if json_mode:
         emit(result, json_mode=True)

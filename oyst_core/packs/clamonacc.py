@@ -11,8 +11,19 @@ from oyst_core.packs.base import Pack, resolve_pack_binary
 from oyst_core.packs.clamav import ClamAVPack
 from oyst_core.packs.clamd_onaccess import probe_onaccess_prevention
 from oyst_core.privileged.helper import run_privileged
+from oyst_core.privileged.helper_clamd import DENIED_INCLUDE_PREFIXES
 from oyst_core.privileged.runner import run_command
 from oyst_core.privileged.systemctl_route import run_systemctl_helper
+
+
+def _allowed_include_path(path: str) -> bool:
+    expanded = str(Path(path).expanduser().resolve())
+    if expanded == "/" or expanded in DENIED_INCLUDE_PREFIXES:
+        return False
+    for prefix in DENIED_INCLUDE_PREFIXES:
+        if prefix != "/" and (expanded == prefix or expanded.startswith(prefix + "/")):
+            return False
+    return True
 
 
 class ClamonaccPack(Pack):
@@ -109,12 +120,20 @@ class ClamonaccPack(Pack):
         except (ValueError, OSError):
             return False
 
-    def _write_path_list(self, filename: str, raw_paths: list[str]) -> Path | None:
+    def _write_path_list(
+        self,
+        filename: str,
+        raw_paths: list[str],
+        *,
+        filter_denied_includes: bool = False,
+    ) -> Path | None:
         """Write absolute existing paths (never '/') for clamonacc include/exclude lists."""
         paths: list[str] = []
         for raw in raw_paths:
             expanded = Path(raw).expanduser().resolve()
             if str(expanded) == "/":
+                continue
+            if filter_denied_includes and not _allowed_include_path(str(expanded)):
                 continue
             if not expanded.exists():
                 continue
@@ -128,7 +147,11 @@ class ClamonaccPack(Pack):
 
     def _write_include_list(self) -> Path | None:
         """Write oysterAV watch paths for clamonacc --include-list (never '/')."""
-        return self._write_path_list("clamonacc-include.list", self.list_paths())
+        return self._write_path_list(
+            "clamonacc-include.list",
+            self.list_paths(),
+            filter_denied_includes=True,
+        )
 
     def _write_exclude_list(self) -> Path | None:
         """Write oysterAV exclude paths for clamonacc --exclude-list."""
@@ -187,6 +210,11 @@ class ClamonaccPack(Pack):
 
     def add_path(self, path: str) -> None:
         expanded = str(Path(path).expanduser())
+        if not _allowed_include_path(expanded):
+            raise ValueError(
+                f"include path denied: {expanded} "
+                "(use paths under /home/…; never /usr, /etc, /var, …)"
+            )
         cfg = load_config()
         if expanded not in cfg.clamonacc.paths:
             cfg.clamonacc.paths.append(expanded)

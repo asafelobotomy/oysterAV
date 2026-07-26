@@ -68,8 +68,14 @@ def test_ufw_from_and_default_and_lifecycle() -> None:
     assert _build_ufw_argv(["default", "incoming", "deny"]) == [
         "ufw",
         "default",
-        "incoming",
         "deny",
+        "incoming",
+    ]
+    assert _build_ufw_argv(["default", "allow", "outgoing"]) == [
+        "ufw",
+        "default",
+        "allow",
+        "outgoing",
     ]
     assert _build_ufw_argv(["disable"]) == ["ufw", "disable"]
     assert _build_ufw_argv(["reload"]) == ["ufw", "reload"]
@@ -272,11 +278,14 @@ def test_install_invalid_backend() -> None:
 
 
 def test_ufw_status_and_firewalld_ssh_helpers() -> None:
-    with patch.object(life, "_run_cmd", side_effect=[(0, "Status: active"), (0, "")]):
-        assert "active" in life._ufw_status_text()
+    from oyst_core.packs.firewall_ops import FirewallOps
+    from oyst_core.privileged import helper_fw_enable as en
+
+    with patch.object(life, "_run_cmd", side_effect=[(0, "Status: active")]):
+        assert "active" in en.ufw_status_text(life._run_cmd)
     with patch.object(life, "_run_cmd", side_effect=[(1, ""), (0, "services: ssh")]):
-        with patch.object(life.FirewallOps, "parse_ssh_open", return_value=True):
-            assert life._firewalld_ssh_ok() is True
+        with patch.object(FirewallOps, "parse_ssh_open", return_value=True):
+            assert en.firewalld_ssh_ok(life._run_cmd) is True
 
 
 # --- firewall pack ---
@@ -637,7 +646,10 @@ def test_select_to_firewalld_disables_ufw() -> None:
 
 def test_ensure_ufw_force_lockout_skips_ssh_check() -> None:
     with (
-        patch.object(life, "_ufw_status_text", return_value="Status: inactive"),
+        patch(
+            "oyst_core.privileged.helper_fw_enable.ufw_status_text",
+            return_value="Status: inactive",
+        ),
         patch.object(life, "_run_cmd", return_value=(0, "ok")),
         patch.object(life, "invalidate_firewall_detect_cache"),
     ):

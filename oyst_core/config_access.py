@@ -113,6 +113,8 @@ def set_config_value(key: str, value: str) -> None:
         old = None
     if key == "quarantine.auto":
         cfg.quarantine.auto = _parse_bool(value)
+    elif key == "quarantine.secure_wipe":
+        cfg.quarantine.secure_wipe = _parse_bool(value)
     elif key == "scan.profile":
         cfg.scan.profile = value
     elif key == "scan.backend":

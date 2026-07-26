@@ -75,17 +75,37 @@ def open_maldet_tarball_fd(path: str, expected_sha256: str) -> int:
 
 
 def seal_and_run_install_tarball(tarball_path: str, expected_sha256: str) -> int:
-    """Re-verify tarball SHA, extract under root seal dir, run install.sh."""
-    fd = open_maldet_tarball_fd(tarball_path, expected_sha256)
-    os.close(fd)
+    """Re-verify tarball SHA via fd, copy into seal dir, extract sealed copy, run install.sh.
 
+    Never reopens the caller path after hash verification (A-02-R TOCTOU).
+    """
+    fd = open_maldet_tarball_fd(tarball_path, expected_sha256)
     seal_dir = "/var/tmp" if Path("/var/tmp").is_dir() else None  # nosec B108
     seal_root = Path(tempfile.mkdtemp(prefix="oyst-seal-", dir=seal_dir))
     try:
         os.chmod(seal_root, 0o700)
+        sealed_tarball = seal_root / "payload.tar.gz"
+        digest = hashlib.sha256()
+        try:
+            with open(sealed_tarball, "wb") as out:
+                while True:
+                    chunk = os.read(fd, 65536)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    out.write(chunk)
+                out.flush()
+                os.fsync(out.fileno())
+        finally:
+            os.close(fd)
+            fd = -1
+        if digest.hexdigest() != expected_sha256.lower():
+            print("sealed tarball copy sha256 mismatch", file=sys.stderr)
+            return 2
+        os.chmod(sealed_tarball, 0o600)
         extract_dir = seal_root / "extract"
         extract_dir.mkdir()
-        with tarfile.open(tarball_path, "r:gz") as archive:
+        with tarfile.open(sealed_tarball, "r:gz") as archive:
             archive.extractall(extract_dir, filter="data")
         install_dirs = list(extract_dir.glob("maldetect-*"))
         if not install_dirs:
@@ -104,6 +124,8 @@ def seal_and_run_install_tarball(tarball_path: str, expected_sha256: str) -> int
         )
         return proc.returncode
     finally:
+        if fd >= 0:
+            os.close(fd)
         shutil.rmtree(seal_root, ignore_errors=True)
 
 

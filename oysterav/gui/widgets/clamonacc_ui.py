@@ -236,30 +236,53 @@ def _run_ensure(
     on_status: Callable[[str], None] | None,
     on_complete: Callable[[], None] | None,
 ) -> None:
-    if on_status:
-        on_status(f"{heading}…")
-
-    def done(result: dict[str, Any]) -> bool:
-        ok = bool(result.get("ok"))
-        msg = str(result.get("message") or result.get("error") or ("ok" if ok else "failed"))
+    def start() -> None:
         if on_status:
-            on_status(msg)
-        if not ok and window:
-            show_command_dialog(window, heading=heading, body=msg, copy_text=copy_text)
-        if on_complete:
-            on_complete()
-        return False
+            on_status(f"{heading}…")
 
-    def failed(message: str) -> bool:
-        if on_status:
-            on_status(message)
-        if window:
-            show_command_dialog(window, heading=heading, body=message, copy_text=copy_text)
-        if on_complete:
-            on_complete()
-        return False
+        def done(result: dict[str, Any]) -> bool:
+            ok = bool(result.get("ok"))
+            msg = str(result.get("message") or result.get("error") or ("ok" if ok else "failed"))
+            if on_status:
+                on_status(msg)
+            if not ok and window:
+                show_command_dialog(window, heading=heading, body=msg, copy_text=copy_text)
+            if on_complete:
+                on_complete()
+            return False
 
-    run_in_thread(worker, done, failed)
+        def failed(message: str) -> bool:
+            if on_status:
+                on_status(message)
+            if window:
+                show_command_dialog(window, heading=heading, body=message, copy_text=copy_text)
+            if on_complete:
+                on_complete()
+            return False
+
+        run_in_thread(worker, done, failed)
+
+    if window is None:
+        start()
+        return
+    dialog = Adw.MessageDialog(
+        transient_for=window,
+        heading=heading,
+        body=f"Administrator authentication may be required.\n\n{copy_text}",
+    )
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("confirm", "Continue")
+    dialog.set_default_response("confirm")
+    dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
+
+    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
+        if response == "confirm":
+            start()
+        elif on_complete:
+            on_complete()
+
+    dialog.connect("response", on_response)
+    dialog.present()
 
 
 def ensure_fdpass_from_gui(

@@ -2,18 +2,34 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
 from oyst_core.privileged.helper_firewall import _has_flag, _parse_flag
+from oyst_core.privileged.helper_validate import resolve_trusted_argv
 from oyst_core.privileged.safe_write import write_text_nofollow
 from oyst_core.privileged.validators import validate_ip, validate_jail
 
 
+def _secure_exec_env() -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k in ("LANG", "LC_ALL", "TZ")}
+    env["PATH"] = "/usr/bin:/usr/sbin:/bin:/sbin"
+    env["HOME"] = "/root"
+    return env
+
+
 def _run_fail2ban_client(argv: list[str]) -> None:
     """Run fail2ban-client as root; raise ValueError on failure."""
-    proc = subprocess.run(argv, check=False, capture_output=True, text=True)
+    cmd = resolve_trusted_argv(list(argv))
+    proc = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_secure_exec_env(),
+    )
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "fail2ban-client failed").strip()
         raise ValueError(detail)

@@ -118,19 +118,28 @@ def apply_firewall_choice(wizard: SetupWizard) -> None:
     will_install = (backend == "ufw" and not det.get("ufw")) or (
         backend == "firewalld" and not det.get("firewalld")
     )
+    nft_note = ""
+    if str(det.get("active") or "") == "nft-direct":
+        nft_note = (
+            " Host nftables filtering may already be active; enabling a managed "
+            "manager adds a layer oysterAV can edit."
+        )
 
     def worker() -> dict[str, Any]:
         result = dict(wizard.client.firewall_select(backend))
-        try:
-            wizard.client.config_set("firewall.managed_backend", backend)
-            result["config_ok"] = True
-        except Exception as exc:
-            result["config_ok"] = False
-            result["config_error"] = str(exc)
+        if result.get("ok") or result.get("skipped"):
+            try:
+                wizard.client.config_set("firewall.managed_backend", backend)
+                result["config_ok"] = True
+            except Exception as exc:
+                result["config_ok"] = False
+                result["config_error"] = str(exc)
+        else:
+            result["config_ok"] = None
         return result
 
     def done(result: dict[str, Any]) -> bool:
-        ok = bool(result.get("ok"))
+        ok = bool(result.get("ok") or result.get("skipped"))
         msg = str(result.get("message") or ("ok" if ok else "failed"))
         if result.get("config_ok") is False:
             ok = False
@@ -148,17 +157,23 @@ def apply_firewall_choice(wizard: SetupWizard) -> None:
     def start() -> None:
         run_in_thread(worker, done, fail)
 
-    if not will_install:
-        start()
-        return
+    if will_install:
+        body = (
+            f"Will install {backend}, then enable it (SSH-safe). "
+            f"Authentication is required to change the managed firewall.{nft_note}"
+        )
+    elif backend == "none":
+        body = f"Stops UFW/firewalld if managed. Host nftables rules are left unchanged.{nft_note}"
+    else:
+        body = (
+            f"Enable {backend} as the managed firewall (SSH-safe). "
+            f"Authentication is required.{nft_note}"
+        )
 
     dialog = Adw.MessageDialog(
         transient_for=wizard.dialog,
         heading=f"Select {backend}?",
-        body=(
-            f"Will install {backend}, then enable it (SSH-safe). "
-            "Authentication is required to change the managed firewall."
-        ),
+        body=body,
     )
     dialog.add_response("cancel", "Cancel")
     dialog.add_response("apply", "Apply")

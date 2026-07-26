@@ -10,7 +10,6 @@ from oyst_core.config import load_config
 from oyst_core.packs.clamav import ClamAVPack
 from oyst_core.packs.clamd_ensure import _append_restart_flags, fdpass_status
 from oyst_core.packs.clamd_onaccess import discover_clamd_conf_paths, probe_onaccess_prevention
-from oyst_core.packs.firewall import FirewallPack
 from oyst_core.packs.rkhunter_disable_tests import (
     DEFAULTS_OVERLAY_PATH,
     build_disable_tests_overlay_text,
@@ -227,57 +226,20 @@ def _prepare_rkhunter(argv: list[str], local: list[dict[str, Any]]) -> None:
         argv.append(f"--rkh-tests={','.join(tests)}")
 
 
-def _prepare_firewall(
-    argv: list[str],
-    local: list[dict[str, Any]],
-    *,
-    with_firewall: bool,
-    force_lockout: bool,
-) -> None:
-    if not with_firewall:
-        return
-    det = FirewallPack().detect()
-    if det.get("conflict"):
-        local.append(
-            _step(
-                "firewall-ensure",
-                ok=False,
-                message="Multiple firewall managers active; resolve UFW vs firewalld first",
-                soft_fail=True,
-            ),
-        )
-        return
-    active = str(det.get("active", "none"))
-    if active in ("ufw", "firewalld"):
-        local.append(
-            _step("firewall-ensure", ok=True, skipped=True, message=f"{active} already active"),
-        )
-        return
-    if not det.get("ufw") and not det.get("firewalld"):
-        local.append(
-            _step(
-                "firewall-ensure",
-                ok=True,
-                skipped=True,
-                message="no UFW or firewalld binary installed",
-            ),
-        )
-        return
-    argv.append("--with-firewall")
-    if force_lockout:
-        argv.append("--force-lockout")
-
-
 def prepare_harden_argv(
     *,
     with_firewall: bool = False,
     force_lockout: bool = False,
     include: frozenset[str] | None = None,
+    firewall_backend: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Build local skip/soft-fail steps and helper argv for harden concert.
 
     ``include`` limits which harden step ids run (None = all safe hardenings).
+    ``firewall_backend`` when set uses select (install+soft-swap) instead of bare ensure.
     """
+    from oyst_core.setup_harden_fw import prepare_firewall_argv
+
     local: list[dict[str, Any]] = []
     argv: list[str] = []
     want = include
@@ -295,12 +257,15 @@ def prepare_harden_argv(
         _prepare_disable_cache(argv, local)
     if _want("harden-rkhunter-defaults"):
         _prepare_rkhunter(argv, local)
-    if _want("firewall-ensure"):
-        _prepare_firewall(
+    backend = (firewall_backend or "").strip().lower()
+    want_fw = _want("firewall-ensure") or backend in {"ufw", "firewalld", "none"}
+    if want_fw and (with_firewall or firewall_backend):
+        prepare_firewall_argv(
             argv,
             local,
             with_firewall=with_firewall,
             force_lockout=force_lockout,
+            firewall_backend=firewall_backend,
         )
     if any(a.startswith(("--ve-", "--dc-")) for a in argv):
         _append_restart_flags(argv, probe=probe_onaccess_prevention())
@@ -313,6 +278,7 @@ def apply_safe_hardenings(
     with_firewall: bool = False,
     force_lockout: bool = False,
     include: frozenset[str] | None = None,
+    firewall_backend: str | None = None,
 ) -> list[dict[str, Any]]:
     """Apply safe ClamAV/rkhunter(/firewall) defaults via one polkit prompt.
 
@@ -326,6 +292,7 @@ def apply_safe_hardenings(
             with_firewall=with_firewall,
             force_lockout=force_lockout,
             include=include,
+            firewall_backend=firewall_backend,
         )
     except (OSError, ValueError, RuntimeError) as exc:
         return [_step("harden", ok=False, message=str(exc), soft_fail=True)]

@@ -13,13 +13,14 @@ from typing import Any
 from oyst_core.config import data_dir
 from oyst_core.orchestrator import JobOrchestrator
 from oyst_core.rpc_auth import ensure_rpc_token, verify_peer_credentials, verify_rpc_token
-from oyst_core.rpc_errors import RpcError
+from oyst_core.rpc_errors import RpcError, RpcValidationError
 from oyst_core.rpc_handlers import dispatch_rpc
 from oyst_core.rpc_io import recv_framed
 
 SCHEMA_VERSION = 2
 DEFAULT_SOCKET = data_dir() / "oyst.sock"
-_CONN_TIMEOUT_SEC = 120.0
+# Idle-to-frame timeout (one-shot connections; long work runs after recv).
+_CONN_TIMEOUT_SEC = 15.0
 _MAX_CONCURRENT_CONNS = 8
 _logger = logging.getLogger("oyst.rpc")
 _accept_semaphore = threading.BoundedSemaphore(_MAX_CONCURRENT_CONNS)
@@ -70,11 +71,19 @@ class RpcServer:
 
     def handle(self, request: dict[str, Any]) -> dict[str, Any]:
         method = request.get("method", "")
-        params = request.get("params") or {}
         rid = request.get("id", 0)
         auth_token = request.get("auth")
         try:
             verify_rpc_token(auth_token if isinstance(auth_token, str) else None)
+            raw_params = request.get("params", {})
+            if raw_params is None:
+                params: dict[str, Any] = {}
+            elif not isinstance(raw_params, dict):
+                raise RpcValidationError("params must be an object")
+            else:
+                params = raw_params
+            if not isinstance(method, str):
+                raise RpcValidationError("method must be a string")
             result = self._dispatch(method, params)
             return {"id": rid, "schema_version": SCHEMA_VERSION, "result": result}
         except RpcError as exc:
@@ -124,21 +133,24 @@ class RpcServer:
         finally:
             _accept_semaphore.release()
 
+    def _send_error(self, conn: socket.socket, *, code: str, message: str, rid: Any = 0) -> None:
+        response = {
+            "id": rid,
+            "schema_version": SCHEMA_VERSION,
+            "error": {"code": code, "message": message},
+        }
+        try:
+            conn.sendall((json.dumps(response) + "\n").encode())
+        except OSError:
+            pass
+
     def _handle_conn(self, conn: socket.socket) -> None:
         with conn:
             try:
                 conn.settimeout(_CONN_TIMEOUT_SEC)
                 verify_peer_credentials(conn)
             except RpcError as exc:
-                response = {
-                    "id": 0,
-                    "schema_version": SCHEMA_VERSION,
-                    "error": exc.to_dict(),
-                }
-                try:
-                    conn.sendall((json.dumps(response) + "\n").encode())
-                except OSError:
-                    pass
+                self._send_error(conn, code=exc.code, message=exc.message)
                 return
             try:
                 data = recv_framed(conn).decode()
@@ -146,18 +158,19 @@ class RpcServer:
                     return
                 request = json.loads(data)
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                response = {
-                    "id": 0,
-                    "schema_version": SCHEMA_VERSION,
-                    "error": {
-                        "code": "invalid_request",
-                        "message": f"malformed RPC frame: {exc}",
-                    },
-                }
-                try:
-                    conn.sendall((json.dumps(response) + "\n").encode())
-                except OSError:
-                    pass
+                _logger.debug("malformed RPC frame: %s", exc)
+                self._send_error(
+                    conn,
+                    code="invalid_request",
+                    message="malformed RPC frame",
+                )
+                return
+            if not isinstance(request, dict):
+                self._send_error(
+                    conn,
+                    code="validation_error",
+                    message="request must be a JSON object",
+                )
                 return
             response = self.handle(request)
             try:

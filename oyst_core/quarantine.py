@@ -71,6 +71,17 @@ class QuarantineVault:
         return h.hexdigest()
 
     def add(self, source: str, threat_name: str = "") -> QuarantineEntry:
+        from oyst_core.quarantine_guards import quarantine_refuse_reason
+
+        refuse = quarantine_refuse_reason(source)
+        if refuse:
+            SecurityAudit().log(
+                "quarantine.refuse",
+                source,
+                success=False,
+                data={"reason": refuse, "threat": threat_name},
+            )
+            raise ValueError(refuse)
         src = Path(source).expanduser()
         if src.is_symlink():
             raise ValueError("refuse to quarantine through symlink")
@@ -238,10 +249,33 @@ class QuarantineVault:
             raise KeyError(entry_id)
         vault = self._contained_vault_path(entry.vault_path)
         if vault.exists():
-            vault.unlink()
+            if load_config().quarantine.secure_wipe:
+                self._secure_wipe(vault)
+            vault.unlink(missing_ok=True)
         with self._connect() as conn:
             conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
         SecurityAudit().log("quarantine.delete", str(entry_id), success=True)
+
+    @staticmethod
+    def _secure_wipe(path: Path) -> None:
+        """Best-effort single-pass overwrite before unlink (not a formal sanitize)."""
+        try:
+            size = path.stat().st_size
+        except OSError:
+            return
+        try:
+            with path.open("r+b", buffering=0) as handle:
+                remaining = size
+                chunk = b"\0" * min(65536, max(size, 1))
+                while remaining > 0:
+                    written = handle.write(chunk if remaining >= len(chunk) else b"\0" * remaining)
+                    if written <= 0:
+                        break
+                    remaining -= written
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError:
+            return
 
     def verify(self) -> list[int]:
         bad: list[int] = []

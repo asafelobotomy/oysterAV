@@ -1,13 +1,14 @@
 # Security verification gates (oysterAV)
 
 Commit-time gates for privileged surfaces. Mapped loosely to **OWASP ASVS 5.0**
-automatable controls (not a Level 2 certification claim).
+automatable controls (not a Level 2 certification claim). Full requirement map:
+[`asvs-checklist.md`](asvs-checklist.md).
 
 ## Gates
 
 | Gate | Command / location | Control |
 |------|--------------------|---------|
-| Security marker suite | `uv run pytest -m security -q --no-cov` | Validation, helper argv, firewall props, RPC auth, audit redaction |
+| Security marker suite | `uv run pytest -m security -q --no-cov` | Validation, helper argv, firewall props, RPC auth/framing, audit redaction |
 | Security module coverage ≥85% | `uv run python scripts/check_security_coverage.py` | Regressions in privileged modules cannot drop below floor |
 | Bandit MEDIUM+ | `uv tool run bandit -c bandit.yaml -r oyst_core oyst_cli -ll -ii` | SAST (injection / unsafe subprocess patterns) |
 | pip-audit | `uv tool run pip-audit` | Known dependency CVEs |
@@ -17,22 +18,41 @@ automatable controls (not a Level 2 certification claim).
 | GUI subprocess ban | CI `rg` + `test_no_security_subprocess_in_gui` | ADR-002: GUI uses `OystClient` only |
 | Global coverage | `fail_under = 65` in `pyproject.toml` | Broader quality (not a security floor) |
 
-`scripts/check.sh` (non-`--quick`) and GitHub CI run the security marker suite,
-security coverage, Bandit, and pip-audit after the usual triad.
+`scripts/check.sh` and GitHub CI run the security marker suite, security coverage,
+Bandit, and pip-audit after the usual triad.
 
 ## ASVS-oriented mapping
 
 | Theme | Evidence in tests |
 |-------|-------------------|
-| Input validation / injection | `test_validators_adversarial`, `test_helper_argv_injection` |
-| Privilege / command construction | `test_helper_fw_lifecycle`, firewall security props |
-| Local RPC authentication | `test_rpc_auth_hardening` (token + peercred UID) |
+| Input validation / injection | `test_validators_adversarial`, `test_helper_argv_injection`, `test_helper_services_argv`, `test_helper_seal_install_adversarial`, `test_quarantine_refuse`, `test_wave2_privilege`; golden `Case`/`Expect` in `corpora.py` |
+| Privilege / command construction | `test_helper_fw_lifecycle`, `test_helper_env_argc`, firewall security props |
+| Concert workflow abuse | `test_concert_abuse` (ASVS V11.1) |
+| Local RPC authentication / framing / DoS bounds | `test_rpc_auth_hardening`, `test_rpc_adversarial`, `test_rpc_dos_bounds` |
+| Detection-path smoke | `test_eicar_detection_path` (mocked; live via `OYST_EICAR_LIVE=1`) |
 | Sensitive logging | `test_audit_redaction` |
+| Attacker-sim (optional) | [`attacker-sim.md`](attacker-sim.md), `scripts/attacker_sim.sh`, `workflow_dispatch` |
+| Requirement-level map | [`asvs-checklist.md`](asvs-checklist.md) |
+
+## Live EICAR (optional)
+
+```bash
+OYST_EICAR_LIVE=1 uv run pytest -m security tests/test_security/test_eicar_detection_path.py -q --no-cov
+```
+
+Requires host `clamscan` on `PATH`. Default CI uses the mocked path only.
+
+## Attacker-sim (non-blocking)
+
+```bash
+./scripts/attacker_sim.sh --dry-run
+# or: GitHub Actions → Security attacker-sim → Run workflow
+```
 
 ## How to add a security test
 
 1. Put it under `tests/test_security/`.
-2. Mark with `@pytest.mark.security`.
+2. Mark with `@pytest.mark.security` (or use shared `corpora.py`).
 3. Prefer property assertions (reject corpora, argv shape, auth fail-closed) over
    behavioral happy-paths already covered in `tests/test_core/`.
 4. If you add a security-critical module, include it in
@@ -48,9 +68,9 @@ allowlisted `subprocess` argv construction in the privileged helper. Inline
 ## Residuals
 
 - Full ASVS Level 2 certification and live GUI DAST/ZAP remain out of scope
-  (commit-time gates only; no Level 2 claim).
-- Peercred cross-UID is covered in `test_rpc_auth_hardening` via mocked
-  `SO_PEERCRED` (no live cross-UID socket required).
+  (see checklist chapter-level `n/a` and priority gaps).
+- Peercred cross-UID is covered via mocked `SO_PEERCRED` (no live cross-UID socket).
+- Same-process RPC local fallback skips token (documented `partial` in checklist).
 - Dependency CVE exceptions (if ever needed) go in
   [`dependency-exceptions.md`](dependency-exceptions.md) with an expiry note.
 - Gitleaks/Semgrep run in GitHub Actions (`security-scan.yml`); they are not

@@ -86,3 +86,76 @@ def test_seal_and_run_ignores_userspace_extract_mutation() -> None:
         assert str(evil) not in cmd[1]
     finally:
         shutil.rmtree(tarball.parent, ignore_errors=True)
+
+
+def test_seal_and_run_ignores_path_swap_after_hash(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A-02-R: replacing the path with a new inode must not change sealed extract."""
+    tarball, digest = _stage_tarball()
+    try:
+        real_open = open_maldet_tarball_fd
+
+        def _open_then_replace(path: str, expected: str) -> int:
+            fd = real_open(path, expected)
+            # Unlink + recreate (new inode); open fd still holds verified bytes.
+            os.unlink(path)
+            evil_root = tarball.parent / "evil-tree"
+            evil_root.mkdir(exist_ok=True)
+            evil_mal = evil_root / "maldetect-evil"
+            evil_mal.mkdir(exist_ok=True)
+            (evil_mal / "install.sh").write_text("#!/bin/sh\necho pwned\n", encoding="utf-8")
+            with tarfile.open(path, "w:gz") as archive:
+                archive.add(evil_mal, arcname="maldetect-evil")
+            return fd
+
+        monkeypatch.setattr(
+            "oyst_core.privileged.helper_install_script.open_maldet_tarball_fd",
+            _open_then_replace,
+        )
+        with (
+            patch(
+                "oyst_core.privileged.helper_install_script.resolve_trusted_binary",
+                return_value="/bin/bash",
+            ),
+            patch(
+                "oyst_core.privileged.helper_install_script.subprocess.run",
+                return_value=type("R", (), {"returncode": 0})(),
+            ) as run,
+        ):
+            rc = seal_and_run_install_tarball(str(tarball), digest)
+        assert rc == 0
+        cmd = run.call_args[0][0]
+        assert "maldetect-1.0" in cmd[1]
+        assert "maldetect-evil" not in cmd[1]
+    finally:
+        shutil.rmtree(tarball.parent, ignore_errors=True)
+
+
+def test_seal_and_run_fails_closed_on_same_inode_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Truncating the same inode mid-flight must not extract attacker content."""
+    tarball, digest = _stage_tarball()
+    try:
+        real_open = open_maldet_tarball_fd
+
+        def _open_then_truncate(path: str, expected: str) -> int:
+            fd = real_open(path, expected)
+            with tarfile.open(path, "w:gz") as archive:
+                evil = tarball.parent / "evil"
+                evil.mkdir(exist_ok=True)
+                (evil / "install.sh").write_text("#!/bin/sh\necho pwned\n", encoding="utf-8")
+                archive.add(evil, arcname="maldetect-evil")
+            return fd
+
+        monkeypatch.setattr(
+            "oyst_core.privileged.helper_install_script.open_maldet_tarball_fd",
+            _open_then_truncate,
+        )
+        with patch(
+            "oyst_core.privileged.helper_install_script.subprocess.run",
+        ) as run:
+            rc = seal_and_run_install_tarball(str(tarball), digest)
+        assert rc == 2
+        run.assert_not_called()
+    finally:
+        shutil.rmtree(tarball.parent, ignore_errors=True)

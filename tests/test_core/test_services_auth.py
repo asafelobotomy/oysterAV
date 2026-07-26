@@ -301,18 +301,21 @@ def test_systemctl_route_av_up_vs_fail2ban() -> None:
 
 
 def test_systemctl_up_builder_rejects_stop_and_fail2ban() -> None:
+    from unittest.mock import patch
+
     from oyst_core.privileged.helper_services import _build_systemctl_up_argv
 
-    with pytest.raises(ValueError, match="systemctl-up"):
-        _build_systemctl_up_argv(["stop", "clamav-daemon"])
-    with pytest.raises(ValueError, match="systemctl-up"):
-        _build_systemctl_up_argv(["enable-now", "fail2ban"])
-    assert _build_systemctl_up_argv(["enable-now", "clamav-daemon"]) == [
-        "systemctl",
-        "enable",
-        "--now",
-        "clamav-daemon",
-    ]
+    with patch("oyst_core.privileged.helper_services.assert_lifecycle_grant_not_stale"):
+        with pytest.raises(ValueError, match="systemctl-up"):
+            _build_systemctl_up_argv(["stop", "clamav-daemon"])
+        with pytest.raises(ValueError, match="systemctl-up"):
+            _build_systemctl_up_argv(["enable-now", "fail2ban"])
+        assert _build_systemctl_up_argv(["enable-now", "clamav-daemon"]) == [
+            "systemctl",
+            "enable",
+            "--now",
+            "clamav-daemon",
+        ]
 
 
 def test_set_service_unknown_name() -> None:

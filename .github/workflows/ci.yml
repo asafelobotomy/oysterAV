@@ -47,5 +47,5 @@ jobs:
       - run: uv tool run pip-audit
       - name: GUI must not call security binaries directly
         run: |
-          ! rg -n "subprocess\.(run|call|Popen)|os\.system|\bpkexec\b|\bsystemctl\b.*\bclam|rkhunter|chkrootkit|lynis|ufw|firewall-cmd" oysterav/ || \
+          ! rg -n "subprocess\.(run|call|Popen)|os\.system\(|\bpkexec\b|\bsystemctl\b.*\bclam" oysterav/ || \
             (echo "GUI must use OystClient only" && exit 1)

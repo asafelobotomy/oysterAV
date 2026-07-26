@@ -103,6 +103,7 @@ def save_config(config: OysterConfig) -> None:
     lines: list[str] = []
     lines.append("[quarantine]")
     lines.append(f"auto = {'true' if config.quarantine.auto else 'false'}")
+    lines.append(f"secure_wipe = {'true' if config.quarantine.secure_wipe else 'false'}")
     if config.quarantine.vault_dir:
         lines.append(f"vault_dir = {_toml_str(config.quarantine.vault_dir)}")
     lines.append("")

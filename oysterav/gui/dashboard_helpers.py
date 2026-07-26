@@ -280,41 +280,59 @@ def host_shield_card(firewall: dict[str, Any], services: dict[str, Any]) -> Dash
     ufw_on = bool(firewall.get("ufw_active"))
     fwd_on = bool(firewall.get("firewalld_active"))
     active = str(firewall.get("active") or "none")
-    if ufw_on or fwd_on:
-        fw_value = "On"
-        fw_css = "success"
-        backend = "ufw" if ufw_on else "firewalld"
-    elif active == "none":
-        fw_value = "Off"
-        fw_css = "warning"
-        backend = "No host firewall enabled"
-    elif active == "nft-direct":
-        fw_value = "On"
-        fw_css = "success"
-        backend = "nftables"
-    else:
-        fw_value = "Unknown"
-        fw_css = "warning"
-        backend = "Firewall status unclear"
+    managed_on = ufw_on or fwd_on
+    host_nft = active == "nft-direct" and not managed_on
 
     svc = (services.get("services") or {}) if isinstance(services, dict) else {}
     fail2ban = svc.get("fail2ban") if isinstance(svc, dict) else None
+    f2b_running = bool(fail2ban.get("running")) if isinstance(fail2ban, dict) else False
+    f2b_unit = bool(fail2ban.get("unit")) if isinstance(fail2ban, dict) else False
+
     if isinstance(fail2ban, dict):
-        if fail2ban.get("running"):
-            ban = "fail2ban active"
-        elif fail2ban.get("unit"):
+        if f2b_running:
+            ban = "fail2ban on"
+        elif f2b_unit:
             ban = "fail2ban installed, not running"
-            if fw_css == "success":
-                fw_css = "warning"
         else:
             ban = "fail2ban not installed"
     else:
         ban = "fail2ban status unknown"
 
-    if ufw_on or fwd_on or active == "nft-direct":
-        desc = f"{backend} · {ban}"
+    if managed_on:
+        backend = "ufw" if ufw_on else "firewalld"
+    elif host_nft:
+        backend = "nftables · managed off"
+    elif active == "none":
+        backend = "firewall off"
     else:
-        desc = ban if active == "none" else f"{backend} · {ban}"
+        backend = "firewall unclear"
+
+    # Combined host posture: primary value must not say Off when fail2ban is on.
+    # nft-direct without managed UFW/firewalld is Partial (matches Shield subtitle).
+    if managed_on and f2b_running:
+        fw_value = "On"
+        fw_css = "success"
+        desc = f"{backend} · {ban}"
+    elif managed_on and not f2b_running:
+        fw_value = "On"
+        fw_css = "warning" if f2b_unit or isinstance(fail2ban, dict) else "success"
+        desc = f"{backend} · {ban}"
+    elif host_nft:
+        fw_value = "Partial"
+        fw_css = "warning"
+        desc = f"{backend} · {ban}"
+    elif f2b_running and not managed_on:
+        fw_value = "Partial"
+        fw_css = "warning"
+        desc = f"{ban} · {backend}"
+    elif active == "none":
+        fw_value = "Off"
+        fw_css = "warning"
+        desc = ban
+    else:
+        fw_value = "Unknown"
+        fw_css = "warning"
+        desc = f"{backend} · {ban}"
 
     return DashboardCardModel(
         id="host_shield",

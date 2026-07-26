@@ -99,14 +99,17 @@ def test_select_soft_stop_systemctl_stop_not_disable_now() -> None:
 def test_ensure_ufw_auto_allows_ssh() -> None:
     status_calls = {"n": 0}
 
-    def _status() -> str:
+    def _status(_run: object) -> str:
         status_calls["n"] += 1
         if status_calls["n"] == 1:
             return "Status: inactive"
         return "22/tcp ALLOW IN Anywhere"
 
     with (
-        patch.object(life, "_ufw_status_text", side_effect=_status),
+        patch(
+            "oyst_core.privileged.helper_fw_enable.ufw_status_text",
+            side_effect=_status,
+        ),
         patch.object(life, "_run_cmd", return_value=(0, "ok")) as run,
         patch.object(life, "invalidate_firewall_detect_cache"),
     ):
@@ -127,12 +130,58 @@ def test_ensure_firewalld_fail_closed_stops() -> None:
 
     with (
         patch.object(life, "_run_cmd", side_effect=_run),
-        patch.object(life, "_firewalld_ssh_ok", return_value=False),
+        patch(
+            "oyst_core.privileged.helper_fw_enable.firewalld_ssh_ok",
+            return_value=False,
+        ),
         patch.object(life, "invalidate_firewall_detect_cache"),
     ):
         step = life._ensure_firewalld(force_lockout=False)
     assert step["ok"] is False
     assert any(c[:3] == ["systemctl", "stop", "firewalld"] for c in calls)
+
+
+def test_select_soft_swap_restarts_peer_on_enable_failure() -> None:
+    calls: list[list[str]] = []
+
+    def _run(cmd: list[str]) -> tuple[int, str]:
+        calls.append(cmd)
+        return 0, "ok"
+
+    with (
+        patch.object(life, "invalidate_firewall_detect_cache"),
+        patch.object(life, "_run_cmd", side_effect=_run),
+        patch.object(
+            life.FirewallPack,
+            "detect",
+            side_effect=[
+                {
+                    "ufw": True,
+                    "firewalld": True,
+                    "firewalld_active": True,
+                    "ufw_active": False,
+                    "conflict": False,
+                    "active": "firewalld",
+                },
+                {"ufw": True, "firewalld": True, "conflict": False, "active": "none"},
+            ],
+        ),
+        patch.object(
+            life,
+            "_ensure_ufw",
+            return_value={
+                "step": "firewall-ensure",
+                "ok": False,
+                "message": "ufw enable failed",
+                "soft_fail": True,
+            },
+        ),
+    ):
+        step = life.select_firewall_as_root("ufw")
+    assert step["ok"] is False
+    assert "restored firewalld" in step["message"]
+    assert any(c[:3] == ["systemctl", "stop", "firewalld"] for c in calls)
+    assert any(c[:3] == ["systemctl", "start", "firewalld"] for c in calls)
 
 
 def test_apply_lifecycle_install_before_select_and_short_circuit() -> None:

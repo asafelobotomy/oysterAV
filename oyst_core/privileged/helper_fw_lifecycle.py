@@ -9,9 +9,9 @@ from typing import Any
 
 from oyst_core.packs.base import detect_distro_family
 from oyst_core.packs.firewall import FirewallPack, invalidate_firewall_detect_cache
-from oyst_core.packs.firewall_ops import FirewallOps
 from oyst_core.privileged.helper_clamd import _parse_flag
-from oyst_core.privileged.helper_firewall import _build_firewalld_argv, _build_ufw_argv
+from oyst_core.privileged.helper_firewall import _build_ufw_argv
+from oyst_core.privileged.helper_fw_enable import ensure_firewalld, ensure_ufw
 from oyst_core.privileged.helper_services import _build_systemctl_argv
 from oyst_core.privileged.helper_validate import (
     _validate_package_name,
@@ -64,24 +64,6 @@ def _run_cmd(cmd: list[str]) -> tuple[int, str]:
     return proc.returncode, detail
 
 
-def _ufw_status_text() -> str:
-    rc, out = _run_cmd(["ufw", "status", "verbose"])
-    if rc == 0 and out:
-        return out
-    _, numbered = _run_cmd(["ufw", "status", "numbered"])
-    return numbered
-
-
-def _firewalld_ssh_ok() -> bool:
-    rc, _ = _run_cmd(["firewall-cmd", "--query-service=ssh"])
-    if rc == 0:
-        return True
-    rc, out = _run_cmd(["firewall-cmd", "--list-all"])
-    if rc != 0:
-        rc, out = _run_cmd(["firewall-cmd", "--list-services"])
-    return FirewallOps.parse_ssh_open(out or "")
-
-
 def _family_install_argv(family: str, packages: list[str]) -> list[str]:
     pkgs = [_validate_package_name(p) for p in packages]
     if not pkgs:
@@ -121,8 +103,20 @@ def install_firewall_package_as_root(backend: str) -> dict[str, Any]:
     )
 
 
+def _root_managed_pref() -> str:
+    try:
+        from oyst_core.config_access import get_config_value
+
+        raw = get_config_value("firewall.managed_backend")
+    except Exception:
+        return ""
+    if raw is None or raw in {"", "None", "null"}:
+        return ""
+    return str(raw).strip().lower()
+
+
 def ensure_firewall_as_root(*, force_lockout: bool = False) -> dict[str, Any]:
-    """SSH-safe UFW/firewalld enable (already root; no nested pkexec)."""
+    """SSH-safe enable using prefer/recommend order (same as userspace ensure)."""
     invalidate_firewall_detect_cache()
     det = FirewallPack().detect()
     if det.get("conflict"):
@@ -140,20 +134,44 @@ def ensure_firewall_as_root(*, force_lockout: bool = False) -> dict[str, Any]:
             skipped=True,
             message=f"Managed firewall already on ({active})",
         )
-    if det.get("ufw"):
-        return _ensure_ufw(force_lockout=force_lockout)
-    if det.get("firewalld"):
-        return _ensure_firewalld(force_lockout=force_lockout)
-    return _step(
-        "firewall-ensure",
-        ok=True,
-        skipped=True,
-        message="no UFW or firewalld binary installed",
-    )
+    prefer_ufw = bool(det.get("ufw"))
+    prefer_fw = bool(det.get("firewalld"))
+    if not prefer_ufw and not prefer_fw:
+        return _step(
+            "firewall-ensure",
+            ok=True,
+            skipped=True,
+            message="no UFW or firewalld binary installed",
+        )
+    pref = _root_managed_pref()
+    if pref == "none":
+        return _step(
+            "firewall-ensure",
+            ok=True,
+            skipped=True,
+            message="firewall.managed_backend is none; skipping ensure",
+        )
+    if pref == "ufw" and prefer_ufw:
+        target = "ufw"
+    elif pref == "firewalld" and prefer_fw:
+        target = "firewalld"
+    else:
+        from oyst_core.packs.firewall_select import recommended_managed_backend
+
+        rec = recommended_managed_backend()
+        if rec == "ufw" and prefer_ufw:
+            target = "ufw"
+        elif rec == "firewalld" and prefer_fw:
+            target = "firewalld"
+        else:
+            target = "ufw" if prefer_ufw else "firewalld"
+    step = select_firewall_as_root(target, force_lockout=force_lockout)
+    step["step"] = "firewall-ensure"
+    return step
 
 
 def select_firewall_as_root(backend: str, *, force_lockout: bool = False) -> dict[str, Any]:
-    """Soft-swap to one managed backend (or none). Does not flush host nftables."""
+    """Soft-swap to one managed backend. Restarts peer if enable fails after stop."""
     choice = backend.strip().lower()
     if choice not in {"ufw", "firewalld", "none"}:
         return _step(
@@ -167,12 +185,7 @@ def select_firewall_as_root(backend: str, *, force_lockout: bool = False) -> dic
     if choice == "none":
         return _select_none(det)
     if choice == "ufw" and not det.get("ufw"):
-        return _step(
-            "firewall-select",
-            ok=False,
-            message="ufw is not installed",
-            soft_fail=True,
-        )
+        return _step("firewall-select", ok=False, message="ufw is not installed", soft_fail=True)
     if choice == "firewalld" and not det.get("firewalld"):
         return _step(
             "firewall-select",
@@ -180,6 +193,7 @@ def select_firewall_as_root(backend: str, *, force_lockout: bool = False) -> dic
             message="firewalld is not installed",
             soft_fail=True,
         )
+    peer_stopped: str | None = None
     if choice == "ufw" and (det.get("firewalld_active") or det.get("conflict")):
         rc, detail = _run_cmd(_build_systemctl_argv(["stop", "firewalld"]))
         if rc != 0:
@@ -189,6 +203,7 @@ def select_firewall_as_root(backend: str, *, force_lockout: bool = False) -> dic
                 message=detail or "could not stop firewalld",
                 soft_fail=True,
             )
+        peer_stopped = "firewalld"
     if choice == "firewalld" and (det.get("ufw_active") or det.get("conflict")):
         rc, detail = _run_cmd(_build_ufw_argv(["disable"]))
         if rc != 0:
@@ -198,9 +213,12 @@ def select_firewall_as_root(backend: str, *, force_lockout: bool = False) -> dic
                 message=detail or "could not disable UFW",
                 soft_fail=True,
             )
+        peer_stopped = "ufw"
     invalidate_firewall_detect_cache()
     det2 = FirewallPack().detect()
     if det2.get("conflict"):
+        if peer_stopped:
+            _restart_peer(peer_stopped)
         return _step(
             "firewall-select",
             ok=False,
@@ -215,13 +233,26 @@ def select_firewall_as_root(backend: str, *, force_lockout: bool = False) -> dic
             skipped=True,
             message=f"{choice} already active",
         )
-    if choice == "ufw":
-        step = _ensure_ufw(force_lockout=force_lockout)
-    else:
-        step = _ensure_firewalld(force_lockout=force_lockout)
+    step = (
+        _ensure_ufw(force_lockout=force_lockout)
+        if choice == "ufw"
+        else _ensure_firewalld(force_lockout=force_lockout)
+    )
     step["step"] = "firewall-select"
+    if not step.get("ok") and not step.get("skipped") and peer_stopped:
+        _restart_peer(peer_stopped)
+        prior = str(step.get("message") or "enable failed")
+        step["message"] = f"{prior}; restored {peer_stopped}"
     invalidate_firewall_detect_cache()
     return step
+
+
+def _restart_peer(peer: str) -> None:
+    if peer == "firewalld":
+        _run_cmd(_build_systemctl_argv(["start", "firewalld"]))
+    elif peer == "ufw":
+        _run_cmd(_build_ufw_argv(["enable"]))
+    invalidate_firewall_detect_cache()
 
 
 def _select_none(det: dict[str, object]) -> dict[str, Any]:
@@ -258,64 +289,11 @@ def _select_none(det: dict[str, object]) -> dict[str, Any]:
 
 
 def _ensure_ufw(*, force_lockout: bool) -> dict[str, Any]:
-    before = _ufw_status_text()
-    ssh_ok = FirewallOps.parse_ssh_open(before)
-    if not ssh_ok and not force_lockout:
-        cmd = _build_ufw_argv(["allow", "--port", "22", "--proto", "tcp"])
-        rc, detail = _run_cmd(cmd)
-        if rc != 0:
-            return _step(
-                "firewall-ensure",
-                ok=False,
-                message=f"could not add SSH allow before enable: {detail}",
-                soft_fail=True,
-            )
-        ssh_ok = FirewallOps.parse_ssh_open(_ufw_status_text())
-    if not ssh_ok and not force_lockout:
-        return _step(
-            "firewall-ensure",
-            ok=False,
-            message="SSH allow rule not detected; use --force-lockout-risk to proceed",
-            soft_fail=True,
-        )
-    rc, detail = _run_cmd(_build_ufw_argv(["enable"]))
-    if rc != 0:
-        return _step(
-            "firewall-ensure",
-            ok=False,
-            message=detail or "ufw enable failed",
-            soft_fail=True,
-        )
-    invalidate_firewall_detect_cache()
-    return _step("firewall-ensure", ok=True, message="ufw enabled")
-
-
-def _fail_closed_firewalld(message: str) -> dict[str, Any]:
-    _run_cmd(_build_systemctl_argv(["stop", "firewalld"]))
-    invalidate_firewall_detect_cache()
-    return _step("firewall-ensure", ok=False, message=message, soft_fail=True)
+    return ensure_ufw(force_lockout=force_lockout, run_cmd=_run_cmd)
 
 
 def _ensure_firewalld(*, force_lockout: bool) -> dict[str, Any]:
-    rc, detail = _run_cmd(_build_systemctl_argv(["enable-now", "firewalld"]))
-    if rc != 0:
-        return _step(
-            "firewall-ensure",
-            ok=False,
-            message=detail or "firewalld enable failed",
-            soft_fail=True,
-        )
-    if not force_lockout:
-        cmd = _build_firewalld_argv(["add-service", "ssh", "--zone", "public"])
-        _run_cmd(cmd)
-        _run_cmd(_build_firewalld_argv(["reload"]))
-        if not _firewalld_ssh_ok():
-            return _fail_closed_firewalld(
-                "firewalld started but SSH service not confirmed; "
-                "stopped firewalld — use --force-lockout-risk to proceed",
-            )
-    invalidate_firewall_detect_cache()
-    return _step("firewall-ensure", ok=True, message="firewalld enabled")
+    return ensure_firewalld(force_lockout=force_lockout, run_cmd=_run_cmd)
 
 
 def apply_firewall_lifecycle_flags(argv: Sequence[str]) -> list[dict[str, Any]]:

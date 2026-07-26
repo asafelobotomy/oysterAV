@@ -65,11 +65,11 @@ def test_verify_peer_credentials_rejects_cross_uid(
     tmp_path.mkdir(parents=True, exist_ok=True)
     ensure_rpc_token()
     conn = MagicMock(spec=socket.socket)
-    # SO_PEERCRED layout: pid(u32) uid(u32) gid(u32) little-endian
+    # SO_PEERCRED: pid, uid, gid as native signed ints (struct ucred).
     other_uid = (os.getuid() + 1) % 65535
     if other_uid == os.getuid():
         other_uid = 0 if os.getuid() != 0 else 1
-    creds = struct.pack("<iii", 1, other_uid, 0)
+    creds = struct.pack("iii", 1, other_uid, 0)
     conn.getsockopt.return_value = creds
     with pytest.raises(RpcAuthError, match="UID"):
         verify_peer_credentials(conn)
@@ -83,6 +83,19 @@ def test_verify_peer_credentials_accepts_matching_uid(
     tmp_path.mkdir(parents=True, exist_ok=True)
     ensure_rpc_token()
     conn = MagicMock(spec=socket.socket)
-    creds = struct.pack("<iii", os.getpid(), os.getuid(), os.getgid())
+    creds = struct.pack("iii", os.getpid(), os.getuid(), os.getgid())
     conn.getsockopt.return_value = creds
     verify_peer_credentials(conn)
+
+
+def test_ensure_rpc_token_regenerates_short_token(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("oyst_core.rpc_auth.data_dir", lambda: tmp_path)
+    path = tmp_path / "oyst.token"
+    path.write_text("short\n", encoding="utf-8")
+    path.chmod(0o600)
+    token = ensure_rpc_token()
+    assert len(token) >= 22
+    assert token != "short"

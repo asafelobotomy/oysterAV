@@ -78,36 +78,38 @@ def _run_auto_install(wizard: SetupWizard) -> None:
     def worker() -> dict[str, Any]:
         from oysterav.gui.widgets.setup_wizard_firewall import selected_firewall_backend
 
+        backend = selected_firewall_backend(wizard) if enable_firewall else None
         result = wizard.client.setup_run(
             confirm_aur=True,
             skip_packs=skip_packs,
             skip_schedule=skip_schedule,
             skip_harden=skip_harden,
             enable_linger=enable_linger,
-            enable_firewall=False,
+            enable_firewall=enable_firewall,
+            firewall_backend=backend if enable_firewall else None,
             auto_quarantine=auto_quarantine,
             mark_complete=True,
         )
-        if enable_firewall:
-            backend = selected_firewall_backend(wizard)
-            if backend != "none":
-                sel = wizard.client.firewall_select(backend)
-                steps = list(result.get("steps") or [])
-                steps.append(
-                    {
-                        "step": "firewall-select",
-                        "ok": bool(sel.get("ok")),
-                        "message": sel.get("message"),
-                        "skipped": sel.get("skipped"),
-                    },
-                )
-                result["steps"] = steps
-                if not sel.get("ok"):
-                    result["ok"] = False
-            try:
-                wizard.client.config_set("firewall.managed_backend", backend)
-            except Exception:
-                pass
+        if enable_firewall and backend:
+            fw_ok = any(
+                isinstance(s, dict)
+                and s.get("step") in {"firewall-select", "firewall-ensure", "firewall-install"}
+                and (s.get("ok") or s.get("skipped"))
+                for s in (result.get("steps") or [])
+            )
+            # Prefer explicit select/ensure success; install-only without select is ok when skipped
+            select_steps = [
+                s
+                for s in (result.get("steps") or [])
+                if isinstance(s, dict) and s.get("step") in {"firewall-select", "firewall-ensure"}
+            ]
+            if select_steps:
+                fw_ok = all(s.get("ok") or s.get("skipped") for s in select_steps)
+            if fw_ok or backend == "none":
+                try:
+                    wizard.client.config_set("firewall.managed_backend", backend)
+                except Exception:
+                    pass
         return result
 
     def done(result: dict[str, Any]) -> bool:

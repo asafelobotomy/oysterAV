@@ -71,6 +71,27 @@ def _validate_wrapper_cmd(raw: str) -> str:
         raise ValueError("VirusEvent command must be absolute oysterAV wrapper path")
     if any(ch in cleaned for ch in (" ", ";", "|", "&", "`", "$", "\n", "\r")):
         raise ValueError("VirusEvent command must not contain shell metacharacters")
+    path = Path(cleaned)
+    if path.name != OYSTERAV_MARK:
+        raise ValueError("VirusEvent command basename must be oyst-virusevent")
+    text = str(path)
+    allowed = text.endswith("/.local/share/oysterav/bin/oyst-virusevent") or any(
+        text.startswith(prefix) and text.rstrip("/").endswith("/oyst-virusevent")
+        for prefix in ("/usr/lib/oysterav/", "/usr/local/lib/oysterav/")
+    )
+    if not allowed:
+        raise ValueError(
+            "VirusEvent wrapper must be under ~/.local/share/oysterav/bin or /usr/lib/oysterav"
+        )
+    if path.exists():
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("VirusEvent wrapper must be a regular file")
+        try:
+            body = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"cannot read VirusEvent wrapper: {exc}") from exc
+        if OYSTERAV_MARK not in body:
+            raise ValueError("VirusEvent wrapper missing oysterAV mark")
     return cleaned
 
 

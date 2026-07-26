@@ -49,19 +49,32 @@ class Fail2banPack(Pack):
     def service_status(self) -> dict[str, object]:
         if not which("fail2ban-client"):
             return {"installed": False, "running": False, "jails": []}
+        unit_active = False
+        try:
+            unit_res = run_command(["systemctl", "is-active", "fail2ban"], timeout=15)
+            unit_active = unit_res.stdout.strip() == "active"
+        except (ValueError, OSError):
+            unit_active = False
         try:
             res = run_command(["fail2ban-client", "status"], timeout=30)
             output = res.stdout.strip()
-            running = res.returncode == 0
-            jails = self._parse_jail_list(output)
+            client_ok = res.returncode == 0
+            jails = self._parse_jail_list(output) if client_ok else []
             return {
                 "installed": True,
-                "running": running,
+                "running": client_ok or unit_active,
                 "jails": jails,
                 "output": output,
+                "unit_active": unit_active,
             }
         except (ValueError, OSError) as exc:
-            return {"installed": True, "running": False, "error": str(exc), "jails": []}
+            return {
+                "installed": True,
+                "running": unit_active,
+                "error": str(exc),
+                "jails": [],
+                "unit_active": unit_active,
+            }
 
     def _parse_jail_list(self, output: str) -> list[str]:
         for line in output.splitlines():

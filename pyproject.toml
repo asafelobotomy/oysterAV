@@ -57,6 +57,7 @@ addopts = "-q --tb=short"
 markers = [
     "gui: requires PyGObject (gi); skipped when gui extra is not installed",
     "security: ASVS-aligned security property tests (required gate)",
+    "security_nightly: heavier hostile-client / attacker-sim checks (optional)",
 ]
 
 [tool.coverage.run]

@@ -93,16 +93,18 @@ def build_harden_page(wizard: SetupWizard, harden_box: Gtk.Box) -> None:
 
     harden_group = Adw.PreferencesGroup(title="Host firewall")
     note = Gtk.Label(
-        label="Choose and apply a managed firewall on the Firewall page (previous step).",
+        label=(
+            "When Include firewall is on, Apply hardenings selects the Firewall page "
+            "backend in the same authentication prompt (install if needed)."
+        ),
         xalign=0,
         wrap=True,
     )
     note.add_css_class("dim-label")
     harden_box.append(note)
-    # Keep row for Auto-Install / harden recipe compatibility (hidden from focus).
     wizard.enable_firewall_row = Adw.SwitchRow(title="Include firewall in harden apply")
     wizard.enable_firewall_row.set_subtitle(
-        "When on, Apply hardenings also ensures the Firewall page selection",
+        "Uses the Firewall page selection in this harden concert (single auth)",
     )
     wizard.enable_firewall_row.set_active(True)
     harden_group.add(wizard.enable_firewall_row)
@@ -144,8 +146,9 @@ def enabled_harden_step_ids(wizard: SetupWizard) -> list[str]:
         if switches.get(key) is None or switches[key].get_active()
     ]
     if wizard.enable_firewall_row.get_active():
-        # Firewall page Apply / Auto-Install call firewall.select separately.
-        pass
+        # Firewall is applied via setup_run firewall_backend (same concert), not a
+        # separate firewall.select call (ADR-009 single-auth).
+        ids.append("firewall-ensure")
     return ids
 
 

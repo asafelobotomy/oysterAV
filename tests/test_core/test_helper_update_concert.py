@@ -51,7 +51,14 @@ def test_update_concert_unknown_family() -> None:
     with pytest.raises(ValueError, match="unsupported"):
         from oyst_core.privileged.helper_update_concert import _family_upgrade_argv
 
-        _family_upgrade_argv("gentoo", ["foo"])
+        _family_upgrade_argv("gentoo", ["clamav"])
+
+
+def test_update_concert_rejects_non_allowlisted_package() -> None:
+    with pytest.raises(ValueError, match="allowlisted"):
+        from oyst_core.privileged.helper_update_concert import _family_upgrade_argv
+
+        _family_upgrade_argv("arch", ["nginx"])
 
 
 def test_update_concert_json_stdout(capsys: pytest.CaptureFixture[str]) -> None:

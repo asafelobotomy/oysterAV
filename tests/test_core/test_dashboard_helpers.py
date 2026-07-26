@@ -111,7 +111,29 @@ def test_host_shield_and_helper_visibility() -> None:
         {"services": {"fail2ban": {"running": True, "unit": "fail2ban"}}},
     )
     assert host.value == "On"
-    assert "fail2ban active" in host.description
+    assert "fail2ban on" in host.description
+
+    # Firewall off + fail2ban on must not read as plain Off (Shield says on).
+    partial = host_shield_card(
+        {"ufw_active": False, "firewalld_active": False, "active": "none"},
+        {"services": {"fail2ban": {"running": True, "unit": "fail2ban"}}},
+    )
+    assert partial.value == "Partial"
+    assert "fail2ban on" in partial.description
+    assert "firewall off" in partial.description
+
+    both_off = host_shield_card(
+        {"ufw_active": False, "firewalld_active": False, "active": "none"},
+        {"services": {"fail2ban": {"running": False, "unit": "fail2ban"}}},
+    )
+    assert both_off.value == "Off"
+
+    nft = host_shield_card(
+        {"ufw_active": False, "firewalld_active": False, "active": "nft-direct"},
+        {"services": {"fail2ban": {"running": False, "unit": ""}}},
+    )
+    assert nft.value == "Partial"
+    assert "managed off" in nft.description
 
     assert helper_card({"helper": {"installed": True, "policy_current": True}}) is None
     stale = helper_card(

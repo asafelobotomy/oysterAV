@@ -37,6 +37,8 @@ ScheduleBackend = Literal["inherit", "auto", "clamd", "clamscan"]
 class QuarantineConfig(BaseModel):
     auto: bool = False
     vault_dir: str = ""
+    # Best-effort overwrite before unlink; SSDs may retain blocks until reclaim.
+    secure_wipe: bool = False
 
 
 class ClamonaccConfig(BaseModel):

@@ -12,6 +12,7 @@ from oyst_core.packs.rkhunter_resolve import (
     apply_overlay_line,
     apply_overlay_lines,
 )
+from oyst_core.privileged.auth_grant import assert_lifecycle_grant_not_stale
 from oyst_core.privileged.helper_validate import resolve_trusted_argv
 from oyst_core.privileged.safe_write import write_text_nofollow
 from oyst_core.privileged.validators import (
@@ -44,6 +45,7 @@ def _build_systemctl_argv(argv: Sequence[str]) -> list[str]:
 
 def _build_systemctl_up_argv(argv: Sequence[str]) -> list[str]:
     """Start/enable/restart AV units only (passwordless grant path)."""
+    assert_lifecycle_grant_not_stale()
     if len(argv) < 2:
         raise ValueError("usage: systemctl-up <action> <unit>")
     action = validate_passwordless_systemctl_action(argv[0])
@@ -74,6 +76,7 @@ def _apply_maldet_monitor_mode(mode: str) -> None:
 
 
 def _build_maldet_config_argv(argv: Sequence[str]) -> list[str]:
+    assert_lifecycle_grant_not_stale()
     if not argv:
         raise ValueError(
             "usage: maldet-config set-monitor-mode <users|paths> | start-monitor <users|paths>"

@@ -41,7 +41,6 @@ def build_services_group(
     on_status: Callable[[str], None] | None,
 ) -> tuple[Adw.PreferencesGroup, Callable[[], None]]:
     """Build Services preferences group; returns (group, refresh_fn)."""
-    _ = window
     group = Adw.PreferencesGroup(
         title="Services",
         description="Start/stop oysterAV-related system services (polkit may prompt).",
@@ -193,60 +192,109 @@ def build_services_group(
         run_in_thread(worker, done, failed)
 
     def _on_install(*_a: object) -> None:
-        install_btn.set_sensitive(False)
-        _status("Installing privileged helper (polkit may prompt)…")
+        def start() -> None:
+            install_btn.set_sensitive(False)
+            _status("Installing privileged helper (polkit may prompt)…")
 
-        def worker() -> dict[str, Any]:
-            return request_helper_install(client)
+            def worker() -> dict[str, Any]:
+                return request_helper_install(client)
 
-        def done(result: dict[str, Any]) -> bool:
-            install_btn.set_sensitive(True)
-            if result.get("ok"):
-                _status("Privileged helper installed")
-            else:
-                _status(str(result.get("message") or "Helper install failed"))
-            refresh()
-            return False
+            def done(result: dict[str, Any]) -> bool:
+                install_btn.set_sensitive(True)
+                if result.get("ok"):
+                    _status("Privileged helper installed")
+                else:
+                    _status(str(result.get("message") or "Helper install failed"))
+                refresh()
+                return False
 
-        def failed(message: str) -> bool:
-            install_btn.set_sensitive(True)
-            _status(f"Helper install failed: {message}")
-            return False
+            def failed(message: str) -> bool:
+                install_btn.set_sensitive(True)
+                _status(f"Helper install failed: {message}")
+                return False
 
-        run_in_thread(worker, done, failed)
+            run_in_thread(worker, done, failed)
+
+        if window is None:
+            start()
+            return
+        dialog = Adw.MessageDialog(
+            transient_for=window,
+            heading="Install privileged helper",
+            body="Administrator authentication is required to install the polkit helper.",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("confirm", "Install")
+        dialog.set_default_response("confirm")
+        dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
+        dialog.connect(
+            "response",
+            lambda _d, r: start() if r == "confirm" else None,
+        )
+        dialog.present()
 
     def _on_auth_notify(*_a: object) -> None:
         if state.get("loading"):
             return
         want_on = bool(auth_switch.get_active())
-        auth_switch.set_sensitive(False)
 
-        def worker() -> dict[str, Any]:
-            if want_on:
-                return request_auth_grant(client)
-            return request_auth_revoke(client)
+        def start() -> None:
+            auth_switch.set_sensitive(False)
 
-        def done(result: dict[str, Any]) -> bool:
-            auth_switch.set_sensitive(True)
-            if result.get("ok"):
-                _status("Passwordless service control " + ("granted" if want_on else "revoked"))
-            else:
-                _status(str(result.get("message") or "Auth change failed"))
+            def worker() -> dict[str, Any]:
+                if want_on:
+                    return request_auth_grant(client)
+                return request_auth_revoke(client)
+
+            def done(result: dict[str, Any]) -> bool:
+                auth_switch.set_sensitive(True)
+                if result.get("ok"):
+                    _status("Passwordless service control " + ("granted" if want_on else "revoked"))
+                else:
+                    _status(str(result.get("message") or "Auth change failed"))
+                    state["loading"] = True
+                    auth_switch.set_active(not want_on)
+                    state["loading"] = False
+                refresh()
+                return False
+
+            def failed(message: str) -> bool:
+                auth_switch.set_sensitive(True)
                 state["loading"] = True
                 auth_switch.set_active(not want_on)
                 state["loading"] = False
-            refresh()
-            return False
+                _status(f"Auth change failed: {message}")
+                return False
 
-        def failed(message: str) -> bool:
-            auth_switch.set_sensitive(True)
-            state["loading"] = True
-            auth_switch.set_active(not want_on)
-            state["loading"] = False
-            _status(f"Auth change failed: {message}")
-            return False
+            run_in_thread(worker, done, failed)
 
-        run_in_thread(worker, done, failed)
+        if window is None:
+            start()
+            return
+        dialog = Adw.MessageDialog(
+            transient_for=window,
+            heading="Passwordless service control",
+            body=(
+                "Grant passwordless start/enable for ClamAV and maldet for 7 days."
+                if want_on
+                else "Revoke the passwordless service-lifecycle grant."
+            ),
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("confirm", "Continue")
+        dialog.set_default_response("confirm")
+        dialog.set_response_appearance("confirm", Adw.ResponseAppearance.SUGGESTED)
+
+        def on_response(_d: Adw.MessageDialog, response: str) -> None:
+            if response == "confirm":
+                start()
+            else:
+                state["loading"] = True
+                auth_switch.set_active(not want_on)
+                state["loading"] = False
+
+        dialog.connect("response", on_response)
+        dialog.present()
 
     install_btn.connect("clicked", _on_install)
     auth_switch.connect("notify::active", _on_auth_notify)
