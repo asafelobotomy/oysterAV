@@ -5,7 +5,9 @@
   <summary>Linux security orchestrator</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <developer_name>oysterAV contributors</developer_name>
+  <developer id="io.github.asafelobotomy">
+    <name>oysterAV contributors</name>
+  </developer>
   <url type="homepage">https://github.com/asafelobotomy/oysterAV</url>
   <url type="bugtracker">https://github.com/asafelobotomy/oysterAV/issues</url>
   <description>
@@ -14,9 +16,33 @@
       via a CLI-first backend and a thin GTK4 GUI client. The GUI talks only to OystClient
       over local JSON-RPC — it never runs security binaries directly.
     </p>
+    <p>
+      Flatpak installs the GUI client with host filesystem access so oysterAV can reach
+      host scanners and elevate via flatpak-spawn. Privileged operations require a
+      host-installed package (AUR, COPR, or GitHub .deb/.rpm) that provides the root-owned
+      oyst-helper and Polkit policy. A Flatpak-only install cannot complete helper setup alone.
+    </p>
   </description>
   <launchable type="desktop-id">io.github.asafelobotomy.OysterAV.desktop</launchable>
   <icon type="stock">oysterav</icon>
+  <categories>
+    <category>System</category>
+    <category>Security</category>
+  </categories>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/asafelobotomy/oysterAV/main/docs/assets/screenshots/dashboard.png</image>
+      <caption>Dashboard posture overview</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/asafelobotomy/oysterAV/main/docs/assets/screenshots/scan.png</image>
+      <caption>Scan profiles and pack cards</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/asafelobotomy/oysterAV/main/docs/assets/screenshots/settings.png</image>
+      <caption>Settings and maintenance</caption>
+    </screenshot>
+  </screenshots>
   <provides>
     <binary>oysterav</binary>
     <binary>oyst-cli</binary>
@@ -25,7 +51,10 @@
     <control>pointing</control>
     <control>keyboard</control>
   </recommends>
-  <content_rating type="oars-1.1"/>
+  <content_rating type="oars-1.1">
+    <content_attribute id="network-internet">intense</content_attribute>
+    <content_attribute id="system-access">intense</content_attribute>
+  </content_rating>
   <releases>
     <release version="0.2.1" date="2026-07-27"/>
   </releases>

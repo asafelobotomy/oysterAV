@@ -1,0 +1,37 @@
+Source: oysterav
+Section: utils
+Priority: optional
+Maintainer: oysterAV contributors <noreply@users.noreply.github.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-python3,
+ pybuild-plugin-pyproject,
+ python3-all,
+ python3-click,
+ python3-defusedxml,
+ python3-pydantic,
+ python3-setuptools,
+ python3-hatchling
+Standards-Version: 4.7.0
+Homepage: https://github.com/asafelobotomy/oysterAV
+Rules-Requires-Root: no
+
+Package: oysterav
+Architecture: all
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ python3-gi,
+ gir1.2-gtk-4.0,
+ gir1.2-adw-1,
+ policykit-1
+Recommends:
+ clamav,
+ clamav-daemon,
+ rkhunter
+Description: Linux security orchestrator (oyst-cli + GTK4 GUI)
+ oysterAV orchestrates host security tools via a CLI-first backend and a thin
+ GTK4 client. This package installs under /usr including the Polkit helper.
+ .
+ Prefer this system package (or AUR/COPR) over pip for privileged helper
+ installs. Flatpak GUI users still need a host package for elevation.

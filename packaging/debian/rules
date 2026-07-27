@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export PYBUILD_NAME = oysterav
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	# oyst-helper + desktop/polkit/icons come from debian/oysterav.install
+	install -d debian/oysterav/usr/bin
+	ln -sf ../lib/oysterav/oyst-helper debian/oysterav/usr/bin/oyst-helper

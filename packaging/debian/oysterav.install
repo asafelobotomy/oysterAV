@@ -1,0 +1,12 @@
+# Paths relative to the upstream source root once debian/ lives at the top level
+# (symlink/copy packaging/debian → ./debian for dpkg-buildpackage).
+debian/oyst-helper.in usr/lib/oysterav/oyst-helper
+packaging/oysterav/io.github.asafelobotomy.OysterAV.desktop usr/share/applications/
+packaging/oysterav/flatpak/io.github.asafelobotomy.OysterAV.metainfo.xml usr/share/metainfo/
+packaging/polkit/io.github.asafelobotomy.policy usr/share/polkit-1/actions/
+branding/hicolor/16x16/apps/oysterav.png usr/share/icons/hicolor/16x16/apps/
+branding/hicolor/32x32/apps/oysterav.png usr/share/icons/hicolor/32x32/apps/
+branding/hicolor/48x48/apps/oysterav.png usr/share/icons/hicolor/48x48/apps/
+branding/hicolor/128x128/apps/oysterav.png usr/share/icons/hicolor/128x128/apps/
+branding/hicolor/256x256/apps/oysterav.png usr/share/icons/hicolor/256x256/apps/
+branding/hicolor/512x512/apps/oysterav.png usr/share/icons/hicolor/512x512/apps/

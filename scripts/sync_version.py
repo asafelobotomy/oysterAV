@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync VERSION into pyproject.toml and package __version__ strings.
+"""Sync VERSION into pyproject, package inits, metainfo, and Arch PKGBUILD.
 
 VERSION is the single source of truth for the application release version.
 RUNTIME_VERSION in oyst_core.runtime.manifest is intentionally separate.
@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,8 +25,20 @@ PACKAGE_INITS = (
     ROOT / "oyst_core" / "__init__.py",
     ROOT / "oysterav" / "__init__.py",
 )
+METAINFO = (
+    ROOT
+    / "packaging"
+    / "oysterav"
+    / "flatpak"
+    / "io.github.asafelobotomy.OysterAV.metainfo.xml"
+)
+PKGBUILD = ROOT / "packaging" / "arch" / "PKGBUILD"
 
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[a-zA-Z0-9.+\-]+)?$")
+RELEASE_TAG_RE = re.compile(
+    r'(<release\s+version=")([^"]*)("\s+date=")([^"]*)("\s*/>)'
+)
+PKGVER_RE = re.compile(r"(?m)^pkgver=.*$")
 
 
 def read_version() -> str:
@@ -58,6 +72,20 @@ def _replace_init(version: str, content: str) -> str:
     return updated
 
 
+def _replace_metainfo(version: str, content: str) -> str:
+    today = date.today().isoformat()
+
+    def _sub(match: re.Match[str]) -> str:
+        return f'{match.group(1)}{version}{match.group(3)}{today}{match.group(5)}'
+
+    if RELEASE_TAG_RE.search(content):
+        updated, n = RELEASE_TAG_RE.subn(_sub, content, count=1)
+        if n != 1:
+            raise SystemExit("Could not update metainfo <release> tag")
+        return updated
+    raise SystemExit(f"No <release version=.../> in {METAINFO}")
+
+
 def current_versions() -> dict[str, str]:
     py = PYPROJECT.read_text(encoding="utf-8")
     m = re.search(r'(?m)^version\s*=\s*"([^"]*)"', py)
@@ -70,7 +98,22 @@ def current_versions() -> dict[str, str]:
         if not im:
             raise SystemExit(f"{path} missing __version__")
         found[str(path.relative_to(ROOT))] = im.group(1)
+    meta = METAINFO.read_text(encoding="utf-8")
+    mm = RELEASE_TAG_RE.search(meta)
+    if not mm:
+        raise SystemExit(f"{METAINFO} missing <release version=.../>")
+    found[str(METAINFO.relative_to(ROOT))] = mm.group(2)
+    if PKGBUILD.is_file():
+        pkg = PKGBUILD.read_text(encoding="utf-8")
+        pm = PKGVER_RE.search(pkg)
+        if pm:
+            found[str(PKGBUILD.relative_to(ROOT))] = pm.group(0).split("=", 1)[1].strip()
     return found
+
+
+def _render_arch_pkgbuild() -> None:
+    script = ROOT / "scripts" / "render_arch_pkgbuild.sh"
+    subprocess.run(["bash", str(script)], check=True, cwd=ROOT)
 
 
 def sync(version: str) -> list[Path]:
@@ -86,6 +129,16 @@ def sync(version: str) -> list[Path]:
         if new_text != text:
             path.write_text(new_text, encoding="utf-8")
             changed.append(path)
+    meta_text = METAINFO.read_text(encoding="utf-8")
+    new_meta = _replace_metainfo(version, meta_text)
+    if new_meta != meta_text:
+        METAINFO.write_text(new_meta, encoding="utf-8")
+        changed.append(METAINFO)
+    before = PKGBUILD.read_text(encoding="utf-8") if PKGBUILD.is_file() else ""
+    _render_arch_pkgbuild()
+    after = PKGBUILD.read_text(encoding="utf-8") if PKGBUILD.is_file() else ""
+    if after != before:
+        changed.append(PKGBUILD)
     return changed
 
 
@@ -98,6 +151,14 @@ def check(version: str) -> None:
             lines.append(f"  {k}: {v}")
         lines.append("Run: python scripts/sync_version.py")
         raise SystemExit("\n".join(lines))
+    if PKGBUILD.is_file():
+        pkg = PKGBUILD.read_text(encoding="utf-8")
+        if "sha256sums=('SKIP')" in pkg or "sha256sums=(SKIP)" in pkg:
+            print(
+                "NOTE: packaging/arch/PKGBUILD still has sha256sums=SKIP "
+                "(tag archive may be unpublished; release CI sets REQUIRE_SHA256=1)",
+                file=sys.stderr,
+            )
     print(f"OK: version {version} is in sync")
 
 
@@ -106,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Verify VERSION matches pyproject and package __version__ (no writes)",
+        help="Verify VERSION matches pyproject, inits, metainfo, PKGBUILD (no writes)",
     )
     args = parser.parse_args(argv)
     version = read_version()

@@ -125,6 +125,32 @@ sudo dnf install clamav clamav-update rkhunter chkrootkit lynis
 
 On-access prevention with the host: [operator guide](docs/user-guide/clamonacc-prevention.md).
 
+## Install from GitHub Releases
+
+Prefer a **system package** so the privileged helper is root-owned under `/usr`
+([getting started](docs/user-guide/getting-started.md)). **Current install path:**
+assets on each [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+
+| Channel | Status | Install |
+|---------|--------|---------|
+| **Debian/Ubuntu (.deb)** | Available | Download `oysterav_*_amd64.deb`, then `sudo apt install ./oysterav_*_amd64.deb` |
+| **Fedora/RHEL (.rpm)** | Available | Download `oysterav-*-1.x86_64.rpm`, then `sudo dnf install ./oysterav-*.rpm` |
+| **Flatpak (GitHub bundle)** | Available | `flatpak install --user ./oysterAV-*-x86_64.flatpak` — **also install a host `.deb`/`.rpm`** for Polkit helper elevation |
+| **Wheel / uv (dev)** | Available | Download the `.whl` or clone and `uv sync --extra all` |
+| **AUR** (Arch / CachyOS) | Pending listing | Packaging prepared — see [distro submit status](docs/packaging/distro-submit.md) |
+| **Fedora COPR** | Pending listing | Spec prepared — see [distro submit status](docs/packaging/distro-submit.md) |
+| **Flathub** | Pending listing | Offline manifest prepared — see [distro submit status](docs/packaging/distro-submit.md) |
+| **PyPI (CLI)** | Pending publish | CLI discoverability only; not recommended for the privileged helper |
+
+After install, verify freshness against GitHub Releases:
+
+```bash
+oyst-cli version --check
+```
+
+Full packaging notes: [docs/packaging/release.md](docs/packaging/release.md).
+Storefront status: [docs/packaging/distro-submit.md](docs/packaging/distro-submit.md).
+
 ## Health / debug
 
 ```bash
@@ -139,6 +165,7 @@ uv run oyst-cli serve --foreground   # RPC for the GUI
 - [CLI reference](docs/cli/reference.md)
 - [Pack commands](docs/cli/pack-commands.md)
 - [Release / packaging](docs/packaging/release.md)
+- [Distro submit tracks](docs/packaging/distro-submit.md)
 - [Flatpak](packaging/oysterav/flatpak/README.md)
 
 ## License

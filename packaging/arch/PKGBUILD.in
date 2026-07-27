@@ -11,6 +11,7 @@ depends=(
   'python'
   'python-click'
   'python-pydantic'
+  'python-defusedxml'
   'python-gobject'
   'gtk4'
   'libadwaita'
@@ -24,7 +25,7 @@ optdepends=(
   'lynis: hardening audits'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('@SHA256@')
 
 build() {
   cd "oysterAV-$pkgver"

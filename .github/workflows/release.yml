@@ -220,6 +220,19 @@ jobs:
           uv sync --extra all
           export PYTHON_BIN="$(uv run which python)"
           bash scripts/build_native_packages.sh x86_64
+      - name: Smoke-check native packages
+        run: |
+          set -euo pipefail
+          DEB="$(ls dist/*.deb | head -n1)"
+          RPM="$(ls dist/*.rpm | head -n1)"
+          dpkg-deb -I "$DEB"
+          rpm -qp --info "$RPM"
+          DEB_DEPS="$(dpkg-deb -f "$DEB" Depends)"
+          RPM_REQS="$(rpm -qpR "$RPM")"
+          for dep in python3-click python3-pydantic python3-defusedxml; do
+            echo "$DEB_DEPS" | grep -F "$dep"
+            echo "$RPM_REQS" | grep -F "$dep"
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: native-pkgs
@@ -235,8 +248,17 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.detect.outputs.build_ref }}
-      - name: Render PKGBUILD
-        run: bash scripts/render_arch_pkgbuild.sh
+      - name: Render PKGBUILD with release checksum
+        run: |
+          set -euo pipefail
+          # Tag is created in prepare; require a real sha256 of the GitHub archive.
+          export REQUIRE_SHA256=1
+          bash scripts/render_arch_pkgbuild.sh
+          if grep -q "sha256sums=('SKIP')" dist/PKGBUILD; then
+            echo "ERROR: sha256sums still SKIP" >&2
+            exit 1
+          fi
+          grep -E "python-defusedxml|sha256sums" dist/PKGBUILD dist/.SRCINFO
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: arch-pkgbuild

@@ -58,7 +58,17 @@ If a tag exists but the GitHub Release is missing or assets need rebuilding:
 |--------|-------------|
 | **AppImage** | oysterAV is a host-integrated orchestrator (polkit helper, ClamAV, GTK introspection). A self-contained AppImage fights that model and still needs host security tools. |
 | **Snap** | Same host-integration tension; Flatpak already covers GNOME desktops. |
-| **Flathub / PyPI** | Not wired in v1 — Flatpak/wheel attach to GitHub Releases only. |
+
+GitHub Releases remain the source of truth for community **`.deb` / `.rpm` / `.flatpak`**
+binaries. Distro storefronts (AUR, Flathub, COPR, PyPI) are separate submission tracks —
+see [docs/packaging/distro-submit.md](distro-submit.md).
+
+## AUR update checklist (each VERSION bump)
+
+1. `python scripts/sync_version.py` (updates metainfo + renders PKGBUILD).
+2. After the GitHub tag exists: `REQUIRE_SHA256=1 bash scripts/render_arch_pkgbuild.sh`.
+3. Copy `packaging/arch/PKGBUILD` and `packaging/arch/.SRCINFO` into the AUR git clone.
+4. `makepkg --printsrcinfo > .SRCINFO` (optional verify) and `git push` to `ssh://aur@aur.archlinux.org/oysterav.git`.
 
 ## Local packaging helpers
 

@@ -88,6 +88,9 @@ echo "==> Build DEB"
 fpm -t deb -f "${COMMON_ARGS[@]}" \
   --architecture "$DEB_ARCH" \
   --package "$OUT_DIR/oysterav_${VERSION}_${DEB_ARCH}.deb" \
+  --depends python3-click \
+  --depends python3-pydantic \
+  --depends python3-defusedxml \
   --depends python3-gi \
   --depends gir1.2-gtk-4.0 \
   --depends gir1.2-adw-1 \
@@ -98,6 +101,9 @@ echo "==> Build RPM"
 fpm -t rpm -f "${COMMON_ARGS[@]}" \
   --architecture "$RPM_ARCH" \
   --package "$OUT_DIR/oysterav-${VERSION}-1.${RPM_ARCH}.rpm" \
+  --depends python3-click \
+  --depends python3-pydantic \
+  --depends python3-defusedxml \
   --depends python3-gobject \
   --depends gtk4 \
   --depends libadwaita \

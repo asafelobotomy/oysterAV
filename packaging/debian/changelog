@@ -1,0 +1,6 @@
+oysterav (0.2.1-1) UNRELEASED; urgency=medium
+
+  * Initial Debian packaging scaffold (mentors track deferred).
+  * GitHub Release .deb remains the community binary until this lands.
+
+ -- oysterAV contributors <noreply@users.noreply.github.com>  Sun, 27 Jul 2026 23:00:00 +0000

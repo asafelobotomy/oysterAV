@@ -5,9 +5,11 @@ __pycache__/
 dist/
 build/
 build-dir/
+build-flathub/
 repo/
 .fpm-staging/
 .runtime-staging/
+.aur-oysterav/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
