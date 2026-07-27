@@ -29,14 +29,11 @@ _MENU_PATH = "/MenuBar"
 
 def resolve_tray_icon_path() -> str:
     """Best-effort path to a PNG/SVG for IconThemePath / pixmap fallbacks."""
-    candidates = [
-        Path(__file__).resolve().parents[2] / "branding" / "oysterAV-icon.png",
-        Path("/app/share/icons/hicolor/256x256/apps/oysterav.png"),
-        Path.home() / ".local/share/icons/hicolor/256x256/apps/oysterav.png",
-    ]
-    for path in candidates:
-        if path.is_file():
-            return str(path)
+    from oyst_core.desktop_icons import resolve_icon_png
+
+    found = resolve_icon_png(size=256) or resolve_icon_png()
+    if found is not None:
+        return str(found)
     return "application-x-executable"
 
 

@@ -7,4 +7,6 @@ Exec=oysterav
 Icon=oysterav
 Terminal=false
 Categories=System;Security;
+Keywords=antivirus;security;clamav;firewall;malware;
+StartupNotify=true
 StartupWMClass=io.github.asafelobotomy.OysterAV

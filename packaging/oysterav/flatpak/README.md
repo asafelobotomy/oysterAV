@@ -39,7 +39,8 @@ io.github.asafelobotomy.OysterAV [--minimized]` when running inside Flatpak
 
 App icons ship from `branding/hicolor/*/apps/oysterav.png` into
 `/app/share/icons/hicolor/` (theme name `oysterav`, matching `Icon=oysterav`).
-See `branding/README.md` for non-Flatpak install.
+For unpackaged/`uv` checkouts use `oyst-cli desktop install` (also runs on GUI start).
+See `branding/README.md`.
 
 ## Pack tier matrix
 

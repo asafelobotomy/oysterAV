@@ -37,6 +37,7 @@ Flags:
 
 ```bash
 oyst-cli desktop status --json
+oyst-cli desktop install                   # user icons + applications launcher
 oyst-cli desktop install-autostart [--minimized]
 oyst-cli desktop remove-autostart
 oyst-cli config set ui.run_at_startup true   # also writes XDG autostart

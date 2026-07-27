@@ -33,7 +33,7 @@ modules:
       - install -Dm644 branding/hicolor/48x48/apps/oysterav.png /app/share/icons/hicolor/48x48/apps/oysterav.png
       - install -Dm644 branding/hicolor/128x128/apps/oysterav.png /app/share/icons/hicolor/128x128/apps/oysterav.png
       - install -Dm644 branding/hicolor/256x256/apps/oysterav.png /app/share/icons/hicolor/256x256/apps/oysterav.png
-      - install -Dm644 branding/oysterAV-icon.png /app/share/icons/hicolor/512x512/apps/oysterav.png
+      - install -Dm644 branding/hicolor/512x512/apps/oysterav.png /app/share/icons/hicolor/512x512/apps/oysterav.png
     sources:
       - type: dir
         path: ../../..

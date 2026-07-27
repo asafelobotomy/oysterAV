@@ -19,10 +19,10 @@ PROFILE_LABELS = {
     ScanProfile.CUSTOM: "Custom (choose packs on the cards)",
 }
 
-# Display order (education): malware packs first. Execution order is privileged-first
-# via Privilege Concert (rkhunter → chkrootkit → unhide → lynis), then clamav/maldet.
-CUSTOM_PACK_CHOICES = ("clamav", "maldet", "rkhunter", "chkrootkit", "unhide", "lynis")
-RESULT_PACKS = ("clamav", "maldet", "rkhunter", "chkrootkit", "unhide", "lynis")
+# Display order by typical wall-clock (longest → quickest). Execution order is
+# still Privilege Concert (rkhunter → chkrootkit → unhide → lynis), then clamav/maldet.
+CUSTOM_PACK_CHOICES = ("clamav", "maldet", "lynis", "rkhunter", "chkrootkit", "unhide")
+RESULT_PACKS = ("clamav", "maldet", "lynis", "rkhunter", "chkrootkit", "unhide")
 
 PATH_PRESETS = [
     ("Home", "~"),

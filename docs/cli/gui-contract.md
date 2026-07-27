@@ -73,7 +73,7 @@ Two-column layout (stacks vertically on narrow windows): **Scan** controls (left
 | Browse folder / Browse file / Clear path | — | Path arguments to `oyst-cli scan` |
 | Selected path label | — | — |
 | Profile: Quick / Full / Suite / Integrity / Custom | — (passed to scan) | `oyst-cli scan --profile quick\|full\|suite\|integrity\|custom` |
-| Custom pack checkboxes (clamav, maldet, rkhunter, chkrootkit, unhide, lynis) | `job.start` `packs` | `oyst-cli scan --profile custom --packs clamav,rkhunter,lynis …` |
+| Custom pack checkboxes (clamav → unhide by typical duration) | `job.start` `packs` | `oyst-cli scan --profile custom --packs clamav,rkhunter,lynis …` |
 | Cancel in-flight scan | `job.cancel` | `oyst-cli job cancel` |
 | Clear stuck job lock | — (CLI only) | `oyst-cli job clear`; `oyst-cli job cancel --force` |
 | Target: Home / Downloads / Desktop / Custom (hidden for Integrity) | — | `oyst-cli scan ~/Downloads` or explicit paths |
@@ -85,7 +85,7 @@ Integrity runs system-wide packs (`rkhunter`, `chkrootkit`, `unhide`); path cont
 | GUI feature | RPC / client | CLI equivalent |
 |-------------|--------------|----------------|
 | Live pack progress (poll while scanning) | `job.status` | `oyst-cli job status --json` |
-| Per-pack result cards (clamav, maldet, rkhunter, chkrootkit, unhide, lynis) | — (from `job.start` result) | `--json` on scan output |
+| Per-pack result cards (longest → quickest: clamav…unhide) | — (from `job.start` result) | `--json` on scan output |
 | Pack detail dialog (grouped findings + quarantine/propupd/resolve/copy) | `quarantine.add` / `rkhunter.propupd` / `rkhunter.resolve` when applicable | `oyst-cli quarantine add`; `oyst-cli rkhunter propupd --confirm`; `oyst-cli rkhunter resolve --confirm` |
 
 Rootkit packs run through orchestrated profiles (Integrity / Suite / Custom), not a separate Scan-tab button. CLI `oyst-cli rkhunter scan` remains available.
@@ -160,6 +160,7 @@ Dashboard “Open Settings” (missing required packs) deep-links to **Security 
 | Clamonacc enable | Real-time switch → `clamonacc.enable/disable` | Services shows status only (no duplicate toggle) |
 | Theme | `config.set ui.theme` | `oyst-cli config set ui.theme gruvbox-dark-hard\|…\|system` (default: Gruvbox Dark Hard) |
 | Run at startup | `config.set ui.run_at_startup` | `oyst-cli desktop install-autostart` / `remove-autostart` or `config set ui.run_at_startup` |
+| Icons + app launcher | (GUI auto on start) | `oyst-cli desktop install` / `install-icons` / `install-launcher` |
 | Start minimized | `config.set ui.start_minimized` | `oyst-cli config set ui.start_minimized true` (+ `oysterav --minimized`) |
 | Minimize to tray on close | `config.set ui.minimize_to_tray` | `oyst-cli config set ui.minimize_to_tray true` |
 

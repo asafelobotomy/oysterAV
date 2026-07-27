@@ -199,7 +199,7 @@ class ScanPage:
         def _on_pack_toggled(*_a: object) -> None:
             scan_job_ui.sync_result_cards_for_profile(self)
 
-        for name in ("clamav", "maldet", "rkhunter"):
+        for name in RESULT_PACKS[:3]:
             card = StatusCard(
                 pack_card_title(name),
                 on_activate=_bind(name),
@@ -212,7 +212,7 @@ class ScanPage:
             self._pack_checks[name] = card.select_check
             self._pack_cards[name] = card
             row1.append(card)
-        for name in ("chkrootkit", "unhide", "lynis"):
+        for name in RESULT_PACKS[3:]:
             card = StatusCard(
                 pack_card_title(name),
                 on_activate=_bind(name),

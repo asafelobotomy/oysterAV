@@ -54,6 +54,6 @@ EOF
     install -Dm644 "branding/hicolor/${size}x${size}/apps/oysterav.png" \
       "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/oysterav.png"
   done
-  install -Dm644 branding/oysterAV-icon.png \
+  install -Dm644 branding/hicolor/512x512/apps/oysterav.png \
     "$pkgdir/usr/share/icons/hicolor/512x512/apps/oysterav.png"
 }

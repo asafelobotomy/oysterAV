@@ -123,10 +123,12 @@ def build_desktop_entry(*, minimized: bool = False, for_autostart: bool = True) 
         "Icon=oysterav",
         "Terminal=false",
         "Categories=System;Security;",
-        "X-GNOME-Autostart-enabled=true",
+        "Keywords=antivirus;security;clamav;firewall;malware;",
+        "StartupNotify=true",
         f"StartupWMClass={APP_ID}",
     ]
     if for_autostart:
+        lines.append("X-GNOME-Autostart-enabled=true")
         lines.append("X-GNOME-Autostart-Phase=Application")
     return "\n".join(lines) + "\n"
 
@@ -190,11 +192,13 @@ def rewrite_autostart_if_enabled() -> dict[str, object] | None:
 
 def autostart_status() -> dict[str, object]:
     from oyst_core.config import load_config
+    from oyst_core.desktop_icons import desktop_integration_status
 
     cfg = load_config()
     path = autostart_path()
     present = path.is_file()
     tray = probe_tray_library()
+    integration = desktop_integration_status()
     return {
         "run_at_startup": cfg.ui.run_at_startup,
         "start_minimized": cfg.ui.start_minimized,
@@ -204,4 +208,8 @@ def autostart_status() -> dict[str, object]:
         "flatpak": is_flatpak(),
         "exec": resolve_oysterav_exec(),
         "tray": tray,
+        "icon_name": integration.get("icon_name"),
+        "user_icons_installed": integration.get("user_icons_installed"),
+        "launcher_path": integration.get("launcher_path"),
+        "launcher_present": integration.get("launcher_present"),
     }

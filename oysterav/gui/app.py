@@ -39,12 +39,25 @@ def _branding_dir() -> Path:
 
 
 def install_default_app_icon() -> None:
-    """Register theme name oysterav; add checkout branding/ for unpackaged runs."""
+    """Register theme name oysterav; install user icons/launcher for unpackaged runs."""
+    from oyst_core.desktop_icons import ensure_desktop_integration
+
     branding = _branding_dir()
     display = Gdk.Display.get_default()
-    if display is not None and branding.is_dir():
+    try:
+        ensure_desktop_integration()
+    except OSError:
+        pass
+    if display is not None:
         theme = Gtk.IconTheme.get_for_display(display)
-        theme.add_search_path(str(branding))
+        if branding.is_dir():
+            theme.add_search_path(str(branding))
+        user_icons = Path.home() / ".local" / "share" / "icons"
+        if user_icons.is_dir():
+            theme.add_search_path(str(user_icons))
+        if hasattr(theme, "rescan_if_needed"):
+            theme.rescan_if_needed()
+    # GTK4 only exposes set_default_icon_name (file-based default icon APIs are gone).
     Gtk.Window.set_default_icon_name(_ICON_NAME)
 
 
@@ -148,7 +161,7 @@ class OysterWindow(Adw.ApplicationWindow):
             self.dashboard.widget,
             "dashboard",
             "Dashboard",
-            "security-high-symbolic",
+            "oysterav",
         )
         self.stack.add_titled_with_icon(
             self.scan.widget,
@@ -160,7 +173,7 @@ class OysterWindow(Adw.ApplicationWindow):
             self.shield.widget,
             "shield",
             "Shield",
-            "channel-secure-symbolic",
+            "security-high-symbolic",
         )
         self.stack.add_titled_with_icon(
             self.reports.widget,

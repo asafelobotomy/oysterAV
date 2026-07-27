@@ -16,6 +16,7 @@
     </p>
   </description>
   <launchable type="desktop-id">io.github.asafelobotomy.OysterAV.desktop</launchable>
+  <icon type="stock">oysterav</icon>
   <provides>
     <binary>oysterav</binary>
     <binary>oyst-cli</binary>

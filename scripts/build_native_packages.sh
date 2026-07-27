@@ -57,7 +57,7 @@ for size in 16 32 48 128 256; do
   install -Dm644 "branding/hicolor/${size}x${size}/apps/oysterav.png" \
     "$STAGE/usr/share/icons/hicolor/${size}x${size}/apps/oysterav.png"
 done
-install -Dm644 branding/oysterAV-icon.png \
+install -Dm644 branding/hicolor/512x512/apps/oysterav.png \
   "$STAGE/usr/share/icons/hicolor/512x512/apps/oysterav.png"
 
 AFTER_INSTALL="$ROOT/packaging/fpm/after-install.sh"
