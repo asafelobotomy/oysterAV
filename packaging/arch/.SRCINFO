@@ -23,4 +23,4 @@ optdepends = rkhunter: rootkit checks
 optdepends = chkrootkit: rootkit checks
 optdepends = lynis: hardening audits
 source = oysterav-0.2.2.tar.gz::https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.2.2.tar.gz
-sha256sums = SKIP
+sha256sums = 3bf3eedb518bf5559f007a692c8822c42c33e17a62b44e3911c4a683805cd5ac
