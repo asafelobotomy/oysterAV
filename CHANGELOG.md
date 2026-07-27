@@ -2,6 +2,22 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.2.2 - 2026-07-27
+
+### Bug Fixes
+
+- *(packaging)* Harden storefronts and honest install docs
+
+
+### Documentation
+
+- *(changelog)* V0.2.1
+
+
+### Miscellaneous
+
+- *(packaging)* Sync debian/rpm changelogs for 0.2.2
+
 ## 0.2.1 - 2026-07-27
 
 ### Bug Fixes
