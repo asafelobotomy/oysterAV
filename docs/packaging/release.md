@@ -3,20 +3,22 @@
 ## Cut a release
 
 1. Ensure `main` is green (`./scripts/check.sh`).
-2. Bump the single source of truth:
+2. Bump the single source of truth (example uses `0.2.1` — replace with the new version):
    ```bash
-   echo "0.2.0" > VERSION
+   echo "0.2.1" > VERSION
    python scripts/sync_version.py
    ```
-3. Commit both `VERSION` and synced files (`pyproject.toml`, `oyst_core/__init__.py`, `oysterav/__init__.py`):
+3. Commit both `VERSION` and synced files (`pyproject.toml`, `oyst_core/__init__.py`, `oysterav/__init__.py`, and packaging embeds such as Flatpak metainfo / Arch PKGBUILD when they changed):
    ```bash
    git add VERSION pyproject.toml oyst_core/__init__.py oysterav/__init__.py
-   git commit -m "chore(release): 0.2.0"
+   git commit -m "chore(release): 0.2.1"
    git push origin main
    ```
-4. GitHub Actions [`.github/workflows/release.yml`](../../.github/workflows/release.yml) detects the `VERSION` change, tags `v0.2.0`, builds assets, and publishes a [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+4. GitHub Actions [`.github/workflows/release.yml`](../../.github/workflows/release.yml) detects the `VERSION` change, tags `v0.2.1`, builds assets, and publishes a [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
 
 Do **not** push an annotated tag yourself unless you know the release workflow already skipped (duplicate tag is ignored).
+
+After publish, `oyst-cli version --check` compares the installed build to that latest GitHub Release.
 
 `RUNTIME_VERSION` in `oyst_core/runtime/manifest.py` is a separate schema pin for Full-mode runtime locks — bump it only when the runtime lock format changes.
 
@@ -31,10 +33,10 @@ Both use [`cliff.toml`](../../cliff.toml). Updating `CHANGELOG.md` alone does **
 
 ## Force republish / repair a stuck tag
 
-If a tag exists but the GitHub Release is missing or assets need rebuilding (e.g. `v0.2.0` after a failed run):
+If a tag exists but the GitHub Release is missing or assets need rebuilding:
 
 1. Open **Actions → Release → Run workflow**.
-2. Leave **version** empty (uses the `VERSION` file) or set it to `0.2.0`.
+2. Leave **version** empty (uses the `VERSION` file) or set it to the tag without the leading `v` (e.g. `0.2.1`).
 3. Enable **force** so an existing tag is rebuilt and the release is created/updated.
 4. Force builds from the **workflow commit** (current `main` tip) so packaging fixes apply, then attaches assets to the existing tag.
 5. Confirm assets and a `docs(changelog): v…` commit land on `main`.

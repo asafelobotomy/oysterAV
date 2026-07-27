@@ -112,6 +112,8 @@ See also [docs/adr/007-gui-remapping-phase.md](docs/adr/007-gui-remapping-phase.
 
 Bump [`VERSION`](VERSION), run `python scripts/sync_version.py`, push to `main`.
 See [docs/packaging/release.md](docs/packaging/release.md).
+Installed builds compare to GitHub Releases via `oyst-cli version --check`
+(and the status-bar / `updates.check` path).
 
 ## Learned User Preferences
 
@@ -133,7 +135,7 @@ See [docs/packaging/release.md](docs/packaging/release.md).
 - oysterAV is a from-scratch successor to deprecated xanadOS Search & Destroy (https://github.com/asafelobotomy/xanadOS-Search_Destroy).
 - Repository license is GPLv3.
 - Default GUI themeing target is Gruvbox Dark Hard via a shared theme/color library.
-- Status-bar pack/service update notices take priority over the security-news ticker.
+- Status-bar oysterAV GitHub Release and pack/service update notices take priority over the security-news ticker.
 - Security-news ticker freshness is configurable in Settings (7/14/30 days; default 14).
 - Privileged-helper install refuses to embed a user-writable oysterAV checkout; `oyst_core` must live under a root-owned prefix (distro package or root install), which matters on externally-managed Python distros (e.g. Arch/CachyOS).
 - Privilege Concert ([ADR-009](docs/adr/009-privilege-concert.md)) is the unified single-admin-auth-per-user-action model for privileged multi-step flows (scans, setup hardenings, Update all / update-concert, resolve, bulk install).

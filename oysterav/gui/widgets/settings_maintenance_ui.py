@@ -33,7 +33,8 @@ def build_maintenance_group(page: SettingsPage) -> None:
 
     update_all_row = Adw.ActionRow(title="Update all")
     update_all_row.set_subtitle(
-        "Upgrade related packages when needed, refresh definitions, then baselines",
+        "Upgrade related packages when needed, refresh definitions, then baselines. "
+        "New oysterAV releases appear in the status bar (GitHub).",
     )
     page.update_all_btn = make_button("Update all", suggested=True, row_suffix=True)
     page.update_all_btn.connect("clicked", lambda *a: on_update_all(page, *a))

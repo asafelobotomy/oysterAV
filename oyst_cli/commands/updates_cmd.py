@@ -12,13 +12,13 @@ from oyst_core.updates import apply_all_updates, check_available_updates
 
 @click.group("updates")
 def updates_group() -> None:
-    """Check and apply pack/service package updates and definitions."""
+    """Check and apply oysterAV / pack updates and signature refresh."""
 
 
 @updates_group.command("check")
 @json_option
 def updates_check_cmd(json_mode: bool) -> None:
-    """List package updates for installed packs / enabled related services."""
+    """List oysterAV GitHub Release and pack/service package updates."""
     result = check_available_updates()
     if json_mode:
         emit(result, json_mode=True)
@@ -29,6 +29,14 @@ def updates_check_cmd(json_mode: bool) -> None:
         return
     for item in updates:
         if not isinstance(item, dict):
+            continue
+        if str(item.get("kind") or "") == "app":
+            url = str(item.get("url") or "").strip()
+            suffix = f" ({url})" if url else ""
+            click.echo(
+                f"{item.get('name')}: {item.get('current')} > {item.get('available')} "
+                f"[GitHub Release]{suffix}"
+            )
             continue
         click.echo(
             f"{item.get('name')}: {item.get('current')} > {item.get('available')} "

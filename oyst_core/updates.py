@@ -30,41 +30,49 @@ def format_update_status_line(update: dict[str, Any]) -> str:
     name = str(update.get("name") or "pack")
     current = str(update.get("current") or "?")
     available = str(update.get("available") or "?")
+    if str(update.get("kind") or "") == "app":
+        return f"oysterAV {current} > {available} is available on GitHub!"
     return f"An update for {name} {current} > {available} is available!"
 
 
-def check_available_updates() -> dict[str, Any]:
-    """Return available updates for installed packs / enabled related services.
+def check_available_updates(*, include_app: bool = True) -> dict[str, Any]:
+    """Return available updates for oysterAV itself and pack/service packages.
 
-    Uses the host package manager only (no polkit). Full-mode private runtime
-    packs without a system package are skipped.
+    App freshness comes from GitHub Releases (best-effort; failures are ignored).
+    Pack upgrades use the host package manager only (no polkit). Full-mode
+    private runtime packs without a system package are skipped.
     """
+    updates: list[dict[str, Any]] = []
+    if include_app:
+        from oyst_core.app_release import app_update_entry
+
+        app = app_update_entry()
+        if app is not None:
+            updates.append(app)
+
     family = detect_distro_family()
     installed_packs = installed_pack_names()
     relevant_packs = relevant_pack_names(installed_packs)
     tracked = tracked_packages(family, relevant_packs)
-    if not tracked:
-        return {"ok": True, "updates": [], "message": ""}
-
-    raw = query_package_upgrades(family)
-    updates: list[dict[str, Any]] = []
-    seen_names: set[str] = set()
-    for pkg, current, available in raw:
-        if pkg not in tracked:
-            continue
-        display = tracked[pkg]
-        if display in seen_names:
-            continue
-        seen_names.add(display)
-        updates.append(
-            {
-                "kind": "pack",
-                "name": display,
-                "package": pkg,
-                "current": current,
-                "available": available,
-            }
-        )
+    if tracked:
+        raw = query_package_upgrades(family)
+        seen_names: set[str] = set()
+        for pkg, current, available in raw:
+            if pkg not in tracked:
+                continue
+            display = tracked[pkg]
+            if display in seen_names:
+                continue
+            seen_names.add(display)
+            updates.append(
+                {
+                    "kind": "pack",
+                    "name": display,
+                    "package": pkg,
+                    "current": current,
+                    "available": available,
+                }
+            )
 
     message = format_update_status_line(updates[0]) if updates else ""
     return {"ok": True, "updates": updates, "message": message}
@@ -190,6 +198,8 @@ def _unique_packages(updates: list[dict[str, Any]]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for item in updates:
+        if str(item.get("kind") or "pack") == "app":
+            continue
         pkg = str(item.get("package") or "").strip()
         if not pkg or pkg in seen:
             continue

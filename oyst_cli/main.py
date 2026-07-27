@@ -38,6 +38,7 @@ from oyst_cli.commands.setup_cmd import setup_group
 from oyst_cli.commands.status import history_group, status_group
 from oyst_cli.commands.terminal_cmd import terminal_group
 from oyst_cli.commands.updates_cmd import updates_group
+from oyst_cli.commands.version_cmd import version_cmd
 from oyst_cli.commands.virusevent_cmd import virusevent_group
 from oyst_core.logging_util import setup_logging
 from oyst_core.serve import SCHEMA_VERSION, RpcServer
@@ -138,6 +139,7 @@ def serve_cmd(socket: str | None, schema_version: int, foreground: bool) -> None
 
 def _register_commands() -> None:
     cli.add_command(doctor_cmd)
+    cli.add_command(version_cmd)
     cli.add_command(status_group)
     cli.add_command(history_group)
     cli.add_command(scan_cmd)

@@ -26,7 +26,7 @@ Living document mapping every GTK user-facing feature to CLI-first equivalents
 | Auto-start RPC backend on launch | `oyst-cli serve` / `oyst-cli serve --foreground` (flag kept for compatibility; always foreground; or systemd user unit in docs) |
 | Tab switcher (Dashboard / Scan / Shield / Quarantine / Settings) | No single command — use tab-specific commands below |
 | Global status bar (operational messages) | stderr/stdout from CLI commands |
-| Update alert (idle; yellow; above news) | **`oyst-cli updates check --json`** (`updates.check`) |
+| Update alert (idle; yellow; above news) | **`oyst-cli updates check --json`** (`updates.check`) — oysterAV GitHub Release + pack packages |
 | Security news ticker (idle status bar; below updates) | **`oyst-cli news list [--json] [--sources …] [--max-age-days …]`** / `oyst-cli news refresh` |
 | Auto setup wizard on first launch | `oyst-cli setup check` (exit 1 = show wizard equivalent) |
 
@@ -366,8 +366,9 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `runtime.bootstrap` | `oyst-cli runtime bootstrap` |
 | `maintenance.bootstrap` | `oyst-cli maintenance bootstrap` |
 | `maintenance.post-update` | `oyst-cli maintenance post-update` |
-| `updates.check` | `oyst-cli updates check [--json]` |
+| `updates.check` | `oyst-cli updates check [--json]` (includes oysterAV GitHub Release) |
 | `updates.apply` | `oyst-cli updates apply [--json]` |
+| — (CLI) | `oyst-cli version [--check] [--json]` |
 | `clamav.clamd.ensure` | `oyst-cli clamav clamd ensure` |
 | `services.status` | `oyst-cli services status --json` |
 | `services.set` | `oyst-cli services set <name> on\|off [--boot]` |

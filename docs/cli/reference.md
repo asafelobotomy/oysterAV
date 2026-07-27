@@ -224,13 +224,20 @@ oyst-cli config set ui.security_news_max_age_days 14
 ## Updates
 
 ```bash
+oyst-cli version
+oyst-cli version --check --json
 oyst-cli updates check --json
 oyst-cli updates apply --json
 ```
 
-`check` lists host package upgrades for installed packs / enabled related services.
-`apply` upgrades those packages (when any), refreshes ClamAV/fangfrisch/rkhunter/maldet
-definitions, then runs rkhunter propupd.
+`version` prints the installed oysterAV release. `version --check` compares it to the
+latest [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases) (exit `1` when
+newer, `2` on network/API failure).
+
+`updates check` lists oysterAV GitHub Release freshness **and** host package upgrades for
+installed packs / enabled related services. `apply` upgrades tracked host packages (when
+any), refreshes ClamAV/fangfrisch/rkhunter/maldet definitions, then runs rkhunter propupd.
+App upgrades are not auto-installed — open the release page from the check output.
 
 ## Helper
 

@@ -22,11 +22,23 @@ def test_format_update_status_line() -> None:
         )
         == "An update for rkhunter 1.4.6-1 > 1.4.6-2 is available!"
     )
+    assert (
+        format_update_status_line(
+            {
+                "kind": "app",
+                "name": "oysterAV",
+                "current": "0.2.0",
+                "available": "0.2.1",
+            }
+        )
+        == "oysterAV 0.2.0 > 0.2.1 is available on GitHub!"
+    )
 
 
 def test_check_available_updates_pacman() -> None:
     with (
         patch("oyst_core.updates.detect_distro_family", return_value="arch"),
+        patch("oyst_core.app_release.app_update_entry", return_value=None),
         patch(
             "oyst_core.updates_query.installed_pack_names",
             return_value={"rkhunter", "clamav"},
@@ -53,9 +65,34 @@ def test_check_available_updates_pacman() -> None:
     assert "rkhunter 1.4.6-3 > 1.4.6-4" in result["message"]
 
 
+def test_check_available_updates_includes_github_app() -> None:
+    app = {
+        "kind": "app",
+        "name": "oysterAV",
+        "package": "",
+        "current": "0.2.0",
+        "available": "0.2.1",
+        "url": "https://github.com/asafelobotomy/oysterAV/releases/tag/v0.2.1",
+    }
+    with (
+        patch("oyst_core.updates.detect_distro_family", return_value="arch"),
+        patch("oyst_core.app_release.app_update_entry", return_value=app),
+        patch("oyst_core.updates_query.installed_pack_names", return_value=set()),
+        patch(
+            "oyst_core.updates_query.relevant_pack_names",
+            return_value=set(),
+        ),
+        patch("oyst_core.updates_query.tracked_packages", return_value={}),
+    ):
+        result = check_available_updates()
+    assert result["updates"][0]["kind"] == "app"
+    assert result["updates"][0]["available"] == "0.2.1"
+
+
 def test_check_available_updates_apt() -> None:
     with (
         patch("oyst_core.updates.detect_distro_family", return_value="debian"),
+        patch("oyst_core.app_release.app_update_entry", return_value=None),
         patch("oyst_core.updates_query.installed_pack_names", return_value={"fail2ban"}),
         patch(
             "oyst_core.updates_query.relevant_pack_names",

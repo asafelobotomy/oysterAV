@@ -221,7 +221,7 @@ class OysterWindow(Adw.ApplicationWindow):
 
         self.connect("close-request", self._on_close_request)
         GLib.idle_add(self._initial_load)
-        # Re-check package updates periodically while the GUI is open.
+        # Re-check oysterAV GitHub Release + pack updates periodically while the GUI is open.
         GLib.timeout_add_seconds(30 * 60, self._periodic_updates_check)
 
     def bind_tray(self, tray: OysterTray | None) -> None:
