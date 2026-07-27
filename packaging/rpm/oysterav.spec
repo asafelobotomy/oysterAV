@@ -2,7 +2,7 @@
 # Community GitHub .rpm artifacts remain fpm-built; this .spec is the COPR path.
 
 Name:           oysterav
-Version:        0.2.1
+Version:        0.2.2
 Release:        1%{?dist}
 Summary:        Linux security orchestrator (oyst-cli + GTK4 GUI)
 License:        GPL-3.0-or-later
@@ -80,5 +80,8 @@ done
 %{_datadir}/icons/hicolor/*/apps/oysterav.png
 
 %changelog
+* Mon Jul 27 2026 oysterAV contributors <noreply@users.noreply.github.com> - 0.2.2-1
+- Packaging harden: Python Depends alignment and Flathub multi-arch notes
+
 * Sun Jul 27 2026 oysterAV contributors <noreply@users.noreply.github.com> - 0.2.1-1
 - Initial COPR-oriented packaging
