@@ -1,3 +1,9 @@
+oysterav (0.2.2-1) UNRELEASED; urgency=medium
+
+  * Sync scaffold to 0.2.2; GitHub Release .deb remains the community binary.
+
+ -- oysterAV contributors <noreply@users.noreply.github.com>  Mon, 27 Jul 2026 23:00:00 +0000
+
 oysterav (0.2.1-1) UNRELEASED; urgency=medium
 
   * Initial Debian packaging scaffold (mentors track deferred).
