@@ -19,7 +19,7 @@
     <p>
       Flatpak installs the GUI client with host filesystem access so oysterAV can reach
       host scanners and elevate via flatpak-spawn. Privileged operations require a
-      host-installed package (AUR, COPR, or GitHub .deb/.rpm) that provides the root-owned
+      host-installed package (AUR or GitHub .deb/.rpm) that provides the root-owned
       oyst-helper and Polkit policy. A Flatpak-only install cannot complete helper setup alone.
     </p>
   </description>

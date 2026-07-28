@@ -20,6 +20,7 @@ htmlcov/
 *.log
 .DS_Store
 .idea/
+.vscode/
 *.swp
 .cursor/
 

@@ -21,6 +21,9 @@ Architecture: all
 Depends:
  ${misc:Depends},
  ${python3:Depends},
+ python3-click,
+ python3-pydantic,
+ python3-defusedxml,
  python3-gi,
  gir1.2-gtk-4.0,
  gir1.2-adw-1,
@@ -33,5 +36,5 @@ Description: Linux security orchestrator (oyst-cli + GTK4 GUI)
  oysterAV orchestrates host security tools via a CLI-first backend and a thin
  GTK4 client. This package installs under /usr including the Polkit helper.
  .
- Prefer this system package (or AUR/COPR) over pip for privileged helper
+ Prefer this system package (or AUR) over pip for privileged helper
  installs. Flatpak GUI users still need a host package for elevation.

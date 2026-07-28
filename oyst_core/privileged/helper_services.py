@@ -11,6 +11,7 @@ from oyst_core.packs.rkhunter_resolve import (
     apply_disable_tests_overlay,
     apply_overlay_line,
     apply_overlay_lines,
+    validate_whitelist_option,
 )
 from oyst_core.privileged.auth_grant import assert_lifecycle_grant_not_stale
 from oyst_core.privileged.helper_validate import resolve_trusted_argv
@@ -121,6 +122,7 @@ def _build_rkhunter_whitelist_argv(argv: Sequence[str]) -> list[str]:
     if argv[0] == "set":
         if len(argv) < 3:
             raise ValueError("usage: rkhunter-whitelist set <OPTION> <value>")
+        validate_whitelist_option(argv[1], argv[2])
         apply_overlay_line(argv[1], argv[2])
         return ["true"]
     if argv[0] == "set-many":
@@ -131,6 +133,7 @@ def _build_rkhunter_whitelist_argv(argv: Sequence[str]) -> list[str]:
             if "=" not in item:
                 raise ValueError(f"expected OPTION=value, got: {item}")
             option, _, value = item.partition("=")
+            validate_whitelist_option(option, value)
             directives.append((option, value))
         apply_overlay_lines(directives)
         return ["true"]

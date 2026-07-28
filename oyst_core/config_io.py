@@ -16,6 +16,10 @@ _log = logging.getLogger(__name__)
 def config_dir() -> Path:
     path = Path.home() / ".config" / "oysterav"
     path.mkdir(parents=True, exist_ok=True)
+    try:
+        path.chmod(0o700)
+    except OSError:
+        pass
     return path
 
 

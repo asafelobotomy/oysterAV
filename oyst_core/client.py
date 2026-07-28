@@ -59,6 +59,18 @@ class OystClient(OystClientApi):
             raise RuntimeError(f"RPC failed after send ({method}): {exc}") from exc
 
     def _local_fallback(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        # Same-UID in-process path (ASVS partial): no token/peercred. Prefer serve socket.
+        try:
+            from oyst_core.audit import SecurityAudit
+
+            SecurityAudit().log(
+                "rpc.local_fallback",
+                method,
+                success=True,
+                data={"reason": "socket unavailable; same-process dispatch"},
+            )
+        except Exception:  # noqa: BLE001 — never fail the call on audit
+            pass
         try:
             return {
                 "result": dispatch_rpc(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import socket
 import threading
 import time
@@ -109,7 +110,12 @@ class RpcServer:
         self.socket_path.parent.mkdir(parents=True, exist_ok=True)
         ensure_rpc_token()
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(str(self.socket_path))
+        # Create the socket node as 0600 (avoid brief umask-open window after bind).
+        old_umask = os.umask(0o177)
+        try:
+            server.bind(str(self.socket_path))
+        finally:
+            os.umask(old_umask)
         self.socket_path.chmod(0o600)
         server.listen(5)
         self._running = True

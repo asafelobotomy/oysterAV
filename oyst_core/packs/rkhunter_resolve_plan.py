@@ -24,6 +24,13 @@ _SINGLE_VALUE_OPTIONS = frozenset({"ALLOW_SSH_PROT_V1", "ALLOW_SSH_ROOT_USER"})
 ALLOWED_OPTIONS = _MULTI_VALUE_OPTIONS | _SINGLE_VALUE_OPTIONS
 
 _PATH_RE = re.compile(r"^/[A-Za-z0-9._/-]+$")
+
+
+def _is_safe_abs_path(path: str) -> bool:
+    """Absolute path with no ``..`` segments (rejects traversal via regex holes)."""
+    if not _PATH_RE.match(path):
+        return False
+    return ".." not in Path(path).parts
 _SSH_PROT_VALUES = frozenset({"2"})
 _SSH_ROOT_VALUES = frozenset({"unset"})
 
@@ -56,7 +63,7 @@ def validate_whitelist_option(option: str, value: str) -> tuple[str, str]:
     if opt not in ALLOWED_OPTIONS:
         raise ValueError(f"option not allowlisted: {option}")
     if opt in _MULTI_VALUE_OPTIONS:
-        if not _PATH_RE.match(val):
+        if not _is_safe_abs_path(val):
             raise ValueError(f"invalid whitelist path: {value}")
         return opt, val
     if opt == "ALLOW_SSH_PROT_V1":
@@ -74,7 +81,7 @@ def require_abs_path(path: str) -> str:
     cleaned = path.strip()
     if not cleaned or cleaned == "system":
         raise ValueError("absolute path required")
-    if not _PATH_RE.match(cleaned):
+    if not _is_safe_abs_path(cleaned):
         raise ValueError(f"invalid path: {path}")
     return cleaned
 

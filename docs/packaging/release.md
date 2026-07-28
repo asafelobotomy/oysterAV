@@ -3,18 +3,18 @@
 ## Cut a release
 
 1. Ensure `main` is green (`./scripts/check.sh`).
-2. Bump the single source of truth (example uses `0.2.1` — replace with the new version):
+2. Bump the single source of truth (example uses `0.2.2` — replace with the new version):
    ```bash
-   echo "0.2.1" > VERSION
+   echo "0.2.2" > VERSION
    python scripts/sync_version.py
    ```
 3. Commit both `VERSION` and synced files (`pyproject.toml`, `oyst_core/__init__.py`, `oysterav/__init__.py`, and packaging embeds such as Flatpak metainfo / Arch PKGBUILD when they changed):
    ```bash
    git add VERSION pyproject.toml oyst_core/__init__.py oysterav/__init__.py
-   git commit -m "chore(release): 0.2.1"
+   git commit -m "chore(release): 0.2.2"
    git push origin main
    ```
-4. GitHub Actions [`.github/workflows/release.yml`](../../.github/workflows/release.yml) detects the `VERSION` change, tags `v0.2.1`, builds assets, and publishes a [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+4. GitHub Actions [`.github/workflows/release.yml`](../../.github/workflows/release.yml) detects the `VERSION` change, tags `v0.2.2`, builds assets, and publishes a [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
 
 Do **not** push an annotated tag yourself unless you know the release workflow already skipped (duplicate tag is ignored).
 
@@ -36,7 +36,7 @@ Both use [`cliff.toml`](../../cliff.toml). Updating `CHANGELOG.md` alone does **
 If a tag exists but the GitHub Release is missing or assets need rebuilding:
 
 1. Open **Actions → Release → Run workflow**.
-2. Leave **version** empty (uses the `VERSION` file) or set it to the tag without the leading `v` (e.g. `0.2.1`).
+2. Leave **version** empty (uses the `VERSION` file) or set it to the tag without the leading `v` (e.g. `0.2.2`).
 3. Enable **force** so an existing tag is rebuilt and the release is created/updated.
 4. Force builds from the **workflow commit** (current `main` tip) so packaging fixes apply, then attaches assets to the existing tag.
 5. Confirm assets and a `docs(changelog): v…` commit land on `main`.
@@ -76,7 +76,7 @@ see [docs/packaging/distro-submit.md](distro-submit.md).
 python scripts/sync_version.py --check
 bash scripts/build_runtime.sh x86_64
 bash scripts/render_arch_pkgbuild.sh
-# Requires flatpak-builder + GNOME 48 runtime/SDK (pip needs network inside the SDK):
+# Requires flatpak-builder + GNOME 50 runtime/SDK (pip needs network inside the SDK):
 bash scripts/build_flatpak.sh x86_64
 # Requires fpm (gem install fpm) + rpm tools:
 PYTHON_BIN="$(uv run which python)" bash scripts/build_native_packages.sh x86_64

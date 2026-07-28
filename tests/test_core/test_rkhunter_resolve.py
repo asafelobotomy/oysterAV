@@ -31,6 +31,13 @@ def test_plan_script_replacement() -> None:
     assert plan.requires_path
 
 
+def test_validate_whitelist_rejects_dotdot() -> None:
+    with pytest.raises(ValueError, match="invalid whitelist path"):
+        validate_whitelist_option("ALLOWHIDDENFILE", "/tmp/../etc/shadow")
+    with pytest.raises(ValueError, match="invalid path"):
+        plan_resolve("rkhunter-hidden", path="/var/../etc/passwd")
+
+
 def test_plan_hidden_and_ssh() -> None:
     hidden = plan_resolve(
         "rkhunter-hidden",

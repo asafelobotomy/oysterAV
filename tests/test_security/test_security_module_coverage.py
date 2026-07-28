@@ -520,6 +520,15 @@ def test_resolve_trusted_binary_rejects_bad_names() -> None:
     assert resolve_trusted_argv([]) == []
 
 
+def test_is_root_owned_file_rejects_group_writable(tmp_path: Path) -> None:
+    from oyst_core.privileged import helper_validate as hv
+
+    target = tmp_path / "tool"
+    target.write_text("#!/bin/sh\n", encoding="utf-8")
+    target.chmod(0o775)
+    assert hv._is_root_owned_file(target) is False
+
+
 def test_passwordless_accept() -> None:
     assert validate_passwordless_unit("maldet") == "maldet"
     assert validate_passwordless_systemctl_action("start") == "start"

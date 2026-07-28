@@ -8,6 +8,9 @@ include =
     */oyst_core/privileged/helper_firewall.py
     */oyst_core/privileged/helper_fw_lifecycle.py
     */oyst_core/privileged/helper_validate.py
+    */oyst_core/packs/rkhunter_resolve_plan.py
+    */oyst_core/privilege/plan.py
+    */oyst_core/privilege/run.py
     */oyst_core/rpc_auth.py
     */oyst_core/packs/firewall.py
     */oyst_core/packs/firewall_ops.py

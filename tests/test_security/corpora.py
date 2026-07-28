@@ -331,6 +331,12 @@ CONCERT_ABUSE_CASES: tuple[Case, ...] = (
         Expect("value_error"),
     ),
     Case(
+        "rkhunter-wl-dotdot",
+        "helper_rkhunter_whitelist",
+        ["set", "ALLOWHIDDENFILE", "/tmp/../etc/shadow"],
+        Expect("value_error"),
+    ),
+    Case(
         "rkhunter-wl-weird",
         "helper_rkhunter_whitelist",
         ["weird"],

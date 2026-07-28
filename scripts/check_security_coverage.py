@@ -20,6 +20,9 @@ SECURITY_MODULES = (
     "oyst_core/privileged/helper_firewall.py",
     "oyst_core/privileged/helper_fw_lifecycle.py",
     "oyst_core/privileged/helper_validate.py",
+    "oyst_core/packs/rkhunter_resolve_plan.py",
+    "oyst_core/privilege/plan.py",
+    "oyst_core/privilege/run.py",
     "oyst_core/rpc_auth.py",
     "oyst_core/packs/firewall.py",
     "oyst_core/packs/firewall_ops.py",
@@ -27,6 +30,10 @@ SECURITY_MODULES = (
     "oyst_core/packs/firewall_ensure.py",
     "oyst_core/audit.py",
 )
+
+# Follow-up (not yet ≥85% under the focused suite): helper_clamd, oyst_helper,
+# serve, auth_grant*, helper_scan_concert — covered by security tests but omit
+# from fail_under until dedicated coverage rises.
 
 # Tests that drive the security modules (marker suite + related core).
 TEST_PATHS = (
@@ -36,6 +43,11 @@ TEST_PATHS = (
     "tests/test_core/test_rpc_auth.py",
     "tests/test_core/test_audit_privacy.py",
     "tests/test_core/test_runner_allowlist.py",
+    "tests/test_core/test_rkhunter_resolve.py",
+    "tests/test_core/test_privilege_concert.py",
+    "tests/test_core/test_serve_dispatch.py",
+    "tests/test_core/test_services_auth.py",
+    "tests/test_core/test_client_fallback.py",
 )
 
 

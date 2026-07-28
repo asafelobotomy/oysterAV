@@ -47,6 +47,10 @@ def install_wrapper(*, force: bool = False) -> dict[str, object]:
     """Install a small executable that invokes ``oyst-cli virusevent handle``."""
     dest = wrapper_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.parent.chmod(0o700)
+    except OSError:
+        pass
     oyst = _resolve_oyst_cli_for_wrapper()
     body = (
         "#!/bin/sh\n"
@@ -56,6 +60,10 @@ def install_wrapper(*, force: bool = False) -> dict[str, object]:
     if dest.is_file() and not force:
         existing = dest.read_text(encoding="utf-8")
         if OYSTERAV_MARK in existing:
+            try:
+                dest.chmod(0o755)
+            except OSError:
+                pass
             return {
                 "ok": True,
                 "path": str(dest),

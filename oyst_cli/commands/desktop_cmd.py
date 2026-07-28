@@ -59,12 +59,16 @@ def desktop_install(json_mode: bool) -> None:
         emit(result, json_mode=True)
         return
     click.echo(str(result.get("message", "ok")))
-    icons = result.get("icons") if isinstance(result.get("icons"), dict) else {}
-    launcher = result.get("launcher") if isinstance(result.get("launcher"), dict) else {}
-    if icons.get("path"):
-        click.echo(f"Icons: {icons['path']}")
-    if launcher.get("path"):
-        click.echo(f"Launcher: {launcher['path']}")
+    icons_raw = result.get("icons")
+    launcher_raw = result.get("launcher")
+    icons = icons_raw if isinstance(icons_raw, dict) else {}
+    launcher = launcher_raw if isinstance(launcher_raw, dict) else {}
+    icons_path = icons.get("path")
+    launcher_path = launcher.get("path")
+    if icons_path:
+        click.echo(f"Icons: {icons_path}")
+    if launcher_path:
+        click.echo(f"Launcher: {launcher_path}")
     if not result.get("ok"):
         raise SystemExit(2)
 

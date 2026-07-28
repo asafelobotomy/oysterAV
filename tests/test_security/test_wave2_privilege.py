@@ -29,6 +29,25 @@ def test_wrapper_cmd_rejects_tmp_and_requires_suffix() -> None:
     assert _validate_wrapper_cmd(ok) == ok
 
 
+def test_wrapper_cmd_rejects_group_writable(tmp_path: Path) -> None:
+    dest = tmp_path / ".local" / "share" / "oysterav" / "bin" / "oyst-virusevent"
+    dest.parent.mkdir(parents=True)
+    dest.write_text("#!/bin/sh\n# oyst-virusevent\n", encoding="utf-8")
+    dest.chmod(0o775)
+    # Path must match allowlisted suffix shape — use real home-shaped path via symlink? 
+    # Validate on a constructed path that ends with the required suffix.
+    home_shaped = Path.home() / ".local" / "share" / "oysterav" / "bin" / "oyst-virusevent"
+    home_shaped.parent.mkdir(parents=True, exist_ok=True)
+    home_shaped.write_text("#!/bin/sh\n# oyst-virusevent\n", encoding="utf-8")
+    home_shaped.chmod(0o775)
+    try:
+        with pytest.raises(ValueError, match="group- or world-writable"):
+            _validate_wrapper_cmd(str(home_shaped))
+    finally:
+        home_shaped.chmod(0o755)
+        home_shaped.unlink(missing_ok=True)
+
+
 def test_clamonacc_add_path_rejects_denied_prefixes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

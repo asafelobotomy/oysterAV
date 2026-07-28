@@ -62,7 +62,12 @@ def _is_root_owned_file(path: Path) -> bool:
         st = path.stat()
     except OSError:
         return False
-    return stat.S_ISREG(st.st_mode) and st.st_uid == 0 and not (st.st_mode & 0o002)
+    # Match site_root posture: refuse group- or world-writable (0o022).
+    return (
+        stat.S_ISREG(st.st_mode)
+        and st.st_uid == 0
+        and not (st.st_mode & 0o022)
+    )
 
 
 def resolve_trusted_binary(name: str) -> str:
