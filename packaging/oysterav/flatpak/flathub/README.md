@@ -7,7 +7,7 @@ host-checkout (dir-source) manifest at
 do not submit that CI manifest to Flathub.
 
 Binary wheels such as `pydantic-core` are pinned twice with `only-arches`
-(`x86_64` and `aarch64`) for the GNOME 48 runtime CPython ABI (`cp313`).
+(`x86_64` and `aarch64`) for the GNOME 50 runtime CPython ABI (`cp313`).
 
 ## Submit
 

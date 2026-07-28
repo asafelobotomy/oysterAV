@@ -2,7 +2,7 @@
 # GitHub Release CI continues to use ../io.github.asafelobotomy.OysterAV.yml (dir source).
 app-id: io.github.asafelobotomy.OysterAV
 runtime: org.gnome.Platform
-runtime-version: "48"
+runtime-version: "50"
 sdk: org.gnome.Sdk
 command: oysterav
 
@@ -41,7 +41,7 @@ modules:
       - type: file
         url: https://files.pythonhosted.org/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl
         sha256: 4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7
-      # pydantic-core is arch-specific; pin both Flathub builder arches (CPython 3.13 = GNOME 48).
+      # pydantic-core is arch-specific; pin both Flathub builder arches (CPython 3.13 = GNOME 50).
       - type: file
         url: https://files.pythonhosted.org/packages/05/9f/b24bb1b764fc360adace5df806a81fd62ef1662df2973891e487c3fd5a2c/pydantic_core-2.47.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
         sha256: 473b9a2b2a1f0dd55cbb32d2b902f93babe7f141a0bb48fb4d3d4d2b3e93e9a0

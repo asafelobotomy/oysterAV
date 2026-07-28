@@ -79,11 +79,21 @@ def escape_systemd_exec_arg(path: str) -> str:
 def get_linger_status() -> dict[str, object]:
     """Return whether user lingering is enabled for timer persistence."""
     user = current_username()
-    res = run_command(["loginctl", "show-user", user, "-p", "Linger"], timeout=15)
+    try:
+        res = run_command(["loginctl", "show-user", user, "-p", "Linger"], timeout=15)
+    except (FileNotFoundError, OSError):
+        # Flatpak / minimal hosts may lack loginctl on PATH.
+        return {
+            "user": user,
+            "linger": False,
+            "available": False,
+            "enable_hint": f"loginctl enable-linger {user}",
+        }
     linger = "Linger=yes" in (res.stdout or "")
     return {
         "user": user,
         "linger": linger,
+        "available": True,
         "enable_hint": f"loginctl enable-linger {user}",
     }
 
