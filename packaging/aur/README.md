@@ -5,21 +5,22 @@ Rendered sources of truth live in [`../arch/`](../arch/) (`PKGBUILD`, `.SRCINFO`
 ## First-time submit
 
 1. Create an AUR account (if needed) and add an SSH public key under
-   https://aur.archlinux.org/account/ (SSH Public Keys).
-2. Create the empty package repo:
+   https://aur.archlinux.org/ (logged-in account → SSH Public Keys).
+2. **Verify your AUR account email** (required before any `git push`).
+3. Create the empty package repo:
 
 ```bash
 ssh aur@aur.archlinux.org setup-repo oysterav
 ```
 
-3. From the oysterAV checkout:
+4. From the oysterAV checkout:
 
 ```bash
 REQUIRE_SHA256=1 bash scripts/render_arch_pkgbuild.sh
 bash scripts/publish_aur.sh
 ```
 
-4. Confirm https://aur.archlinux.org/packages/oysterav
+5. Confirm https://aur.archlinux.org/packages/oysterav
 
 Optional local SSH config (IdentityFile pointing at the key you registered):
 
