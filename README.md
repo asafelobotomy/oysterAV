@@ -137,7 +137,7 @@ assets on each [GitHub Release](https://github.com/asafelobotomy/oysterAV/releas
 | **Fedora/RHEL (.rpm)** | Available | Download `oysterav-*-1.x86_64.rpm`, then `sudo dnf install ./oysterav-*.rpm` |
 | **Flatpak (GitHub bundle)** | Available | `flatpak install --user ./oysterAV-*-x86_64.flatpak` — **also install a host `.deb`/`.rpm`** for Polkit helper elevation |
 | **Wheel / uv (dev)** | Available | Download the `.whl` or clone and `uv sync --extra all` |
-| **AUR** (Arch / CachyOS) | Pending listing | SSH ready; verify AUR account email, then we can push — see [distro submit status](docs/packaging/distro-submit.md) |
+| **AUR** (Arch / CachyOS) | Available | `yay -S oysterav` or `paru -S oysterav` |
 | **Fedora COPR** | Deferred | Spec prepared; skipped for now |
 | **Flathub** | Not pursuing | Blocked by Flathub generative AI policy; use GitHub Flatpak bundle above |
 | **PyPI (CLI)** | Available | `pipx install oysterav` — CLI discoverability only; not recommended for the privileged helper |
