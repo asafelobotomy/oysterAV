@@ -27,3 +27,10 @@ Flatpak cannot install a root-owned `oyst-helper` by itself. Users need:
 
 See the AppStream description in
 [`../io.github.asafelobotomy.OysterAV.metainfo.xml`](../io.github.asafelobotomy.OysterAV.metainfo.xml).
+
+## Flathub status
+
+Flathub listing is **not being pursued**: Flathub’s
+[generative AI policy](https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy)
+disallows AI-assisted applications. Keep this offline manifest for reference /
+possible future policy change; ship users the GitHub Release Flatpak bundle instead.

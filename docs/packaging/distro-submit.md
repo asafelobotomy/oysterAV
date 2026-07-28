@@ -5,10 +5,10 @@ oysterAV ships community binaries on [GitHub Releases](https://github.com/asafel
 
 | Track | Status | Notes |
 |-------|--------|-------|
-| **AUR** (`oysterav`) | Pending — AUR SSH key | PKGBUILD ready; no local SSH identity. Create/register an AUR key, `ssh aur@aur.archlinux.org setup-repo oysterav`, then `bash scripts/publish_aur.sh` |
-| **Flathub** | Pending — PR closed for checklist; updated | [PR #9533](https://github.com/flathub/flathub/pull/9533) (closed by bot). Checklist restored; manifest migrated to **GNOME 50**. Needs: reviewer reopen + Flatpak screencast attachment |
-| **Fedora COPR** | Pending — create project | Spec: [`packaging/rpm/oysterav.spec`](../rpm/oysterav.spec); create `asafelobotomy/oysterav` on [COPR](https://copr.fedorainfracloud.org/) (no `copr-cli` credentials here) |
-| **PyPI** | Pending — Trusted Publisher | GitHub env `pypi` exists; register at [pypi.org publishing](https://pypi.org/manage/account/publishing/) then re-run `publish-pypi.yml` for `v0.2.2` |
+| **AUR** (`oysterav`) | Pending — needs AUR account SSH | PKGBUILD ready (`REQUIRE_SHA256=1`). Register an SSH public key on [AUR account → SSH Keys](https://aur.archlinux.org/account/), then `ssh aur@aur.archlinux.org setup-repo oysterav` and `bash scripts/publish_aur.sh`. See [`packaging/aur/README.md`](../aur/README.md). |
+| **Flathub** | Not pursuing | [PR #9533](https://github.com/flathub/flathub/pull/9533) withdrawn: Flathub [generative AI policy](https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy) disallows AI-assisted apps. GitHub Release `.flatpak` remains available. |
+| **Fedora COPR** | Pending — create project | Spec: [`packaging/rpm/oysterav.spec`](../rpm/oysterav.spec); create `asafelobotomy/oysterav` on [COPR](https://copr.fedorainfracloud.org/) (SCM: this GitHub repo, path `packaging/rpm/oysterav.spec`). |
+| **PyPI** | Pending — Trusted Publisher | GitHub environment `pypi` exists. Register Trusted Publisher at [pypi.org](https://pypi.org/manage/account/publishing/) (owner `asafelobotomy`, repo `oysterAV`, workflow `publish-pypi.yml`, environment `pypi`), then run `publish-pypi.yml` for `v0.2.2`. |
 | **Debian mentors** | Deferred | Scaffold: [`packaging/debian/`](../debian/); GitHub fpm `.deb` stays the Debian-user artifact |
 
 ## Privileged helper rule
@@ -18,10 +18,10 @@ and ship [`packaging/polkit/io.github.asafelobotomy.policy`](../polkit/io.github
 Flatpak GUI installs still need a **host** package for Polkit elevation
 ([Flatpak README](../oysterav/flatpak/README.md)).
 
-## External submit checklist (after a GitHub Release)
+## External submit checklist (human gates)
 
-1. **AUR:** register AUR SSH key → `setup-repo oysterav` → `bash scripts/publish_aur.sh`.
-2. **COPR:** create project + SCM build from tag + [`packaging/rpm/oysterav.spec`](../rpm/oysterav.spec).
-3. **Flathub:** complete screencast on [PR #9533](https://github.com/flathub/flathub/pull/9533); ask for reopen / `/review`; `bot, build` when asked.
-4. **PyPI:** finish Trusted Publisher; re-run `publish-pypi.yml` for the tag.
-5. Flip this table (and the README install table) to **Available** when each listing is live.
+1. **AUR:** AUR SSH key on account → `setup-repo oysterav` → `bash scripts/publish_aur.sh` → flip this table + README to Available.
+2. **COPR:** create project + SCM build from tag → flip docs when the first build succeeds.
+3. **Flathub:** closed — do not resubmit under current Flathub generative AI policy.
+4. **PyPI:** Trusted Publisher on pypi.org → re-run `publish-pypi.yml` for the tag → flip docs.
+5. Flip README install rows only when a listing is actually live.
