@@ -39,8 +39,20 @@
       <caption>Scan profiles and pack cards</caption>
     </screenshot>
     <screenshot>
+      <image>https://raw.githubusercontent.com/asafelobotomy/oysterAV/main/docs/assets/screenshots/shield.png</image>
+      <caption>Shield — firewall and fail2ban</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/asafelobotomy/oysterAV/main/docs/assets/screenshots/reports.png</image>
+      <caption>Reports history and resolve</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/asafelobotomy/oysterAV/main/docs/assets/screenshots/quarantine.png</image>
+      <caption>Quarantine vault</caption>
+    </screenshot>
+    <screenshot>
       <image>https://raw.githubusercontent.com/asafelobotomy/oysterAV/main/docs/assets/screenshots/settings.png</image>
-      <caption>Settings and maintenance</caption>
+      <caption>Settings categories</caption>
     </screenshot>
   </screenshots>
   <provides>

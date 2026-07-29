@@ -13,6 +13,7 @@
   <a href="https://github.com/asafelobotomy/oysterAV"><img alt="GitHub" src="https://img.shields.io/badge/github-asafelobotomy%2FoysterAV-blue?logo=github"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-GPL--3.0--or--later-green"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A5%203.12-3776AB?logo=python&logoColor=white">
+  <a href="https://pypi.org/project/oysterav/"><img alt="PyPI" src="https://img.shields.io/pypi/v/oysterav.svg"></a>
 </p>
 
 <p align="center">
@@ -28,18 +29,24 @@
 - **Orchestrator, not engine** — wraps ClamAV, rkhunter, Lynis, and friends ([ADR-001](docs/adr/001-orchestrator-not-engine.md))
 - **CLI owns security** — `oyst-cli` is the source of truth; the GUI is a client ([ADR-002](docs/adr/002-cli-first-gui-is-client.md))
 - **Full or Lite runtime** — vendored tools under XDG, or host packages only ([ADR-004](docs/adr/004-pack-runtime-delivery.md))
+- **Privilege Concert** — one admin auth per user action for multi-step privileged flows ([ADR-009](docs/adr/009-privilege-concert.md))
 - **Host co-control** — on-access blocking stays with ClamAV; oysterAV guides and responds ([ADR-008](docs/adr/008-clamav-host-cocontrol.md))
 
 ## Screenshots
 
-| Scan | Reports |
-|:----:|:-------:|
-| <img src="docs/assets/screenshots/scan.png" alt="Scan tab" width="360"> | <img src="docs/assets/screenshots/reports.png" alt="Reports tab" width="360"> |
-| Profiles, paths, multi-pack progress | History, export, quarantine / resolve actions |
+| Scan | Shield |
+|:----:|:------:|
+| <img src="docs/assets/screenshots/scan.png" alt="Scan tab" width="360"> | <img src="docs/assets/screenshots/shield.png" alt="Shield tab" width="360"> |
+| Profiles, paths, pack cards | Firewall, fail2ban, bans |
+
+| Reports | Quarantine |
+|:-------:|:----------:|
+| <img src="docs/assets/screenshots/reports.png" alt="Reports tab" width="360"> | <img src="docs/assets/screenshots/quarantine.png" alt="Quarantine tab" width="360"> |
+| History, export, resolve | Vault list, restore / delete |
 
 <p align="center">
   <img src="docs/assets/screenshots/settings.png" alt="Settings" width="720"><br>
-  <em>Settings — feeds, scan defaults, services, scheduling, packs</em>
+  <em>Settings — general, services, real-time, scheduling, host &amp; audit, terminal, packs</em>
 </p>
 
 ## Prerequisites
@@ -74,7 +81,9 @@ uv sync --extra gui --extra dev
 uv run oysterav
 ```
 
-The GUI talks only through `OystClient` / `oyst-cli serve` — never runs security tools itself. See [ADR-007](docs/adr/007-gui-remapping-phase.md) and the [GUI↔CLI contract](docs/cli/gui-contract.md).
+Six tabs: **Dashboard**, **Scan**, **Shield**, **Reports**, **Quarantine**, **Settings**.
+The GUI talks only through `OystClient` / `oyst-cli serve` — never runs security tools itself.
+See [ADR-007](docs/adr/007-gui-remapping-phase.md) and the [GUI↔CLI contract](docs/cli/gui-contract.md).
 
 ## Architecture
 
@@ -167,6 +176,7 @@ uv run oyst-cli serve --foreground   # RPC for the GUI
 - [Release / packaging](docs/packaging/release.md)
 - [Distro submit tracks](docs/packaging/distro-submit.md)
 - [Flatpak](packaging/oysterav/flatpak/README.md)
+- [GUI screenshots](docs/assets/screenshots/README.md)
 
 ## License
 

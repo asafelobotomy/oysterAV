@@ -1,19 +1,21 @@
 # GUI screenshots
 
-Marketing / README captures of the oysterAV GTK4 UI (960×700 window crops).
+Marketing / README captures of the oysterAV GTK4 UI (default 960×700 window).
 
 | File | Tab |
 |------|-----|
-| `dashboard.png` | Dashboard |
-| `scan.png` | Scan |
-| `reports.png` | Reports |
-| `settings.png` | Settings |
+| `dashboard.png` | Dashboard — posture cards, ticker, recent scans |
+| `scan.png` | Scan — profiles, paths, pack cards |
+| `shield.png` | Shield — firewall, fail2ban |
+| `reports.png` | Reports — history / export |
+| `quarantine.png` | Quarantine — vault |
+| `settings.png` | Settings — categories sidebar |
 
-Regenerate on a desktop session with the app running (portal screenshot + crop):
+Regenerate on a desktop session (no portal / IDE chrome):
 
 ```bash
-uv run oysterav &
-# then use AT-SPI + org.freedesktop.portal.Screenshot, crop to the oysterAV window
+uv sync --extra gui
+uv run python scripts/capture_gui_screenshots.py
 ```
 
 Do not commit full-desktop captures that include unrelated IDE chrome.
