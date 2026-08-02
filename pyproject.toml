@@ -33,7 +33,7 @@ gui = ["PyGObject>=3.48.0"]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
-    "mypy>=1.11.0",
+    "mypy>=2.3.0",
     "ruff>=0.6.0",
     "types-defusedxml>=0.7.0.20260504",
 ]
