@@ -27,10 +27,11 @@ def invalidate_firewall_detect_cache() -> None:
     _detect_cache = None
 
 
-def _ufw_enabled_from_conf(conf_path: Path = _UFW_CONF) -> bool | None:
+def _ufw_enabled_from_conf(conf_path: Path | None = None) -> bool | None:
     """Parse ENABLED= from ufw.conf when ``ufw status`` needs root. None if unknown."""
+    path = _UFW_CONF if conf_path is None else conf_path
     try:
-        text = conf_path.read_text(encoding="utf-8", errors="replace")
+        text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
     for line in text.splitlines():

@@ -40,11 +40,11 @@ def test_check_available_updates_pacman() -> None:
         patch("oyst_core.updates.detect_distro_family", return_value="arch"),
         patch("oyst_core.app_release.app_update_entry", return_value=None),
         patch(
-            "oyst_core.updates_query.installed_pack_names",
+            "oyst_core.updates.installed_pack_names",
             return_value={"rkhunter", "clamav"},
         ),
         patch(
-            "oyst_core.updates_query.relevant_pack_names",
+            "oyst_core.updates.relevant_pack_names",
             side_effect=lambda installed: set(installed),
         ),
         patch(
@@ -77,12 +77,12 @@ def test_check_available_updates_includes_github_app() -> None:
     with (
         patch("oyst_core.updates.detect_distro_family", return_value="arch"),
         patch("oyst_core.app_release.app_update_entry", return_value=app),
-        patch("oyst_core.updates_query.installed_pack_names", return_value=set()),
+        patch("oyst_core.updates.installed_pack_names", return_value=set()),
         patch(
-            "oyst_core.updates_query.relevant_pack_names",
+            "oyst_core.updates.relevant_pack_names",
             return_value=set(),
         ),
-        patch("oyst_core.updates_query.tracked_packages", return_value={}),
+        patch("oyst_core.updates.tracked_packages", return_value={}),
     ):
         result = check_available_updates()
     assert result["updates"][0]["kind"] == "app"
@@ -93,9 +93,9 @@ def test_check_available_updates_apt() -> None:
     with (
         patch("oyst_core.updates.detect_distro_family", return_value="debian"),
         patch("oyst_core.app_release.app_update_entry", return_value=None),
-        patch("oyst_core.updates_query.installed_pack_names", return_value={"fail2ban"}),
+        patch("oyst_core.updates.installed_pack_names", return_value={"fail2ban"}),
         patch(
-            "oyst_core.updates_query.relevant_pack_names",
+            "oyst_core.updates.relevant_pack_names",
             side_effect=lambda installed: set(installed),
         ),
         patch(

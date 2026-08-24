@@ -90,9 +90,20 @@ def test_packaging_policy_matches_builder() -> None:
 
 
 def test_install_privileged_helper_writes_policy(tmp_path: Path) -> None:
-    with patch("oyst_core.privileged.install_privileged_helper.os.geteuid", return_value=0):
+    with (
+        patch("oyst_core.privileged.install_privileged_helper.os.geteuid", return_value=0),
+        # Avoid requiring system python3 to import checkout deps (CI image).
+        patch(
+            "oyst_core.privileged.install_privileged_helper._helper_script_text",
+            return_value=(
+                "#!/usr/bin/python3\n"
+                "from oyst_core.privileged.oyst_helper import main\n"
+                "main()\n"
+            ),
+        ),
+    ):
         result = install_privileged_helper(prefix=tmp_path)
-    assert result["ok"] is True
+    assert result["ok"] is True, result.get("message")
     policy_path = tmp_path / "share" / "polkit-1" / "actions" / "io.github.asafelobotomy.policy"
     helper_path = tmp_path / "lib" / "oysterav" / "oyst-helper"
     assert policy_path.is_file()
