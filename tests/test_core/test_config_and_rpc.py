@@ -54,10 +54,6 @@ def test_scan_tuning_config_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     with (
         patch("oyst_core.packs.clamav.ClamAVPack.ensure_ignore_sigs", return_value=None),
         patch(
-            "oyst_core.packs.rkhunter_resolve.ensure_disable_tests_overlay",
-            return_value={"ok": True},
-        ),
-        patch(
             "oyst_core.packs.fangfrisch.FangfrischPack.ensure_config",
             return_value=(True, "ok"),
         ),
@@ -93,10 +89,6 @@ def test_scan_tuning_config_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     # Deprecated alias still writes scan.clamav_profile
     with (
         patch("oyst_core.packs.clamav.ClamAVPack.ensure_ignore_sigs", return_value=None),
-        patch(
-            "oyst_core.packs.rkhunter_resolve.ensure_disable_tests_overlay",
-            return_value={"ok": True},
-        ),
         patch(
             "oyst_core.packs.fangfrisch.FangfrischPack.ensure_config",
             return_value=(True, "ok"),

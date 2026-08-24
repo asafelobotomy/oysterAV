@@ -20,6 +20,7 @@ RPC_TO_CLI: dict[str, list[str]] = {
     "pack.install": ["packs", "install", "--help"],
     "setup.status": ["setup", "status", "--json"],
     "setup.run": ["setup", "run", "--help"],
+    "setup.reset": ["setup", "reset", "--help"],
     "job.start": ["scan", "--help"],
     "job.cancel": ["job", "cancel", "--help"],
     "job.clear": ["job", "clear", "--help"],

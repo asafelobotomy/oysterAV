@@ -20,6 +20,8 @@ from oyst_core.quarantine import QuarantineVault
 OYSTERAV_MARK = "oyst-virusevent"
 ENV_FILENAME = "CLAM_VIRUSEVENT_FILENAME"
 ENV_VIRUSNAME = "CLAM_VIRUSEVENT_VIRUSNAME"
+_SYSTEM_WRAPPER = Path("/usr/lib/oysterav") / OYSTERAV_MARK
+_SYSTEM_WRAPPER_LOCAL = Path("/usr/local/lib/oysterav") / OYSTERAV_MARK
 
 
 def _resolve_oyst_cli_for_wrapper() -> str:
@@ -33,30 +35,44 @@ def _resolve_oyst_cli_for_wrapper() -> str:
     return "/usr/bin/oyst-cli"
 
 
+def system_wrapper_path() -> Path:
+    """Root-owned host VirusEvent wrapper (preferred for clamd conf)."""
+    return _SYSTEM_WRAPPER
+
+
 def wrapper_path() -> Path:
+    """XDG user/dev fallback wrapper path."""
     return data_dir() / "bin" / OYSTERAV_MARK
+
+
+def wrapper_script_body() -> str:
+    oyst = _resolve_oyst_cli_for_wrapper()
+    return (
+        "#!/bin/sh\n"
+        f"# {OYSTERAV_MARK} — oysterAV VirusEvent handler (ADR-008)\n"
+        f'exec "{oyst}" virusevent handle "$@"\n'
+    )
 
 
 def recommended_virus_event_command(wrapper: Path | None = None) -> str:
     """clamd.conf VirusEvent value (absolute path; no env expansion in conf)."""
-    path = wrapper or wrapper_path()
-    return str(path.resolve())
+    if wrapper is not None:
+        return str(wrapper)
+    for candidate in (_SYSTEM_WRAPPER, _SYSTEM_WRAPPER_LOCAL):
+        if candidate.is_file():
+            return str(candidate)
+    return str(wrapper_path())
 
 
 def install_wrapper(*, force: bool = False) -> dict[str, object]:
-    """Install a small executable that invokes ``oyst-cli virusevent handle``."""
+    """Install XDG wrapper that invokes ``oyst-cli virusevent handle`` (user/dev)."""
     dest = wrapper_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
         dest.parent.chmod(0o700)
     except OSError:
         pass
-    oyst = _resolve_oyst_cli_for_wrapper()
-    body = (
-        "#!/bin/sh\n"
-        f"# {OYSTERAV_MARK} — oysterAV VirusEvent handler (ADR-008)\n"
-        f'exec "{oyst}" virusevent handle "$@"\n'
-    )
+    body = wrapper_script_body()
     if dest.is_file() and not force:
         existing = dest.read_text(encoding="utf-8")
         if OYSTERAV_MARK in existing:
@@ -80,7 +96,7 @@ def install_wrapper(*, force: bool = False) -> dict[str, object]:
         "virus_event": recommended_virus_event_command(dest),
         "message": (
             f"Add to host clamd.conf when VirusEvent is unset: "
-            f"VirusEvent {recommended_virus_event_command(dest)}"
+            f"VirusEvent {recommended_virus_event_command(system_wrapper_path())}"
         ),
     }
 
@@ -99,8 +115,11 @@ def _parse_virus_event(text: str) -> str | None:
 def virusevent_status(*, conf_paths: list[Path] | None = None) -> dict[str, object]:
     """Probe whether host VirusEvent points at the oysterAV wrapper."""
     paths = conf_paths if conf_paths is not None else discover_clamd_conf_paths()
-    wrapper = wrapper_path()
-    recommended = recommended_virus_event_command(wrapper)
+    system = system_wrapper_path()
+    xdg = wrapper_path()
+    wrapper = system if system.is_file() else xdg
+    recommended = recommended_virus_event_command()
+    wrapper_installed = system.is_file() or xdg.is_file()
     if not paths:
         return {
             "ok": True,
@@ -110,7 +129,7 @@ def virusevent_status(*, conf_paths: list[Path] | None = None) -> dict[str, obje
             "conf_path": None,
             "virus_event": None,
             "wrapper_path": str(wrapper),
-            "wrapper_installed": wrapper.is_file(),
+            "wrapper_installed": wrapper_installed,
             "recommended": recommended,
             "message": "no readable clamd conf",
         }
@@ -122,7 +141,12 @@ def virusevent_status(*, conf_paths: list[Path] | None = None) -> dict[str, obje
         value = _parse_virus_event(text)
         if value is None:
             continue
-        owned = OYSTERAV_MARK in value or str(wrapper) in value
+        owned = (
+            OYSTERAV_MARK in value
+            or str(system) in value
+            or str(xdg) in value
+            or str(_SYSTEM_WRAPPER_LOCAL) in value
+        )
         foreign = value and not owned
         return {
             "ok": True,
@@ -132,7 +156,7 @@ def virusevent_status(*, conf_paths: list[Path] | None = None) -> dict[str, obje
             "conf_path": str(path),
             "virus_event": value,
             "wrapper_path": str(wrapper),
-            "wrapper_installed": wrapper.is_file(),
+            "wrapper_installed": wrapper_installed,
             "recommended": recommended,
             "message": (
                 "oysterAV owns VirusEvent"
@@ -148,7 +172,7 @@ def virusevent_status(*, conf_paths: list[Path] | None = None) -> dict[str, obje
         "conf_path": str(paths[0]),
         "virus_event": None,
         "wrapper_path": str(wrapper),
-        "wrapper_installed": wrapper.is_file(),
+        "wrapper_installed": wrapper_installed,
         "recommended": recommended,
         "message": "VirusEvent unset — add recommended line when ready",
     }
@@ -229,6 +253,8 @@ __all__ = [
     "handle_virusevent",
     "install_wrapper",
     "recommended_virus_event_command",
+    "system_wrapper_path",
     "virusevent_status",
     "wrapper_path",
+    "wrapper_script_body",
 ]

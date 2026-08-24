@@ -7,8 +7,10 @@ import re
 from oyst_core.audit import SecurityAudit
 from oyst_core.models import PackStatus, PackTier
 from oyst_core.packs.base import Pack
+from oyst_core.packs.firewall import FirewallPack
 from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.runner import run_command, which
+from oyst_core.privileged.systemctl_route import run_systemctl_helper
 from oyst_core.privileged.validators import validate_ip, validate_jail
 
 
@@ -34,8 +36,6 @@ class Fail2banPack(Pack):
             svc = self.service_status()
             status.details = svc
             status.details["binary"] = binary
-            from oyst_core.packs.firewall import FirewallPack
-
             fw = FirewallPack().detect()
             status.details["firewall"] = fw.get("active", "none")
             if not svc.get("running"):
@@ -154,8 +154,26 @@ class Fail2banPack(Pack):
         ok = res.returncode == 0
         return ok, res.stderr or ("ok" if ok else "persist failed")
 
+    def _ensure_daemon_for_jail_start(self) -> tuple[bool, str]:
+        """Enable-now fail2ban when inactive before jail-start (ORD-07)."""
+        try:
+            unit_res = run_command(["systemctl", "is-active", "fail2ban"], timeout=15)
+            if unit_res.stdout.strip() == "active":
+                return True, "already active"
+        except (ValueError, OSError) as exc:
+            return False, f"cannot check fail2ban unit: {exc}"
+        up = run_systemctl_helper("enable-now", "fail2ban")
+        if up.returncode != 0:
+            detail = (up.stderr or up.stdout or "fail2ban enable-now failed").strip()
+            return False, detail
+        return True, "enabled"
+
     def set_jail_enabled(self, jail: str, *, enabled: bool) -> tuple[bool, str]:
         validate_jail(jail)
+        if enabled:
+            ok_daemon, daemon_msg = self._ensure_daemon_for_jail_start()
+            if not ok_daemon:
+                return False, daemon_msg
         action = "jail-start" if enabled else "jail-stop"
         res = run_privileged_helper("fail2ban", [action, jail])
         ok = res.returncode == 0

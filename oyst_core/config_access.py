@@ -192,8 +192,11 @@ def set_config_value(key: str, value: str) -> None:
             cfg.setup.completed_at = datetime.now(UTC).isoformat()
         if not cfg.setup.completed:
             cfg.setup.completed_at = None
+            cfg.setup.completed_install = ""
     elif key == "setup.skipped_steps":
         cfg.setup.skipped_steps = _parse_csv(value)
+    elif key == "setup.completed_install":
+        cfg.setup.completed_install = value.strip()
     elif key == "rkhunter.skip_keypress":
         cfg.rkhunter.skip_keypress = _parse_bool(value)
     elif key == "rkhunter.disable_tests":
@@ -311,10 +314,8 @@ def set_config_value(key: str, value: str) -> None:
         from oyst_core.packs.clamav import ClamAVPack
 
         ClamAVPack().ensure_ignore_sigs()
-    elif key == "rkhunter.disable_tests":
-        from oyst_core.packs.rkhunter_resolve import ensure_disable_tests_overlay
-
-        ensure_disable_tests_overlay(cfg.rkhunter.disable_tests)
+    # rkhunter.disable_tests: persist only. Overlay apply is via resolve /
+    # setup-harden / scan-concert (disclosed elevation), not autosave.
     elif key == "fangfrisch.providers":
         from oyst_core.packs.fangfrisch import FangfrischPack
 

@@ -35,6 +35,7 @@ HANDLERS: dict[str, Handler] = {
     "pack.install": status_pack.handle_pack_install,
     "setup.status": status_pack.handle_setup_status,
     "setup.run": status_pack.handle_setup_run,
+    "setup.reset": status_pack.handle_setup_reset,
     "job.start": jobs.handle_job_start,
     "job.cancel": jobs.handle_job_cancel,
     "job.clear": jobs.handle_job_clear,

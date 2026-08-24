@@ -138,6 +138,9 @@ def test_ensure_firewalld_fail_closed_stops() -> None:
     ):
         step = life._ensure_firewalld(force_lockout=False)
     assert step["ok"] is False
+    assert calls[0][0] == "firewall-offline-cmd"
+    assert "--add-service=ssh" in calls[0]
+    assert any(c[:3] == ["systemctl", "enable", "--now"] for c in calls)
     assert any(c[:3] == ["systemctl", "stop", "firewalld"] for c in calls)
 
 

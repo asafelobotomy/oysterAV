@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from oyst_core.audit import SecurityAudit
-from oyst_core.maintenance import run_bootstrap
+from oyst_core.maintenance import bootstrap_critical_ok, run_bootstrap
 from oyst_core.runtime.bootstrap import bootstrap_runtime, update_runtime
 from oyst_core.runtime.manifest import is_full_mode
 from oyst_core.runtime.progress import ProgressCallback, emit_progress
@@ -75,7 +75,7 @@ def run_full_runtime_bootstrap(
         steps.append(
             {
                 "step": "maintenance",
-                "ok": ok_count > 0,
+                "ok": bootstrap_critical_ok(maint),
                 "message": f"Bootstrap {ok_count}/{len(maint)} steps OK",
                 "details": maint,
             },
@@ -84,7 +84,7 @@ def run_full_runtime_bootstrap(
         steps.append({"step": "maintenance", "ok": True, "skipped": True})
 
     ok_count = sum(1 for s in steps if s.get("ok"))
-    success = ok_count > 0
+    success = all(bool(s.get("ok") or s.get("skipped")) for s in steps)
     emit_progress(on_progress, "bootstrap", 100)
     result: dict[str, Any] = {
         "ok": success,

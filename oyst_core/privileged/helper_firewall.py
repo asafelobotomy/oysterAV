@@ -158,6 +158,16 @@ def _build_firewalld_argv(argv: Sequence[str]) -> list[str]:
     raise ValueError(f"unknown firewalld action: {action}")
 
 
+def _build_firewalld_offline_ssh_argv(*, zone: str = "public") -> list[str]:
+    """Permanent SSH allow while firewalld is down (SSH-safe enable)."""
+    zone_name = validate_zone(zone)
+    return [
+        "firewall-offline-cmd",
+        f"--zone={zone_name}",
+        "--add-service=ssh",
+    ]
+
+
 def _build_firewall_argv(argv: Sequence[str]) -> list[str]:
     if not argv:
         raise ValueError("firewall backend required")

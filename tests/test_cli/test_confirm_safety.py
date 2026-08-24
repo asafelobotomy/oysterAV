@@ -135,3 +135,61 @@ def test_setup_reset_missing_confirm_exits_4() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["setup", "reset"])
     assert result.exit_code == 4
+
+
+def test_clamonacc_enable_requires_confirm() -> None:
+    runner = CliRunner()
+    with patch("oyst_cli.commands.packs.clamonacc_cmd.ClamonaccPack") as pack:
+        result = runner.invoke(cli, ["clamonacc", "enable", "--json"])
+    assert result.exit_code == 4
+    pack.return_value.enable.assert_not_called()
+
+
+def test_clamonacc_disable_requires_confirm() -> None:
+    runner = CliRunner()
+    with patch("oyst_cli.commands.packs.clamonacc_cmd.ClamonaccPack") as pack:
+        result = runner.invoke(cli, ["clamonacc", "disable", "--json"])
+    assert result.exit_code == 4
+    pack.return_value.disable.assert_not_called()
+
+
+def test_clamonacc_stop_requires_confirm() -> None:
+    runner = CliRunner()
+    with patch("oyst_cli.commands.packs.clamonacc_cmd.ClamonaccPack") as pack:
+        result = runner.invoke(cli, ["clamonacc", "stop", "--json"])
+    assert result.exit_code == 4
+    pack.return_value.stop.assert_not_called()
+
+
+def test_job_clear_requires_confirm() -> None:
+    runner = CliRunner()
+    with patch("oyst_cli.commands.job_cmd.JobOrchestrator") as orch:
+        result = runner.invoke(cli, ["job", "clear", "--json"])
+    assert result.exit_code == 4
+    orch.return_value.clear_job.assert_not_called()
+
+
+def test_job_cancel_force_requires_confirm() -> None:
+    runner = CliRunner()
+    with patch("oyst_cli.commands.job_cmd.JobOrchestrator") as orch:
+        result = runner.invoke(cli, ["job", "cancel", "--force", "--json"])
+    assert result.exit_code == 4
+    orch.return_value.cancel_job.assert_not_called()
+
+
+def test_job_cancel_without_force_no_confirm() -> None:
+    runner = CliRunner()
+    with patch(
+        "oyst_cli.commands.job_cmd.JobOrchestrator.cancel_job",
+        return_value={"ok": True, "cancelled": True},
+    ):
+        result = runner.invoke(cli, ["job", "cancel", "--json"])
+    assert result.exit_code == 0
+
+
+def test_firewalld_reload_requires_confirm() -> None:
+    runner = CliRunner()
+    with patch("oyst_cli.commands.packs.firewall_cmd_firewalld.FirewallOps") as ops:
+        result = runner.invoke(cli, ["firewall", "firewalld", "reload"])
+    assert result.exit_code == 4
+    ops.return_value.firewalld_reload.assert_not_called()

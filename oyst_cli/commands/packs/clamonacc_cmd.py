@@ -29,9 +29,11 @@ def clamonacc_start(json_mode: bool) -> None:
 
 
 @clamonacc_group.command("stop")
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def clamonacc_stop(json_mode: bool) -> None:
+def clamonacc_stop(confirm: bool, json_mode: bool) -> None:
     """Stop on-access scanner."""
+    require_confirm(confirm, message="--confirm required to stop clamonacc")
     ok, msg = ClamonaccPack().stop()
     if json_mode:
         emit({"ok": ok, "message": msg}, json_mode=True)
@@ -41,9 +43,11 @@ def clamonacc_stop(json_mode: bool) -> None:
 
 
 @clamonacc_group.command("enable")
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def clamonacc_enable(json_mode: bool) -> None:
+def clamonacc_enable(confirm: bool, json_mode: bool) -> None:
     """Ensure clamd, start clamonacc, and persist enabled config."""
+    require_confirm(confirm, message="--confirm required to enable clamonacc")
     ok, msg = ClamonaccPack().enable()
     if json_mode:
         emit({"ok": ok, "message": msg}, json_mode=True)
@@ -53,9 +57,11 @@ def clamonacc_enable(json_mode: bool) -> None:
 
 
 @clamonacc_group.command("disable")
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def clamonacc_disable(json_mode: bool) -> None:
+def clamonacc_disable(confirm: bool, json_mode: bool) -> None:
     """Stop clamonacc and persist disabled config."""
+    require_confirm(confirm, message="--confirm required to disable clamonacc")
     ok, msg = ClamonaccPack().disable()
     if json_mode:
         emit({"ok": ok, "message": msg}, json_mode=True)

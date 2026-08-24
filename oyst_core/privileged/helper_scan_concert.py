@@ -15,11 +15,13 @@ from oyst_core.packs.rkhunter_disable_tests import apply_disable_tests_overlay
 from oyst_core.privileged.helper_clamd import _parse_flag, _parse_multi
 from oyst_core.privileged.helper_setup_harden import _has_bool, _step
 from oyst_core.privileged.helper_validate import resolve_trusted_argv, resolve_trusted_binary
+from oyst_core.privileged.safe_write import write_text_nofollow
 
 _JOB_ID_RE = re.compile(r"^[0-9a-fA-F-]{8,64}$")
 _UNHIDE_MODES = frozenset({"sys", "brute", "quick", "check", "fork", "proc", "reverse"})
 _ALLOWED_PACKS = frozenset({"rkhunter", "chkrootkit", "unhide", "lynis"})
-_REPORT_ROOT = Path("/var/tmp/oysterav-scan")  # nosec B108 — root-owned reports dir
+# Root-owned under /var/lib (not world-writable /var/tmp).
+_REPORT_ROOT = Path("/var/lib/oysterav/scan-reports")
 
 
 def _caller_uid() -> int | None:
@@ -37,10 +39,38 @@ def _validate_job_id(raw: str) -> str:
     return cleaned
 
 
+def _assert_root_owned_dir(path: Path) -> None:
+    """Fail closed: refuse user-owned or group/world-writable parents (no chown/chmod)."""
+    try:
+        st = path.stat()
+    except OSError as exc:
+        raise ValueError(f"cannot stat report parent {path}: {exc}") from exc
+    if st.st_uid != 0:
+        raise ValueError(f"report parent must be root-owned: {path}")
+    if st.st_mode & 0o022:
+        raise ValueError(f"report parent must not be group- or world-writable: {path}")
+    # Prefer sticky on world-writable parents; 0o022 rejection above covers that case.
+
+
+def _ensure_report_root() -> Path:
+    parent = _REPORT_ROOT.parent
+    if parent.exists():
+        _assert_root_owned_dir(parent)
+    else:
+        parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+        os.chmod(parent, 0o750)  # root+group traverse only  # nosec B103
+    if _REPORT_ROOT.exists():
+        _assert_root_owned_dir(_REPORT_ROOT)
+    else:
+        _REPORT_ROOT.mkdir(mode=0o750, parents=False, exist_ok=True)
+        os.chmod(_REPORT_ROOT, 0o750)  # root+group traverse only  # nosec B103
+        _assert_root_owned_dir(_REPORT_ROOT)
+    return _REPORT_ROOT
+
+
 def _report_dir(job_id: str) -> Path:
-    _REPORT_ROOT.mkdir(parents=True, exist_ok=True)
-    os.chmod(_REPORT_ROOT, 0o755)  # nosec B103 — traverse to per-job dirs
-    path = _REPORT_ROOT / job_id
+    root = _ensure_report_root()
+    path = root / job_id
     path.mkdir(parents=True, exist_ok=True)
     uid = _caller_uid()
     if uid is not None:
@@ -51,7 +81,7 @@ def _report_dir(job_id: str) -> Path:
 
 def _write_report(job_id: str, pack: str, text: str) -> str:
     dest = _report_dir(job_id) / f"{pack}.out"
-    dest.write_text(text, encoding="utf-8", errors="replace")
+    write_text_nofollow(dest, text, mode=0o600)
     uid = _caller_uid()
     if uid is not None:
         os.chown(dest, uid, -1)

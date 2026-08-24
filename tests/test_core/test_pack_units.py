@@ -133,6 +133,30 @@ def test_fail2ban_unban_global() -> None:
     helper.assert_called_once_with("fail2ban", ["unban-flow", "8.8.8.8"])
 
 
+def test_fail2ban_jail_start_enables_daemon_first() -> None:
+    pack = Fail2banPack()
+    with (
+        patch(
+            "oyst_core.packs.fail2ban.run_command",
+            return_value=CommandResult(0, "inactive\n", ""),
+        ),
+        patch(
+            "oyst_core.packs.fail2ban.run_systemctl_helper",
+            return_value=CommandResult(0, "", ""),
+        ) as sysctl,
+        patch(
+            "oyst_core.packs.fail2ban.run_privileged_helper",
+            return_value=CommandResult(0, "ok", ""),
+        ) as helper,
+        patch("oyst_core.packs.fail2ban.SecurityAudit"),
+    ):
+        ok, msg = pack.set_jail_enabled("sshd", enabled=True)
+    assert ok is True
+    sysctl.assert_called_once_with("enable-now", "fail2ban")
+    helper.assert_called_once_with("fail2ban", ["jail-start", "sshd"])
+    assert msg == "ok"
+
+
 def test_fail2ban_unban_ignore_persist_one_helper_call() -> None:
     pack = Fail2banPack()
     mock_res = MagicMock(returncode=0, stdout="ok", stderr="")
@@ -181,26 +205,71 @@ def test_clamonacc_add_remove_path(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     save_config(OysterConfig())
 
     pack = ClamonaccPack()
-    pack.add_path(str(tmp_path / "Downloads"))
+    watch = "/home/testuser/Downloads"
+    pack.add_path(watch)
     cfg = __import__("oyst_core.config", fromlist=["load_config"]).load_config()
-    assert str(tmp_path / "Downloads") in cfg.clamonacc.paths
+    assert watch in cfg.clamonacc.paths
 
-    assert pack.remove_path(str(tmp_path / "Downloads")) is True
+    assert pack.remove_path(watch) is True
     cfg2 = __import__("oyst_core.config", fromlist=["load_config"]).load_config()
-    assert str(tmp_path / "Downloads") not in cfg2.clamonacc.paths
-    assert pack.remove_path(str(tmp_path / "Downloads")) is False
+    assert watch not in cfg2.clamonacc.paths
+    assert pack.remove_path(watch) is False
 
 
 def test_clamonacc_enable_calls_clamd_and_start() -> None:
     pack = ClamonaccPack()
     with (
         patch("oyst_core.packs.clamonacc.set_config_value") as set_cfg,
+        patch.object(pack, "_systemd_unit", return_value="clamav-clamonacc"),
+        patch.object(pack, "is_running", return_value=True),
+        patch("oyst_core.packs.clamonacc.ClamAVPack.clamd_unit", return_value="clamav-daemon"),
+        patch("oyst_core.packs.clamonacc.ClamAVPack._clamd_socket", return_value=None),
+        patch(
+            "oyst_core.packs.clamonacc.run_privileged_helper",
+            return_value=CommandResult(0, "", ""),
+        ) as helper,
+    ):
+        ok, msg = pack.enable()
+    assert ok is True
+    set_cfg.assert_called_with("clamonacc.enabled", "true")
+    helper.assert_called_once()
+    assert helper.call_args.args[0] == "clamd-cocontrol"
+    assert helper.call_args.args[1][0] == "enable-stack"
+    assert "enabled via clamav-clamonacc" in msg
+
+
+def test_clamonacc_start_uses_enable_stack() -> None:
+    pack = ClamonaccPack()
+    with (
+        patch.object(pack, "_binary", return_value=("/usr/bin/clamonacc", "system")),
+        patch.object(pack, "is_running", side_effect=[False, True]),
+        patch.object(pack, "_systemd_unit", return_value="clamav-clamonacc"),
+        patch("oyst_core.packs.clamonacc.ClamAVPack.clamd_unit", return_value="clamav-daemon"),
+        patch("oyst_core.packs.clamonacc.ClamAVPack._clamd_socket", return_value=None),
+        patch(
+            "oyst_core.packs.clamonacc.run_privileged_helper",
+            return_value=CommandResult(0, "", ""),
+        ) as helper,
+        patch("oyst_core.packs.clamonacc.set_config_value") as set_cfg,
+    ):
+        ok, msg = pack.start()
+    assert ok is True
+    set_cfg.assert_not_called()
+    helper.assert_called_once()
+    assert helper.call_args.args[1][0] == "enable-stack"
+    assert "started via clamav-clamonacc" in msg
+
+
+def test_clamonacc_enable_process_mode_falls_back() -> None:
+    pack = ClamonaccPack()
+    with (
+        patch("oyst_core.packs.clamonacc.set_config_value"),
+        patch.object(pack, "_systemd_unit", return_value=None),
         patch("oyst_core.packs.clamonacc.ClamAVPack.clamd_ensure", return_value=(True, "ok")),
         patch.object(pack, "start", return_value=(True, "started")) as start,
     ):
         ok, msg = pack.enable()
     assert ok is True
-    set_cfg.assert_called_with("clamonacc.enabled", "true")
     start.assert_called_once()
     assert msg == "started"
 

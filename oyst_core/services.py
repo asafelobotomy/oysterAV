@@ -203,9 +203,8 @@ def set_service(
         clam = ClamAVPack()
         unit = clam.clamd_unit()
         if on:
-            ok, msg = _systemctl_set(unit, on=True, boot=boot)
-            if ok and not clam.clamd_running():
-                ok, msg = False, f"{unit} started but clamd process not detected"
+            # Pack path downloads host CVD when missing (one polkit via enable-stack).
+            ok, msg = clam.clamd_start()
         elif boot:
             ok, msg = _systemctl_set(unit, on=False, boot=True)
         else:

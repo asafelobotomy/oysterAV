@@ -152,10 +152,12 @@ def register_firewalld_commands(firewall_group: click.Group) -> None:
         raise SystemExit(0 if result.ok else 2)
 
     @firewall_firewalld_group.command("reload")
+    @click.option("--confirm", is_flag=True)
     @click.option("--dry-run", is_flag=True)
     @click.option("--json", "json_mode", is_flag=True)
-    def firewalld_reload(dry_run: bool, json_mode: bool) -> None:
+    def firewalld_reload(confirm: bool, dry_run: bool, json_mode: bool) -> None:
         """Reload firewalld."""
+        require_confirm(confirm, dry_run=dry_run, message="--confirm required to reload firewalld")
         result = FirewallOps().firewalld_reload(dry_run=dry_run)
         emit(result.__dict__, json_mode=json_mode)
         raise SystemExit(0 if result.ok else 2)

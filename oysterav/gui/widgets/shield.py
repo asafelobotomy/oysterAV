@@ -13,7 +13,11 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
-from oysterav.gui.rpc_actions import request_fail2ban_unban, request_firewall_status
+from oysterav.gui.rpc_actions import (
+    request_fail2ban_unban,
+    request_firewall_status,
+    request_services_set,
+)
 from oysterav.gui.rpc_actions_shield import (
     request_fail2ban_banned,
     request_fail2ban_jail_disable,
@@ -281,12 +285,13 @@ class ShieldPage:
     def _on_f2b_service_toggled(self, row: Adw.SwitchRow, *_args: object) -> None:
         if self._loading:
             return
-        state = "on" if row.get_active() else "off"
+        on = row.get_active()
 
         def worker() -> dict[str, Any]:
-            return self.client.services_set("fail2ban", state)
+            return request_services_set(self.client, "fail2ban", on=on)
 
         def done(result: dict[str, Any]) -> bool:
+            state = "on" if on else "off"
             self._set_status(str(result.get("message") or f"fail2ban {state}"))
             self.refresh()
             return False
@@ -310,15 +315,19 @@ class ShieldPage:
             cli_hint=(
                 "oyst-cli fail2ban reload --unban --confirm"
                 if unban
-                else "oyst-cli fail2ban reload --confirm"
+                else "oyst-cli fail2ban reload"
             ),
         )
 
     def _on_jail_enable(self, name: str) -> None:
-        run_in_thread(
-            lambda: request_fail2ban_jail_enable(self.client, name),
-            lambda r: self._mutation_done(r, f"Jail {name} enabled"),
-            self._fail_status,
+        shield_firewall_ui.confirm_and_run(
+            self,
+            heading=f"Enable jail {name}?",
+            body="The jail will start protecting matching services.",
+            action_id="enable",
+            action_label="Enable",
+            worker=lambda: request_fail2ban_jail_enable(self.client, name),
+            cli_hint=f"oyst-cli fail2ban jail-control enable {name} --confirm",
         )
 
     def _on_jail_disable(self, name: str) -> None:

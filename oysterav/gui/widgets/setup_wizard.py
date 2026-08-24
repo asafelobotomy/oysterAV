@@ -354,4 +354,4 @@ class SetupWizard:
     def _on_open_scan(self, *_args: object) -> None:
         if self._on_navigate:
             self._on_navigate("scan")
-        actions.finish_setup(self, mark_complete=True)
+        actions.finish_setup(self, mark_complete=False)

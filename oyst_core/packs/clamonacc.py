@@ -10,15 +10,16 @@ from oyst_core.models import PackStatus, PackTier
 from oyst_core.packs.base import Pack, resolve_pack_binary
 from oyst_core.packs.clamav import ClamAVPack
 from oyst_core.packs.clamd_onaccess import probe_onaccess_prevention
-from oyst_core.privileged.helper import run_privileged
+from oyst_core.privileged.helper import run_privileged, run_privileged_helper
 from oyst_core.privileged.helper_clamd import DENIED_INCLUDE_PREFIXES
 from oyst_core.privileged.runner import run_command
 from oyst_core.privileged.systemctl_route import run_systemctl_helper
+from oyst_core.runtime.manifest import is_full_mode
 
 
 def _allowed_include_path(path: str) -> bool:
     expanded = str(Path(path).expanduser().resolve())
-    if expanded == "/" or expanded in DENIED_INCLUDE_PREFIXES:
+    if expanded == "/" or expanded == "/home" or expanded in DENIED_INCLUDE_PREFIXES:
         return False
     for prefix in DENIED_INCLUDE_PREFIXES:
         if prefix != "/" and (expanded == prefix or expanded.startswith(prefix + "/")):
@@ -88,6 +89,12 @@ class ClamonaccPack(Pack):
                     "prevention=true but host OnAccessPrevention not blocking "
                     f"(process-mode --fdpass; classification={onaccess.get('classification')})"
                 )
+        if is_full_mode():
+            db_note = (
+                "On-access uses the host ClamAV database; "
+                "on-demand scans may use the private runtime database."
+            )
+            status.message = f"{status.message} {db_note}".strip() if status.message else db_note
         return status
 
     def _systemd_unit(self) -> str | None:
@@ -169,14 +176,8 @@ class ClamonaccPack(Pack):
 
         unit = self._systemd_unit()
         if unit:
-            # Distro unit is durable across reboot; OnAccess paths come from clamd.conf.
-            res = run_systemctl_helper("enable-now", unit)
-            if self.is_running():
-                return True, f"started via {unit}"
-            return (
-                res.returncode == 0,
-                (res.stderr or res.stdout or f"failed to start {unit}").strip(),
-            )
+            # Distro unit: same enable-stack as enable() (signatures + clamd + clamonacc).
+            return self._enable_stack(success_verb="started")
 
         # Process mode: detect-only with --fdpass (prevention needs clamd.conf).
         argv = [path, "--foreground", "--fdpass"]
@@ -213,7 +214,7 @@ class ClamonaccPack(Pack):
         if not _allowed_include_path(expanded):
             raise ValueError(
                 f"include path denied: {expanded} "
-                "(use paths under /home/…; never /usr, /etc, /var, …)"
+                "(use paths under /home/<user>/…; never /, /home, /tmp, /opt, /mnt, …)"
             )
         cfg = load_config()
         if expanded not in cfg.clamonacc.paths:
@@ -230,10 +231,33 @@ class ClamonaccPack(Pack):
         save_config(cfg)
         return True
 
+    def _enable_stack(self, *, success_verb: str = "enabled") -> tuple[bool, str]:
+        """Signatures + enable --now clamd (if needed) + clamonacc via one polkit."""
+        clam = ClamAVPack()
+        unit = self._systemd_unit()
+        if not unit:
+            return False, "no distro clamonacc unit"
+        argv = ["enable-stack", f"--clamonacc-unit={unit}"]
+        clamd_unit = clam.clamd_unit()
+        if clamd_unit:
+            argv.insert(1, f"--clamd-unit={clamd_unit}")
+        sock = clam._clamd_socket()
+        if sock:
+            argv.append(f"--socket={sock}")
+        res = run_privileged_helper("clamd-cocontrol", argv)
+        if self.is_running():
+            return True, f"{success_verb} via {unit}"
+        return (
+            False,
+            (res.stderr or res.stdout or f"failed to {success_verb} {unit}").strip(),
+        )
+
     def enable(self) -> tuple[bool, str]:
         set_config_value("clamonacc.enabled", "true")
-        clam = ClamAVPack()
-        ok, msg = clam.clamd_ensure()
+        unit = self._systemd_unit()
+        if unit:
+            return self._enable_stack(success_verb="enabled")
+        ok, msg = ClamAVPack().clamd_ensure()
         if not ok:
             return False, msg
         return self.start()

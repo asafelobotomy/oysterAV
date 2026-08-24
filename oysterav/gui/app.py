@@ -152,7 +152,7 @@ class OysterWindow(Adw.ApplicationWindow):
             client,
             window=self,
             on_status=self._set_status,
-            on_setup_wizard=self.present_setup_wizard,
+            on_setup_wizard=lambda: self.present_setup_wizard(reset=True),
             on_security_news_changed=self._on_security_news_changed,
             on_updates_changed=self._on_updates_changed,
         )
@@ -294,7 +294,19 @@ class OysterWindow(Adw.ApplicationWindow):
             self.present_setup_wizard()
         return False
 
-    def present_setup_wizard(self) -> None:
+    def present_setup_wizard(self, *, reset: bool = False) -> None:
+        if reset:
+            try:
+                self.client.setup_reset()
+            except RuntimeError as exc:
+                self._set_status(f"Could not reset setup: {exc}")
+                show_command_dialog(
+                    self,
+                    heading="Could not reset first-run setup",
+                    body=str(exc),
+                    copy_text="oyst-cli setup reset --confirm",
+                )
+                return
         try:
             wizard = SetupWizard(
                 self.client,

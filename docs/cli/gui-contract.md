@@ -187,7 +187,7 @@ Clamonacc under Services is **status-only** (no `services.set` toggle). Paths an
 | Ensure `--fdpass` drop-in | `clamonacc.ensure_fdpass` | `oyst-cli clamonacc ensure-fdpass --confirm` |
 | Ensure host prevention | `clamonacc.ensure_prevention` | `oyst-cli clamonacc ensure-prevention --confirm` |
 | Ensure VirusEvent | `virusevent.ensure` | `oyst-cli virusevent ensure --confirm` |
-| Ensure DisableCache | `clamav.ensure_disable_cache` | `oyst-cli clamav ensure-disable-cache --confirm` |
+| DisableCache (CLI / wizard Harden / health) | `clamav.ensure_disable_cache` | `oyst-cli clamav ensure-disable-cache --confirm` (not a Real-time Settings button) |
 
 ### Scheduling
 
@@ -300,14 +300,20 @@ Pages: Welcome → Security packs → Preferences → Scheduling → **Firewall*
 | Preferences (auto-quarantine) | `config.set quarantine.auto` on finish | `setup run --auto-quarantine` or `config set quarantine.auto` |
 | Install scheduled scan timer (profile / frequency / time) | `schedule.apply` | `setup run` or `schedule apply` |
 | Linger prompt | `schedule.enable_linger` (Auto-Install via `setup.run`; manual Install may prompt) | `setup run --enable-linger` / `schedule enable-linger` |
-| Finish / mark complete | `config.set setup.completed` via `setup.run` | Automatic on successful `setup run` |
+| Finish / mark complete | `config.set setup.completed` (+ `setup.completed_install`) via `setup.run` | Automatic on successful `setup run` when security blockers pass |
 | Ready summary checklist | — (GUI) | — |
 | Cancel | — (no mark complete) | Do not run `setup run`; or `setup run --no-mark-complete` |
+| Open Scan (Ready) | navigate only (`mark_complete=False`) | Does not set `setup.completed` |
+
+**Setup gate (`setup.status` / `setup check`):** `needs_attention` when incomplete, missing required packs (unless `required_packs` skip honored), `missing_signatures`, `helper_missing` (helper absent or policy outdated), or `install_mismatch` (`setup.completed_install` ≠ current `oyst_core` path; legacy empty fingerprint only mismatches when helper/signatures already need attention). Shared XDG means completion is per-user, not per-package install — fingerprint catches install moves.
+
+**Hard vs soft complete:** Failed `packs-gate`, `maintenance-bootstrap`/`maintenance`, `signatures`, `harden-clamd`, firewall ensure/select/install, and linger (when requested) block `setup.completed`. Schedule and other harden-* remain soft UI warnings.
 
 **Auto-Install defaults:** quick profile, daily at 02:00, linger enabled, full runtime
 bootstrap path, hardenings + firewall in **one** admin authentication (`setup.run`
 with `firewall_backend` from the Firewall page). Preference
 `firewall.managed_backend` is saved only when select/ensure succeeds.
+Firewall toggle is independent of harden. Soft-fails surface as “completed with warnings.”
 bootstrap, safe ClamAV/rkhunter hardenings (clamd, fdpass, VirusEvent, DisableCache),
 and SSH-safe firewall enable when UFW/firewalld is available. On-access prevention
 stays on Settings → Real-time after path selection. Step-through Scheduling widgets
@@ -378,6 +384,9 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `auth.revoke_service_lifecycle` | `oyst-cli auth revoke-service-lifecycle` |
 | `desktop.status` | `oyst-cli desktop status --json` |
 | `firewall.status` | `oyst-cli firewall status --json` |
+| `firewall.set_enabled` | `oyst-cli firewall ensure-enable` / `firewall ufw disable` / `firewall firewalld disable` |
+| `firewall.select` | `oyst-cli firewall select ufw\|firewalld\|none` |
+| `firewall.recommend` | `oyst-cli firewall recommend` |
 | `firewall.ensure_enable` | `oyst-cli firewall ensure-enable --confirm` |
 | `firewall.rules` | `oyst-cli firewall rules` |
 | `firewall.export` | `oyst-cli firewall export` |
@@ -386,7 +395,8 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `firewall.ufw_default` | `oyst-cli firewall ufw default` |
 | `firewall.firewalld_port` | `oyst-cli firewall firewalld add-port\|remove-port` |
 | `firewall.firewalld_service` | `oyst-cli firewall firewalld add-service\|remove-service` |
-| `firewall.firewalld_reload` | `oyst-cli firewall firewalld reload` |
+| `firewall.firewalld_reload` | `oyst-cli firewall firewalld reload --confirm` |
+| `firewall.firewalld_rich_rule` | `oyst-cli firewall firewalld rich-rule add\|remove …` |
 | `fail2ban.status` | `oyst-cli fail2ban status --json` |
 | `fail2ban.banned` | `oyst-cli fail2ban banned` |
 | `fail2ban.jail` | `oyst-cli fail2ban jail` |
@@ -399,8 +409,8 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `terminal.clear` | `oyst-cli terminal clear --confirm` |
 | `terminal.export` | `oyst-cli terminal export -o FILE --format txt\|jsonl` |
 | `clamonacc.status` | `oyst-cli clamonacc status --json` |
-| `clamonacc.enable` | `oyst-cli clamonacc enable` |
-| `clamonacc.disable` | `oyst-cli clamonacc disable` |
+| `clamonacc.enable` | `oyst-cli clamonacc enable --confirm` |
+| `clamonacc.disable` | `oyst-cli clamonacc disable --confirm` |
 | `clamonacc.add_path` | `oyst-cli clamonacc paths add` |
 | `clamonacc.remove_path` | `oyst-cli clamonacc paths remove` |
 | `clamonacc.ensure_fdpass` | `oyst-cli clamonacc ensure-fdpass --confirm` |
@@ -437,7 +447,7 @@ reopens the surface.
 
 | Capability | CLI | GUI surface |
 |------------|-----|-------------|
-| Setup gate / reset | `setup check`, `setup reset` | None (wizard uses `setup.run` / `setup.status`) |
+| Setup gate / reset | `setup.status`, `setup.reset` | `setup check`; `setup reset --confirm`; Maintenance “Run setup wizard” calls `setup.reset` then opens wizard |
 | Firewall plan file / nftables mutation | `firewall plan`; (nft none) | Permanent CLI-first; Shield has structured + rich-rule for UFW/firewalld |
 | Deep pack ops | `fangfrisch`, `lynis audit`, `maldet scan`, `chkrootkit`, `unhide`, `freshclam update` | Packs list install/remove; Scan profiles; not full pack CLIs |
 | Privileged helper / auth grant | `install-privileged-helper`, `auth grant/revoke-service-lifecycle` | Services: Install button + passwordless switch (`helper.install` / `auth.grant*` / `auth.revoke*`) |
@@ -453,7 +463,7 @@ See [pack-commands.md](pack-commands.md) for the full pack inventory.
 
 | Topic | GUI | CLI |
 |-------|-----|-----|
-| Setup | 6-page wizard with Host hardening + granular RPC calls | Single `setup run` batch workflow |
+| Setup | 7-page wizard (Welcome→…→Ready) with Host hardening + granular RPC calls | Single `setup run` batch workflow |
 | Failure UX | Copy-to-clipboard command dialogs | Commands are run directly; use `--json` for scripting |
 | AUR installs | Per-pack modal confirm | `--confirm-aur` on install/setup |
 | fail2ban unban | MessageDialog before RPC | `--confirm` required |

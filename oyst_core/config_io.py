@@ -157,6 +157,8 @@ def save_config(config: OysterConfig) -> None:
         lines.append(f"completed_at = {_toml_str(config.setup.completed_at)}")
     if config.setup.skipped_steps:
         lines.append(f"skipped_steps = [{_toml_str_list(config.setup.skipped_steps)}]")
+    if config.setup.completed_install:
+        lines.append(f"completed_install = {_toml_str(config.setup.completed_install)}")
     lines.append("")
     lines.append("[rkhunter]")
     lines.append(

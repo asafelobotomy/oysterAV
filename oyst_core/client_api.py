@@ -34,6 +34,9 @@ class OystClientApi(OystClientShieldApi):
     def setup_run(self, **kwargs: Any) -> dict[str, Any]:
         return self._as_dict("setup.run", kwargs)
 
+    def setup_reset(self) -> dict[str, Any]:
+        return self._as_dict("setup.reset")
+
     def cancel_job(self, job_id: str | None = None, *, force: bool = False) -> dict[str, Any]:
         params: dict[str, Any] = {}
         if job_id is not None:

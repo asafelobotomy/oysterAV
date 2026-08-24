@@ -25,23 +25,17 @@ def show_schedule_result(
     on_complete: Callable[[dict[str, Any]], None] | None = None,
     client: OystClient | None = None,
 ) -> None:
+    _ = client  # retained for call-site compatibility
     parent_win = dialog_parent(window, parent)
     if on_complete:
         on_complete(result)
-    if result.get("ok") and result.get("enabled"):
-        message = str(result.get("message", "Daily scan timer enabled"))
+    if result.get("ok"):
+        message = str(
+            result.get("message")
+            or ("Daily scan timer enabled" if result.get("enabled") else "Schedule timer updated")
+        )
         if on_status:
             on_status(message)
-        linger = result.get("linger", {})
-        advisory = result.get("linger_advisory")
-        if advisory and isinstance(linger, dict) and not linger.get("linger", True):
-            _prompt_enable_linger(
-                parent_win,
-                str(linger.get("enable_hint", "")),
-                client=client,
-                on_status=on_status,
-                on_complete=lambda: on_complete(result) if on_complete else None,
-            )
         return
 
     hint = str(result.get("enable_hint", ""))
@@ -59,42 +53,8 @@ def show_schedule_result(
         on_status("Schedule timer needs manual setup")
 
 
-def _prompt_enable_linger(
-    window: Gtk.Window | None,
-    hint: str,
-    *,
-    client: OystClient | None = None,
-    on_status: Callable[[str], None] | None = None,
-    on_complete: Callable[[], None] | None = None,
-) -> None:
-    dialog = Adw.MessageDialog(
-        transient_for=window,
-        heading="Enable linger for scheduled scans?",
-        body=(
-            "Your user session has linger disabled, so timers stop when you log out.\n\n"
-            "Enable linger now (requires admin), or copy the command for later."
-        ),
-    )
-    dialog.add_response("later", "Not now")
-    dialog.add_response("copy", "Copy command")
-    if client is not None:
-        dialog.add_response("enable", "Enable linger")
-    dialog.set_default_response("enable" if client else "later")
-
-    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
-        if response == "copy":
-            clipboard = Gdk.Display.get_default().get_clipboard()
-            clipboard.set(Gdk.ContentProvider.new_for_value(hint))
-        elif response == "enable" and client is not None:
-            enable_linger_from_gui(
-                client,
-                window=window,
-                on_status=on_status,
-                on_complete=on_complete,
-            )
-
-    dialog.connect("response", on_response)
-    dialog.present()
+def _linger_is_off(status: dict[str, Any] | object) -> bool:
+    return isinstance(status, dict) and status.get("linger") is False
 
 
 def enable_linger_from_gui(
@@ -104,6 +64,7 @@ def enable_linger_from_gui(
     parent: Gtk.Window | None = None,
     on_status: Callable[[str], None] | None = None,
     on_complete: Callable[[], None] | None = None,
+    on_failure: Callable[[], None] | None = None,
 ) -> None:
     parent_win = dialog_parent(window, parent)
 
@@ -111,6 +72,8 @@ def enable_linger_from_gui(
         if result.get("ok") or result.get("linger"):
             if on_status:
                 on_status("Linger enabled for scheduled scans")
+            if on_complete:
+                on_complete()
         else:
             hint = ""
             linger = client.linger_status()
@@ -122,18 +85,78 @@ def enable_linger_from_gui(
                 body=str(result.get("message", "Could not enable linger")),
                 copy_text=hint or None,
             )
-        if on_complete:
-            on_complete()
+            if on_failure:
+                on_failure()
         return False
 
-    run_in_thread(
-        client.linger_enable,
-        done,
-        lambda m: on_status(f"Linger failed: {m}") if on_status else False,
+    def fail(msg: str) -> bool:
+        if on_status:
+            on_status(f"Linger failed: {msg}")
+        if on_failure:
+            on_failure()
+        return False
+
+    run_in_thread(client.linger_enable, done, fail)
+
+
+def _prompt_linger_and_apply(
+    window: Gtk.Window | None,
+    hint: str,
+    *,
+    client: OystClient,
+    smoke_test: bool,
+    on_status: Callable[[str], None] | None = None,
+    on_error: Callable[[str], None] | None = None,
+    on_complete: Callable[[dict[str, Any]], None] | None = None,
+    on_cancel: Callable[[], None] | None = None,
+    apply_worker: Callable[[], dict[str, Any]] | None = None,
+) -> None:
+    """One dialog: enable linger then apply schedule (no surprise post-apply prompt)."""
+    dialog = Adw.MessageDialog(
+        transient_for=window,
+        heading="Enable linger and apply schedule?",
+        body=(
+            "Scheduled scans need linger so timers keep running after logout.\n\n"
+            "Enable linger (requires admin) and apply the schedule now, "
+            "or copy the command for later."
+        ),
     )
+    dialog.add_response("cancel", "Cancel")
+    dialog.add_response("copy", "Copy command")
+    dialog.add_response("enable", "Enable and apply")
+    dialog.set_default_response("enable")
+    dialog.set_response_appearance("enable", Adw.ResponseAppearance.SUGGESTED)
+
+    def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
+        if response == "copy":
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set(Gdk.ContentProvider.new_for_value(hint))
+            if on_cancel:
+                on_cancel()
+        elif response == "enable":
+            enable_linger_from_gui(
+                client,
+                window=window,
+                on_status=on_status,
+                on_complete=lambda: _run_schedule_apply(
+                    client,
+                    window=window,
+                    smoke_test=smoke_test,
+                    on_status=on_status,
+                    on_error=on_error,
+                    on_complete=on_complete,
+                    apply_worker=apply_worker,
+                ),
+                on_failure=on_cancel,
+            )
+        elif on_cancel:
+            on_cancel()
+
+    dialog.connect("response", on_response)
+    dialog.present()
 
 
-def apply_schedule_timer(
+def _run_schedule_apply(
     client: OystClient,
     *,
     window: Gtk.Window | None = None,
@@ -142,9 +165,10 @@ def apply_schedule_timer(
     on_status: Callable[[str], None] | None = None,
     on_error: Callable[[str], None] | None = None,
     on_complete: Callable[[dict[str, Any]], None] | None = None,
+    apply_worker: Callable[[], dict[str, Any]] | None = None,
 ) -> None:
-    """Materialize systemd units from current schedule config."""
     parent_win = dialog_parent(window, parent)
+    worker = apply_worker or (lambda: client.schedule_apply(smoke_test=smoke_test))
 
     def done(result: dict[str, Any]) -> bool:
         show_schedule_result(
@@ -164,7 +188,66 @@ def apply_schedule_timer(
             on_status(f"Schedule apply failed: {msg}")
         return False
 
-    run_in_thread(lambda: client.schedule_apply(smoke_test=smoke_test), done, fail)
+    run_in_thread(worker, done, fail)
+
+
+def apply_schedule_timer(
+    client: OystClient,
+    *,
+    window: Gtk.Window | None = None,
+    parent: Gtk.Window | None = None,
+    smoke_test: bool = False,
+    prompt_linger: bool = True,
+    on_status: Callable[[str], None] | None = None,
+    on_error: Callable[[str], None] | None = None,
+    on_complete: Callable[[dict[str, Any]], None] | None = None,
+    on_cancel: Callable[[], None] | None = None,
+    apply_worker: Callable[[], dict[str, Any]] | None = None,
+) -> None:
+    """Materialize systemd units; prompt once for linger before apply when needed."""
+    parent_win = dialog_parent(window, parent)
+
+    def run_apply() -> None:
+        _run_schedule_apply(
+            client,
+            window=window,
+            parent=parent_win,
+            smoke_test=smoke_test,
+            on_status=on_status,
+            on_error=on_error,
+            on_complete=on_complete,
+            apply_worker=apply_worker,
+        )
+
+    if not prompt_linger:
+        run_apply()
+        return
+
+    def after_linger_check(status: dict[str, Any]) -> bool:
+        if _linger_is_off(status):
+            _prompt_linger_and_apply(
+                parent_win,
+                str(status.get("enable_hint", "")),
+                client=client,
+                smoke_test=smoke_test,
+                on_status=on_status,
+                on_error=on_error,
+                on_complete=on_complete,
+                on_cancel=on_cancel,
+                apply_worker=apply_worker,
+            )
+        else:
+            run_apply()
+        return False
+
+    def fail(msg: str) -> bool:
+        if on_error:
+            on_error(msg)
+        elif on_status:
+            on_status(f"Schedule apply failed: {msg}")
+        return False
+
+    run_in_thread(client.linger_status, after_linger_check, fail)
 
 
 def format_timer_status(status: dict[str, Any]) -> str:

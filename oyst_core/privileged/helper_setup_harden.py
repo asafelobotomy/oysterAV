@@ -12,13 +12,19 @@ from typing import Any
 from oyst_core.packs.rkhunter_disable_tests import apply_disable_tests_overlay
 from oyst_core.privileged.helper_clamd import (
     _ensure_disable_cache,
+    _ensure_system_wrapper,
     _ensure_virusevent,
     _parse_flag,
     _parse_multi,
     _validate_conf_path,
     _validate_wrapper_cmd,
 )
-from oyst_core.privileged.helper_clamd_unit import ensure_fdpass_dropin, restart_clam_stack
+from oyst_core.privileged.helper_clamd_unit import (
+    ensure_fdpass_dropin,
+    ensure_host_daily_signatures,
+    restart_clam_stack,
+    wait_for_clamd_ready,
+)
 from oyst_core.privileged.helper_fw_lifecycle import (
     apply_firewall_lifecycle_flags,
     ensure_firewall_as_root,
@@ -71,6 +77,10 @@ def _run_cmd(cmd: list[str]) -> tuple[int, str]:
     return proc.returncode, detail
 
 
+def _skip_clam_not_ready(name: str) -> dict[str, Any]:
+    return _step(name, ok=False, message="skipped: clamd not ready", soft_fail=True)
+
+
 def collect_harden_steps(argv: Sequence[str]) -> list[dict[str, Any]]:
     """Apply harden flags as root; return step dicts (no JSON print)."""
     steps: list[dict[str, Any]] = []
@@ -85,6 +95,7 @@ def collect_harden_steps(argv: Sequence[str]) -> list[dict[str, Any]]:
     clamd_unit = _parse_flag(argv, "clamd-unit")
     clamonacc_unit = _parse_flag(argv, "clamonacc-unit")
     sockets = _parse_multi(argv, "socket") or None
+    clamd_ok = False
 
     # Firewall install/select/ensure (select skips with-firewall inside lifecycle).
     steps.extend(apply_firewall_lifecycle_flags(argv))
@@ -92,57 +103,109 @@ def collect_harden_steps(argv: Sequence[str]) -> list[dict[str, Any]]:
     if clamd_enable:
         try:
             unit = validate_unit(clamd_enable)
+            sig_msg = ensure_host_daily_signatures()
             rc, detail = _run_cmd(_build_systemctl_argv(["enable-now", unit]))
+            msg = detail or ("ok" if rc == 0 else "failed")
+            if sig_msg and sig_msg != "signatures present":
+                msg = f"{sig_msg}; {msg}"
+            if rc == 0:
+                wait_for_clamd_ready(sockets=sockets)
+                clamd_ok = True
             steps.append(
                 _step(
                     "harden-clamd",
                     ok=rc == 0,
-                    message=detail or ("ok" if rc == 0 else "failed"),
+                    message=msg,
                     soft_fail=rc != 0,
                 ),
             )
         except ValueError as exc:
             steps.append(_step("harden-clamd", ok=False, message=str(exc), soft_fail=True))
+        except subprocess.TimeoutExpired:
+            steps.append(
+                _step(
+                    "harden-clamd",
+                    ok=False,
+                    message="freshclam timed out downloading virus definitions",
+                    soft_fail=True,
+                ),
+            )
+
+    # Gate later Clam steps only when harden-clamd was attempted and failed (ORD-08).
+    gate_clam = bool(clamd_enable) and not clamd_ok
 
     if fdpass_unit:
-        try:
-            ensure_fdpass_dropin(fdpass_unit)
-            steps.append(
-                _step("harden-fdpass", ok=True, message=f"fdpass ensured for {fdpass_unit}"),
-            )
-        except (OSError, ValueError) as exc:
-            steps.append(_step("harden-fdpass", ok=False, message=str(exc), soft_fail=True))
+        if gate_clam:
+            steps.append(_skip_clam_not_ready("harden-fdpass"))
+        else:
+            try:
+                ensure_fdpass_dropin(fdpass_unit)
+                steps.append(
+                    _step(
+                        "harden-fdpass",
+                        ok=True,
+                        message=f"fdpass ensured for {fdpass_unit}",
+                    ),
+                )
+            except (OSError, ValueError) as exc:
+                steps.append(
+                    _step("harden-fdpass", ok=False, message=str(exc), soft_fail=True),
+                )
 
     if ve_conf and ve_cmd:
-        try:
-            conf = _validate_conf_path(ve_conf)
-            cmd = _validate_wrapper_cmd(ve_cmd)
-            _ensure_virusevent(conf, cmd)
-            need_restart = True
-            steps.append(_step("harden-virusevent", ok=True, message="VirusEvent ensured"))
-        except (OSError, ValueError) as exc:
-            steps.append(
-                _step("harden-virusevent", ok=False, message=str(exc), soft_fail=True),
-            )
+        if gate_clam:
+            steps.append(_skip_clam_not_ready("harden-virusevent"))
+        else:
+            try:
+                conf = _validate_conf_path(ve_conf)
+                _ensure_system_wrapper()
+                cmd = _validate_wrapper_cmd(ve_cmd)
+                _ensure_virusevent(conf, cmd)
+                need_restart = True
+                steps.append(
+                    _step("harden-virusevent", ok=True, message="VirusEvent ensured"),
+                )
+            except (OSError, ValueError) as exc:
+                steps.append(
+                    _step("harden-virusevent", ok=False, message=str(exc), soft_fail=True),
+                )
 
     if dc_conf:
-        try:
-            conf = _validate_conf_path(dc_conf)
-            _ensure_disable_cache(conf)
-            need_restart = True
-            steps.append(_step("harden-disable-cache", ok=True, message="DisableCache yes"))
-        except (OSError, ValueError) as exc:
-            steps.append(
-                _step("harden-disable-cache", ok=False, message=str(exc), soft_fail=True),
-            )
+        if gate_clam:
+            steps.append(_skip_clam_not_ready("harden-disable-cache"))
+        else:
+            try:
+                conf = _validate_conf_path(dc_conf)
+                _ensure_disable_cache(conf)
+                need_restart = True
+                steps.append(
+                    _step("harden-disable-cache", ok=True, message="DisableCache yes"),
+                )
+            except (OSError, ValueError) as exc:
+                steps.append(
+                    _step(
+                        "harden-disable-cache",
+                        ok=False,
+                        message=str(exc),
+                        soft_fail=True,
+                    ),
+                )
 
     if need_restart:
-        try:
-            restart_clam_stack(clamd_unit, clamonacc_unit, sockets=sockets)
-        except (OSError, ValueError) as exc:
-            steps.append(
-                _step("harden-restart-stack", ok=False, message=str(exc), soft_fail=True),
-            )
+        if gate_clam:
+            steps.append(_skip_clam_not_ready("harden-restart-stack"))
+        else:
+            try:
+                restart_clam_stack(clamd_unit, clamonacc_unit, sockets=sockets)
+            except (OSError, ValueError) as exc:
+                steps.append(
+                    _step(
+                        "harden-restart-stack",
+                        ok=False,
+                        message=str(exc),
+                        soft_fail=True,
+                    ),
+                )
 
     if do_rkh:
         try:

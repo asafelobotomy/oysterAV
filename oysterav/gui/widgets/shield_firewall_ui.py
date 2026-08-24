@@ -12,6 +12,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from oyst_core.privileged.validators import rich_rule_ssh_lockout_risk
 from oysterav.gui.rpc_actions_shield import (
     request_firewall_firewalld_rich_rule,
     request_firewall_set_enabled,
@@ -190,8 +191,6 @@ def wire_rich_rule_buttons(
     add_btn: Gtk.Button,
     rem_btn: Gtk.Button,
 ) -> None:
-    from oyst_core.privileged.validators import rich_rule_ssh_lockout_risk
-
     def _run(action: str) -> None:
         rule = entry.get_text().strip()
         if not rule:

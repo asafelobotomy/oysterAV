@@ -8,6 +8,7 @@ from oyst_core.privilege import build_setup_plan
 from oysterav.gui.widgets.common import run_in_thread, show_command_dialog
 from oysterav.gui.widgets.privilege_confirm import confirm_privilege_plan
 from oysterav.gui.widgets.setup_wizard_actions import run_doctor
+from oysterav.gui.widgets.setup_wizard_firewall import selected_firewall_backend
 from oysterav.gui.widgets.setup_wizard_text import PAGE_TITLES
 
 if TYPE_CHECKING:
@@ -56,6 +57,38 @@ def on_auto_install(wizard: SetupWizard, *_args: object) -> None:
     )
 
 
+def _apply_ran_flags(wizard: SetupWizard, steps: list[dict[str, Any]]) -> None:
+    """Set bootstrap/harden ran flags from successful step outcomes (UX-11)."""
+    bootstrap_ok = False
+    harden_ok = False
+    for step in steps:
+        name = str(step.get("step", ""))
+        if step.get("ok") and name in {"maintenance-bootstrap", "signatures", "freshclam"}:
+            bootstrap_ok = True
+        details = step.get("details")
+        if isinstance(details, list) and any(
+            isinstance(d, dict) and d.get("step") == "freshclam" and d.get("ok") for d in details
+        ):
+            bootstrap_ok = True
+        if step.get("ok") and (name.startswith("harden-") or name.startswith("firewall-")):
+            harden_ok = True
+    wizard._bootstrap_ran = bootstrap_ok
+    wizard._harden_ran = harden_ok
+
+
+def _issue_lines(steps: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for step in steps[:8]:
+        name = str(step.get("step", "?"))
+        message = str(step.get("message", "")).strip()
+        tag = "soft" if step.get("soft_fail") else "fail"
+        if message:
+            lines.append(f"{name} ({tag}): {message[:200]}")
+        else:
+            lines.append(f"{name} ({tag})")
+    return lines
+
+
 def _run_auto_install(wizard: SetupWizard) -> None:
     wizard._load_preferences()
     wizard._auto_install_busy = True
@@ -73,11 +106,9 @@ def _run_auto_install(wizard: SetupWizard) -> None:
     skip_schedule = not _on("schedule")
     skip_harden = not _on("harden")
     enable_linger = _on("linger")
-    enable_firewall = _on("firewall") and _on("harden", True)
+    enable_firewall = _on("firewall")
 
     def worker() -> dict[str, Any]:
-        from oysterav.gui.widgets.setup_wizard_firewall import selected_firewall_backend
-
         backend = selected_firewall_backend(wizard) if enable_firewall else None
         result = wizard.client.setup_run(
             confirm_aur=True,
@@ -97,7 +128,6 @@ def _run_auto_install(wizard: SetupWizard) -> None:
                 and (s.get("ok") or s.get("skipped"))
                 for s in (result.get("steps") or [])
             )
-            # Prefer explicit select/ensure success; install-only without select is ok when skipped
             select_steps = [
                 s
                 for s in (result.get("steps") or [])
@@ -118,58 +148,54 @@ def _run_auto_install(wizard: SetupWizard) -> None:
         ok = bool(result.get("ok"))
         steps_ok = result.get("steps_ok", 0)
         steps_total = result.get("steps_total", 0)
-        if completed and ok:
+        steps = [s for s in result.get("steps", []) if isinstance(s, dict)]
+        soft_fails = [
+            s for s in steps if s.get("soft_fail") and not s.get("ok") and not s.get("skipped")
+        ]
+        hard_fails = [
+            s for s in steps if not s.get("ok") and not s.get("skipped") and not s.get("soft_fail")
+        ]
+        _apply_ran_flags(wizard, steps)
+        pure_success = completed and ok and not soft_fails
+        if pure_success:
             summary = f"Auto-Install finished ({steps_ok}/{steps_total} steps OK)."
             wizard.welcome_status.set_text(summary)
             wizard._set_status(summary)
-            wizard._bootstrap_ran = True
-            wizard._harden_ran = True
             wizard._refresh_schedule_status()
             run_doctor(wizard)
             wizard._go_to_page(len(PAGE_TITLES) - 1)
             wizard._emit_changed()
             if wizard._on_complete:
                 wizard._on_complete()
+            return False
+
+        issues = soft_fails + hard_fails
+        if completed and soft_fails and not hard_fails:
+            summary = f"Auto-Install completed with warnings ({steps_ok}/{steps_total} steps OK)."
+            heading = "Auto-Install completed with warnings"
         else:
             summary = f"Auto-Install finished with issues ({steps_ok}/{steps_total} steps OK)."
-            wizard.welcome_status.set_text(summary)
-            wizard._set_status(summary)
-            body = summary
-            failed = [
-                step
-                for step in result.get("steps", [])
-                if isinstance(step, dict)
-                and not step.get("ok")
-                and not step.get("skipped")
-                and not step.get("soft_fail")
-            ]
-            if failed:
-                details = []
-                for step in failed[:5]:
-                    name = str(step.get("step", "?"))
-                    message = str(step.get("message", "")).strip()
-                    if message:
-                        details.append(f"{name}: {message[:200]}")
-                    else:
-                        details.append(name)
-                body = f"{summary}\n\n" + "\n".join(details)
-            show_command_dialog(
-                wizard.dialog,
-                heading="Auto-Install completed with issues",
-                body=body,
-                copy_text="oyst-cli setup run --enable-linger",
-            )
-            wizard._refresh_schedule_status()
-            run_doctor(wizard)
-            wizard._emit_changed()
-            if completed:
-                wizard._bootstrap_ran = True
-                wizard._harden_ran = True
-                wizard._go_to_page(len(PAGE_TITLES) - 1)
-                if wizard._on_complete:
-                    wizard._on_complete()
-            else:
-                wizard._update_nav()
+            heading = "Auto-Install completed with issues"
+        wizard.welcome_status.set_text(summary)
+        wizard._set_status(summary)
+        body = summary
+        if issues:
+            body = f"{summary}\n\n" + "\n".join(_issue_lines(issues))
+        show_command_dialog(
+            wizard.dialog,
+            heading=heading,
+            body=body,
+            copy_text="oyst-cli setup run --enable-linger",
+        )
+        wizard._refresh_schedule_status()
+        run_doctor(wizard)
+        wizard._emit_changed()
+        if completed:
+            wizard._go_to_page(len(PAGE_TITLES) - 1)
+            if wizard._on_complete:
+                wizard._on_complete()
+        else:
+            wizard._update_nav()
         return False
 
     def fail(message: str) -> bool:

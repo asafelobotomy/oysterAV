@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -9,10 +10,12 @@ from pathlib import Path
 from oyst_core.packs.clamd_onaccess import list_conf_conflict_sidecars
 from oyst_core.privileged.helper_clamd_unit import (
     FDPASS_DROPIN_NAME,
+    enable_clam_stack,
     ensure_fdpass_dropin,
     restart_clam_stack,
 )
 from oyst_core.privileged.safe_write import write_text_nofollow
+from oyst_core.virusevent import OYSTERAV_MARK, system_wrapper_path, wrapper_script_body
 
 ONACCESS_BEGIN = "# oysterAV OnAccess begin"
 ONACCESS_END = "# oysterAV OnAccess end"
@@ -20,24 +23,34 @@ VIRUSEVENT_BEGIN = "# oysterAV VirusEvent begin"
 VIRUSEVENT_END = "# oysterAV VirusEvent end"
 HARDEN_BEGIN = "# oysterAV Harden begin"
 HARDEN_END = "# oysterAV Harden end"
-OYSTERAV_MARK = "oyst-virusevent"
 
 _CONF_RE = re.compile(r"^/etc/(clamav/|clamd\.d/)[A-Za-z0-9._+-]+\.conf$|^/etc/clamd\.conf$")
 _WRAPPER_RE = re.compile(r"^/[A-Za-z0-9._/+-]+$")
 _INCLUDE_RE = re.compile(r"^/[A-Za-z0-9._/+-]+$")
 _UNAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,31}$")
+_ALLOWED_WRAPPERS = frozenset(
+    {
+        "/usr/lib/oysterav/oyst-virusevent",
+        "/usr/local/lib/oysterav/oyst-virusevent",
+    }
+)
 
 DENIED_INCLUDE_PREFIXES = (
     "/",
     "/usr",
     "/etc",
     "/var",
+    "/tmp",  # nosec B108 — deny-list entry, not a temp-file write
     "/boot",
     "/sys",
     "/proc",
     "/dev",
     "/run",
     "/root",
+    "/opt",
+    "/mnt",
+    "/media",
+    "/srv",
 )
 
 
@@ -76,39 +89,60 @@ def _validate_wrapper_cmd(raw: str) -> str:
     path = Path(cleaned)
     if path.name != OYSTERAV_MARK:
         raise ValueError("VirusEvent command basename must be oyst-virusevent")
-    text = str(path)
-    allowed = text.endswith("/.local/share/oysterav/bin/oyst-virusevent") or any(
-        text.startswith(prefix) and text.rstrip("/").endswith("/oyst-virusevent")
-        for prefix in ("/usr/lib/oysterav/", "/usr/local/lib/oysterav/")
-    )
-    if not allowed:
+    if cleaned not in _ALLOWED_WRAPPERS:
         raise ValueError(
-            "VirusEvent wrapper must be under ~/.local/share/oysterav/bin or /usr/lib/oysterav"
+            "VirusEvent wrapper must be /usr/lib/oysterav/oyst-virusevent "
+            "or /usr/local/lib/oysterav/oyst-virusevent",
         )
-    if path.exists():
-        if path.is_symlink() or not path.is_file():
-            raise ValueError("VirusEvent wrapper must be a regular file")
-        try:
-            st = path.stat()
-        except OSError as exc:
-            raise ValueError(f"cannot stat VirusEvent wrapper: {exc}") from exc
-        if st.st_mode & 0o022:
-            raise ValueError("VirusEvent wrapper must not be group- or world-writable")
-        try:
-            body = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            raise ValueError(f"cannot read VirusEvent wrapper: {exc}") from exc
-        if OYSTERAV_MARK not in body:
-            raise ValueError("VirusEvent wrapper missing oysterAV mark")
+    if path.is_symlink():
+        raise ValueError("VirusEvent wrapper must not be a symlink")
+    if not path.is_file():
+        raise ValueError("VirusEvent wrapper must exist as a regular file")
+    try:
+        st = path.stat()
+    except OSError as exc:
+        raise ValueError(f"cannot stat VirusEvent wrapper: {exc}") from exc
+    if st.st_uid != 0:
+        raise ValueError("VirusEvent wrapper must be root-owned")
+    if st.st_mode & 0o022:
+        raise ValueError("VirusEvent wrapper must not be group- or world-writable")
+    try:
+        body = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"cannot read VirusEvent wrapper: {exc}") from exc
+    if OYSTERAV_MARK not in body:
+        raise ValueError("VirusEvent wrapper missing oysterAV mark")
     return cleaned
+
+
+def _ensure_system_wrapper() -> Path:
+    """Install root-owned VirusEvent wrapper next to oyst-helper if missing."""
+    dest = system_wrapper_path()
+    body = wrapper_script_body()
+    if dest.is_file() and not dest.is_symlink():
+        try:
+            st = dest.stat()
+            if (
+                st.st_uid == 0
+                and not (st.st_mode & 0o022)
+                and OYSTERAV_MARK in dest.read_text(encoding="utf-8")
+            ):
+                return dest
+        except OSError:
+            pass
+    dest.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    write_text_nofollow(dest, body, mode=0o755)
+    if os.geteuid() == 0:
+        os.chown(dest, 0, 0)
+    return dest
 
 
 def _validate_include(raw: str) -> str:
     cleaned = raw.strip()
     if not _INCLUDE_RE.match(cleaned) or ".." in Path(cleaned).parts:
         raise ValueError(f"invalid include path: {raw}")
-    if cleaned == "/":
-        raise ValueError("include path denied: /")
+    if cleaned == "/" or cleaned == "/home":
+        raise ValueError(f"include path denied: {raw}")
     for prefix in DENIED_INCLUDE_PREFIXES:
         if prefix == "/":
             continue
@@ -126,7 +160,11 @@ def _validate_uname(raw: str) -> str:
 
 def _backup_conf(conf: Path) -> Path:
     backup = Path(str(conf) + ".oysterav-bak")
-    write_text_nofollow(backup, conf.read_text(encoding="utf-8"), mode=0o644)
+    try:
+        mode = conf.stat().st_mode & 0o7777
+    except OSError:
+        mode = 0o644
+    write_text_nofollow(backup, conf.read_text(encoding="utf-8"), mode=mode)
     return backup
 
 
@@ -173,7 +211,7 @@ def _ensure_virusevent(conf: Path, cmd: str) -> None:
         VIRUSEVENT_END,
         [f"VirusEvent {cmd}"],
     )
-    write_text_nofollow(conf, updated, mode=0o644)
+    write_text_nofollow(conf, updated, mode=0o644, preserve_mode=True)
 
 
 def _ensure_prevention(conf: Path, uname: str, includes: list[str]) -> None:
@@ -181,19 +219,33 @@ def _ensure_prevention(conf: Path, uname: str, includes: list[str]) -> None:
         raise ValueError("at least one --include= path required")
     _require_no_sidecars(conf)
     text = conf.read_text(encoding="utf-8")
+    in_oyster_block = False
     for raw in text.splitlines():
+        stripped = raw.strip()
+        if stripped == ONACCESS_BEGIN:
+            in_oyster_block = True
+            continue
+        if stripped == ONACCESS_END:
+            in_oyster_block = False
+            continue
+        if in_oyster_block:
+            continue
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
-        parts = line.split(None, 1)
-        if len(parts) >= 1 and parts[0].lower() == "onaccessmountpath":
+        key = line.split(None, 1)[0].lower()
+        if key == "onaccessmountpath":
             raise ValueError("OnAccessMountPath present — hand off (incompatible with prevention)")
+        if key.startswith("onaccess"):
+            raise ValueError(
+                f"foreign {line.split(None, 1)[0]} outside oysterAV block — hand off",
+            )
     body = [f"OnAccessIncludePath {p}" for p in includes]
     body.append("OnAccessPrevention yes")
     body.append(f"OnAccessExcludeUname {uname}")
     _backup_conf(conf)
     updated = _replace_marked_block(text, ONACCESS_BEGIN, ONACCESS_END, body)
-    write_text_nofollow(conf, updated, mode=0o644)
+    write_text_nofollow(conf, updated, mode=0o644, preserve_mode=True)
 
 
 def _ensure_disable_cache(conf: Path) -> None:
@@ -222,7 +274,7 @@ def _ensure_disable_cache(conf: Path) -> None:
         raise ValueError("foreign DisableCache no — hand off (do not overwrite)")
     _backup_conf(conf)
     updated = _replace_marked_block(text, HARDEN_BEGIN, HARDEN_END, ["DisableCache yes"])
-    write_text_nofollow(conf, updated, mode=0o644)
+    write_text_nofollow(conf, updated, mode=0o644, preserve_mode=True)
 
 
 def _socket_args(rest: Sequence[str]) -> list[str] | None:
@@ -234,7 +286,7 @@ def _build_clamd_cocontrol_argv(argv: Sequence[str]) -> list[str]:
     if not argv:
         raise ValueError(
             "usage: clamd-cocontrol ensure-fdpass|ensure-virusevent|"
-            "ensure-prevention|ensure-disable-cache|restart-stack …",
+            "ensure-prevention|ensure-disable-cache|enable-stack|restart-stack …",
         )
     action = argv[0]
     rest = list(argv[1:])
@@ -243,12 +295,21 @@ def _build_clamd_cocontrol_argv(argv: Sequence[str]) -> list[str]:
         unit = _parse_flag(rest, "unit") or "clamav-clamonacc"
         ensure_fdpass_dropin(unit)
         return ["true"]
+    if action == "enable-stack":
+        # Downloads host daily CVD via freshclam when missing, then enable --now.
+        enable_clam_stack(
+            _parse_flag(rest, "clamd-unit"),
+            _parse_flag(rest, "clamonacc-unit"),
+            sockets=sockets,
+        )
+        return ["true"]
     if action == "ensure-virusevent":
         conf_raw = _parse_flag(rest, "conf")
         cmd_raw = _parse_flag(rest, "cmd")
         if not conf_raw or not cmd_raw:
             raise ValueError("usage: ensure-virusevent --conf=PATH --cmd=WRAPPER")
         conf = _validate_conf_path(conf_raw)
+        _ensure_system_wrapper()
         cmd = _validate_wrapper_cmd(cmd_raw)
         _ensure_virusevent(conf, cmd)
         restart_clam_stack(

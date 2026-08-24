@@ -6,7 +6,10 @@ from typing import Any
 
 from oyst_core.packs.firewall import invalidate_firewall_detect_cache
 from oyst_core.packs.firewall_ops import FirewallOps
-from oyst_core.privileged.helper_firewall import _build_firewalld_argv, _build_ufw_argv
+from oyst_core.privileged.helper_firewall import (
+    _build_firewalld_offline_ssh_argv,
+    _build_ufw_argv,
+)
 from oyst_core.privileged.helper_services import _build_systemctl_argv
 
 
@@ -80,6 +83,24 @@ def ensure_ufw(*, force_lockout: bool, run_cmd: Any) -> dict[str, Any]:
 
 
 def ensure_firewalld(*, force_lockout: bool, run_cmd: Any) -> dict[str, Any]:
+    if not force_lockout:
+        try:
+            offline = _build_firewalld_offline_ssh_argv(zone="public")
+            rc, detail = run_cmd(offline)
+        except ValueError as exc:
+            return _step(
+                "firewall-ensure",
+                ok=False,
+                message=f"firewall-offline-cmd unavailable; refusing enable without SSH: {exc}",
+                soft_fail=True,
+            )
+        if rc != 0:
+            return _step(
+                "firewall-ensure",
+                ok=False,
+                message=f"could not add SSH offline before enable: {detail}",
+                soft_fail=True,
+            )
     rc, detail = run_cmd(_build_systemctl_argv(["enable-now", "firewalld"]))
     if rc != 0:
         return _step(
@@ -88,21 +109,18 @@ def ensure_firewalld(*, force_lockout: bool, run_cmd: Any) -> dict[str, Any]:
             message=detail or "firewalld enable failed",
             soft_fail=True,
         )
-    if not force_lockout:
-        run_cmd(_build_firewalld_argv(["add-service", "ssh", "--zone", "public"]))
-        run_cmd(_build_firewalld_argv(["reload"]))
-        if not firewalld_ssh_ok(run_cmd):
-            run_cmd(_build_systemctl_argv(["stop", "firewalld"]))
-            invalidate_firewall_detect_cache()
-            return _step(
-                "firewall-ensure",
-                ok=False,
-                message=(
-                    "firewalld started but SSH service not confirmed; "
-                    "stopped firewalld — use --force-lockout-risk to proceed"
-                ),
-                soft_fail=True,
-            )
+    if not force_lockout and not firewalld_ssh_ok(run_cmd):
+        run_cmd(_build_systemctl_argv(["stop", "firewalld"]))
+        invalidate_firewall_detect_cache()
+        return _step(
+            "firewall-ensure",
+            ok=False,
+            message=(
+                "firewalld started but SSH service not confirmed; "
+                "stopped firewalld — use --force-lockout-risk to proceed"
+            ),
+            soft_fail=True,
+        )
     invalidate_firewall_detect_cache()
     return _step("firewall-ensure", ok=True, message="firewalld enabled")
 

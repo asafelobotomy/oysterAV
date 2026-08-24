@@ -16,6 +16,8 @@ from oyst_core.privileged.auth_grant_scope import (
 )
 from oyst_core.privileged.polkit_policy import build_polkit_policy
 from oyst_core.privileged.runner import run_command
+from oyst_core.privileged.safe_write import write_text_nofollow
+from oyst_core.virusevent import system_wrapper_path, wrapper_script_body
 
 HELPER_DIR = Path("/usr/lib/oysterav")
 HELPER_PATH = HELPER_DIR / "oyst-helper"
@@ -206,6 +208,11 @@ def install_privileged_helper(
             encoding="utf-8",
         )
         helper_path.chmod(helper_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        # VirusEvent wrapper next to oyst-helper (P-02): root-owned host path.
+        ve_dest = (
+            (prefix / "lib" / "oysterav" / "oyst-virusevent") if prefix else system_wrapper_path()
+        )
+        write_text_nofollow(ve_dest, wrapper_script_body(), mode=0o755)
         if prefix is None:
             bin_link = Path("/usr/bin/oyst-helper")
             bin_link.parent.mkdir(parents=True, exist_ok=True)

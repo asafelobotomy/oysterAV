@@ -22,7 +22,7 @@ from oysterav.gui.rpc_actions import (
     request_services_set,
     request_services_status,
 )
-from oysterav.gui.widgets.common import make_button, run_in_thread
+from oysterav.gui.widgets.common import make_button, run_in_thread, show_command_dialog
 
 _SERVICE_TITLES = {
     "clamd": "ClamAV daemon (clamd)",
@@ -204,13 +204,38 @@ def build_services_group(
                 if result.get("ok"):
                     _status("Privileged helper installed")
                 else:
-                    _status(str(result.get("message") or "Helper install failed"))
+                    msg = str(result.get("message") or "Helper install failed")
+                    _status(msg)
+                    if "user-writable" in msg or "Refusing" in msg:
+                        show_command_dialog(
+                            window,
+                            heading="Helper install refused",
+                            body=(
+                                f"{msg}\n\n"
+                                "Install oysterAV from a distro package or a root-owned "
+                                "prefix so the helper can embed a non-user-writable "
+                                "oyst_core (development checkouts cannot be used)."
+                            ),
+                            copy_text="oyst-cli install-privileged-helper",
+                        )
                 refresh()
                 return False
 
             def failed(message: str) -> bool:
                 install_btn.set_sensitive(True)
                 _status(f"Helper install failed: {message}")
+                if "user-writable" in message or "Refusing" in message:
+                    show_command_dialog(
+                        window,
+                        heading="Helper install refused",
+                        body=(
+                            f"{message}\n\n"
+                            "Install oysterAV from a distro package or a root-owned "
+                            "prefix so the helper can embed a non-user-writable "
+                            "oyst_core (development checkouts cannot be used)."
+                        ),
+                        copy_text="oyst-cli install-privileged-helper",
+                    )
                 return False
 
             run_in_thread(worker, done, failed)

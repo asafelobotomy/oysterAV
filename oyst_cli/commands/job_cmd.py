@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from oyst_cli.confirm import require_confirm
 from oyst_cli.output import emit
 from oyst_core.orchestrator import JobOrchestrator
 
@@ -20,9 +21,12 @@ def job_group() -> None:
     is_flag=True,
     help="Force-clear the job lock (use when no scan is actually running).",
 )
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def job_cancel_cmd(job_id: str | None, force: bool, json_mode: bool) -> None:
+def job_cancel_cmd(job_id: str | None, force: bool, confirm: bool, json_mode: bool) -> None:
     """Request cancel of the active scan job (cooperative between packs)."""
+    if force:
+        require_confirm(confirm, message="--confirm required with --force")
     result = JobOrchestrator().cancel_job(job_id, force=force)
     emit(result, json_mode=json_mode)
     if not result.get("ok"):
@@ -30,9 +34,11 @@ def job_cancel_cmd(job_id: str | None, force: bool, json_mode: bool) -> None:
 
 
 @job_group.command("clear")
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def job_clear_cmd(json_mode: bool) -> None:
+def job_clear_cmd(confirm: bool, json_mode: bool) -> None:
     """Force-clear a stuck job lock (zombie 'scan in progress' banner)."""
+    require_confirm(confirm, message="--confirm required to clear a job lock")
     result = JobOrchestrator().clear_job()
     emit(result, json_mode=json_mode)
 

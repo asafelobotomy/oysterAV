@@ -11,12 +11,13 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw  # noqa: E402
 
+from oyst_core.maintenance import bootstrap_critical_ok
 from oysterav.gui.widgets.common import run_in_thread, show_command_dialog
 from oysterav.gui.widgets.runtime_ui import (
     bootstrap_runtime_from_gui,
     format_runtime_status_line,
 )
-from oysterav.gui.widgets.schedule_ui import show_schedule_result
+from oysterav.gui.widgets.schedule_ui import apply_schedule_timer
 from oysterav.gui.widgets.setup_wizard_text import format_check_summary
 
 if TYPE_CHECKING:
@@ -121,7 +122,16 @@ def on_full_bootstrap(wizard: SetupWizard, *_args: object) -> None:
         wizard.bootstrap_label.set_text(
             f"Full bootstrap finished ({ok_count}/{len(steps)} steps OK).",
         )
-        wizard._bootstrap_ran = ok_count > 0
+        sig_ok = any(s.get("step") == "signatures" and s.get("ok") for s in steps)
+        maint_ok = False
+        for s in steps:
+            if s.get("step") != "maintenance":
+                continue
+            details = s.get("details")
+            if isinstance(details, list) and bootstrap_critical_ok(details):
+                maint_ok = True
+                break
+        wizard._bootstrap_ran = sig_ok or maint_ok
         set_bootstrap_busy(wizard, False)
         run_doctor(wizard)
         wizard._emit_changed()
@@ -155,7 +165,7 @@ def on_bootstrap_only(wizard: SetupWizard, *_args: object) -> None:
         wizard.bootstrap_label.set_text(
             f"Maintenance finished ({ok_count}/{len(steps)} steps OK).",
         )
-        wizard._bootstrap_ran = ok_count > 0
+        wizard._bootstrap_ran = bootstrap_critical_ok(steps)
         set_bootstrap_busy(wizard, False)
         run_doctor(wizard)
         wizard._emit_changed()
@@ -179,23 +189,15 @@ def on_schedule_install(wizard: SetupWizard, *_args: object) -> None:
     wizard.schedule_label.set_text("Installing scheduled scan timer…")
     wizard.schedule_btn.set_sensitive(False)
 
-    def worker() -> dict[str, Any]:
+    def apply_worker() -> dict[str, Any]:
         wizard.client.config_set("schedule.profile", profile)
         wizard.client.config_set("schedule.frequency", frequency)
         wizard.client.config_set("schedule.time", at_time)
         wizard.client.config_set("schedule.enabled", "true")
         return wizard.client.schedule_apply(smoke_test=True)
 
-    def on_complete(result: dict[str, Any]) -> bool:
+    def on_complete(result: dict[str, Any]) -> None:
         wizard.schedule_btn.set_sensitive(True)
-        show_schedule_result(
-            wizard._parent_window,
-            result,
-            parent=wizard.dialog,
-            on_status=wizard._set_status,
-            client=wizard.client,
-            on_complete=lambda _r: None,
-        )
 
         def apply_status(status: dict[str, Any]) -> bool:
             wizard._apply_schedule_ui(status)
@@ -208,14 +210,26 @@ def on_schedule_install(wizard: SetupWizard, *_args: object) -> None:
             return False
 
         run_in_thread(wizard.client.schedule_status, apply_status, apply_fallback)
-        return False
 
-    def on_error(message: str) -> bool:
+    def on_error(message: str) -> None:
         wizard.schedule_btn.set_sensitive(True)
         wizard.schedule_label.set_text(f"Schedule failed: {message}")
-        return False
 
-    run_in_thread(worker, on_complete, on_error)
+    def on_cancel() -> None:
+        wizard.schedule_btn.set_sensitive(True)
+        wizard.schedule_label.set_text("Schedule apply cancelled")
+
+    apply_schedule_timer(
+        wizard.client,
+        window=wizard._parent_window,
+        parent=wizard.dialog,
+        smoke_test=True,
+        on_status=wizard._set_status,
+        on_error=on_error,
+        on_complete=on_complete,
+        on_cancel=on_cancel,
+        apply_worker=apply_worker,
+    )
 
 
 def finish_gaps(wizard: SetupWizard) -> list[str]:
@@ -226,6 +240,10 @@ def finish_gaps(wizard: SetupWizard) -> list[str]:
         gaps.append("Scheduled scan timer was not installed")
     if not wizard._harden_ran:
         gaps.append("Host hardenings were not applied")
+    if wizard._setup.get("missing_signatures"):
+        gaps.append("Virus definitions (host ClamAV daily signatures) are missing")
+    if wizard._setup.get("helper_missing"):
+        gaps.append("Privileged helper is not installed or is outdated")
     return gaps
 
 

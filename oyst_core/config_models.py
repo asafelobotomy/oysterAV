@@ -144,6 +144,8 @@ class SetupConfig(BaseModel):
     completed: bool = False
     completed_at: str | None = None
     skipped_steps: list[str] = Field(default_factory=list)
+    # Resolved oyst_core package path when setup was marked complete ("" = legacy).
+    completed_install: str = ""
 
 
 class RKHunterConfig(BaseModel):

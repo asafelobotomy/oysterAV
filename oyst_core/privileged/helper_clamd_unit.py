@@ -27,6 +27,47 @@ _CLAMD_SOCKETS = (
 _WAIT_TIMEOUT_SEC = 30.0
 _WAIT_POLL_SEC = 0.5
 
+# Arch/systemd ConditionPathExistsGlob=/var/lib/clamav/daily.{c[vl]d,inc}
+_HOST_DAILY_SIGNATURES = (
+    Path("/var/lib/clamav/daily.cvd"),
+    Path("/var/lib/clamav/daily.cld"),
+    Path("/var/lib/clamav/daily.inc"),
+)
+
+
+def host_daily_signatures_present() -> bool:
+    """True when host CVD/CLD exists so clamav-daemon ConditionPathExistsGlob passes."""
+    return any(path.is_file() for path in _HOST_DAILY_SIGNATURES)
+
+
+def ensure_host_daily_signatures() -> str:
+    """Download official ClamAV DBs as root when missing. Returns status message."""
+    if host_daily_signatures_present():
+        return "signatures present"
+    cmd = resolve_trusted_argv(["freshclam"])
+    proc = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_secure_exec_env(),
+        timeout=1800,
+    )
+    detail = (proc.stdout or proc.stderr or "").strip()
+    if proc.returncode != 0 and not host_daily_signatures_present():
+        raise ValueError(detail or "freshclam failed; virus definitions still missing")
+    # Best-effort: keep signatures current after first download.
+    try:
+        _run_systemctl(["enable", "--now", "clamav-freshclam"])
+    except ValueError:
+        try:
+            _run_systemctl(["enable", "--now", "clamav-freshclam.timer"])
+        except ValueError:
+            pass
+    if not host_daily_signatures_present():
+        raise ValueError(detail or "freshclam finished but daily signatures still missing")
+    return detail or "freshclam updated signatures"
+
 
 def _secure_exec_env() -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k in ("LANG", "LC_ALL", "TZ")}
@@ -124,20 +165,48 @@ def build_fdpass_dropin_body(vendor_argv: list[str] | None) -> str:
     )
 
 
-def ensure_fdpass_dropin(unit: str) -> None:
+def _unit_file_listed(unit: str) -> bool:
+    try:
+        cmd = resolve_trusted_argv(["systemctl", "list-unit-files", unit])
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=_secure_exec_env(),
+        )
+    except (OSError, ValueError):
+        return False
+    if proc.returncode != 0:
+        return False
+    needle = unit if "@" not in unit else unit.split("@", 1)[0]
+    return needle in (proc.stdout or "")
+
+
+def ensure_fdpass_dropin(unit: str, *, sockets: list[str] | None = None) -> None:
     unit = validate_unit(unit)
-    dropin_dir = Path(f"/etc/systemd/system/{unit}.service.d")
-    dropin_dir.mkdir(parents=True, exist_ok=True)
-    dropin = dropin_dir / FDPASS_DROPIN_NAME
+    # Soft-preflight: signatures + clamd up before touching clamonacc (ORD-04/05).
+    ensure_host_daily_signatures()
+    if _unit_file_listed("clamav-daemon"):
+        enable_clam_stack("clamav-daemon", None, sockets=sockets)
 
     raw = _systemctl_show(unit, "ExecStart")
     vendor: list[str] | None = None
-    if raw:
+    if raw.strip():
         try:
-            vendor = parse_systemctl_exec_start(raw)
-            _validate_clamonacc_argv(vendor)
-        except ValueError:
-            vendor = None
+            parsed = parse_systemctl_exec_start(raw)
+            if not parsed:
+                raise ValueError("vendor ExecStart non-empty but parsed empty")
+            vendor = _validate_clamonacc_argv(parsed)
+        except ValueError as exc:
+            # Fail closed: never strip to a minimal drop-in when vendor was present.
+            raise ValueError(
+                f"vendor ExecStart present but invalid — refusing stripped fdpass drop-in: {exc}",
+            ) from exc
+
+    dropin_dir = Path(f"/etc/systemd/system/{unit}.service.d")
+    dropin_dir.mkdir(parents=True, exist_ok=True)
+    dropin = dropin_dir / FDPASS_DROPIN_NAME
 
     if vendor and "--fdpass" in vendor:
         body = build_fdpass_dropin_body(vendor)
@@ -192,16 +261,37 @@ def restart_clam_stack(
     sockets: list[str] | None = None,
 ) -> None:
     if clamd_unit:
+        ensure_host_daily_signatures()
         _run_systemctl(["restart", validate_unit(clamd_unit)])
         wait_for_clamd_ready(sockets=sockets)
     if clamonacc_unit:
         _run_systemctl(["restart", validate_unit(clamonacc_unit)])
 
 
+def enable_clam_stack(
+    clamd_unit: str | None,
+    clamonacc_unit: str | None,
+    *,
+    sockets: list[str] | None = None,
+) -> None:
+    """One helper invocation: signatures (if needed) + enable --now clamd then clamonacc."""
+    if not clamd_unit and not clamonacc_unit:
+        raise ValueError("enable-stack requires --clamd-unit and/or --clamonacc-unit")
+    if clamd_unit:
+        ensure_host_daily_signatures()
+        _run_systemctl(["enable", "--now", validate_unit(clamd_unit)])
+        wait_for_clamd_ready(sockets=sockets)
+    if clamonacc_unit:
+        _run_systemctl(["enable", "--now", validate_unit(clamonacc_unit)])
+
+
 __all__ = [
     "FDPASS_DROPIN_NAME",
     "build_fdpass_dropin_body",
+    "enable_clam_stack",
     "ensure_fdpass_dropin",
+    "ensure_host_daily_signatures",
+    "host_daily_signatures_present",
     "parse_systemctl_exec_start",
     "restart_clam_stack",
     "wait_for_clamd_ready",

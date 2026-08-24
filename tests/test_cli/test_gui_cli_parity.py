@@ -39,6 +39,7 @@ GUI_CLIENT_TO_CLI: dict[str, list[str]] = {
     "config_get": ["config", "get", "--json"],
     "config_set": ["config", "set", "--help"],
     "setup_status": ["setup", "status", "--json"],
+    "setup_reset": ["setup", "reset", "--help"],
     "schedule_apply": ["schedule", "apply", "--help"],
     "schedule_run": ["schedule", "run", "--help"],
     "schedule_status": ["schedule", "status", "--json"],
@@ -102,8 +103,6 @@ GUI_CLIENT_TO_CLI: dict[str, list[str]] = {
 CLI_FIRST_REMAINING: frozenset[str] = frozenset(
     {
         "setup check",
-        "setup reset",
-        "firewall rich-rule",
         "firewall plan",
         "fangfrisch",
         "lynis audit",
@@ -189,8 +188,8 @@ def test_helper_auth_use_client_not_gui_pkexec() -> None:
     assert "request_auth_grant" in services_ui
     assert "request_auth_revoke" in services_ui
     assert "pkexec" not in services_ui
-    assert "show_command_dialog" not in services_ui
     assert "sudo oyst-cli" not in services_ui
+    # Failure UX may use show_command_dialog; elevation itself stays on OystClient.
 
 
 def test_no_security_subprocess_in_gui() -> None:

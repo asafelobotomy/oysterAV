@@ -5,9 +5,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from oyst_core.audit import SecurityAudit
 from oyst_core.config import load_config
 from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier, ScanProfile
 from oyst_core.packs.base import Pack, detect_distro_family, resolve_pack_binary
+from oyst_core.privileged.helper import run_privileged_helper
+from oyst_core.privileged.helper_clamd_unit import host_daily_signatures_present
 from oyst_core.privileged.runner import CommandResult, run_command, version_gte
 from oyst_core.privileged.systemctl_route import run_systemctl_helper
 from oyst_core.runtime.bundles.clamav import clamav_db_dir, clamscan_database_args
@@ -60,6 +63,11 @@ class ClamAVPack(Pack):
             return False
 
     def _clamd_service_hint(self) -> str:
+        if not host_daily_signatures_present():
+            return (
+                "Virus definitions are missing; update them first "
+                "(oyst-cli freshclam update), then start clamd"
+            )
         unit = self.clamd_unit()
         return f"Enable clamd for faster scans: sudo systemctl enable --now {unit}"
 
@@ -89,17 +97,19 @@ class ClamAVPack(Pack):
         }
 
     def _clamd_action(self, action: str) -> tuple[bool, str]:
-        from oyst_core.audit import SecurityAudit
-
         unit = self.clamd_unit()
-        helper_action = "enable-now" if action == "start" else action
-        if action == "restart":
-            helper_action = "restart"
+        if action == "start":
+            # Signatures + enable --now in one polkit (ConditionPathExistsGlob).
+            res = run_privileged_helper(
+                "clamd-cocontrol",
+                ["enable-stack", f"--clamd-unit={unit}"],
+            )
+        elif action == "restart":
+            res = run_systemctl_helper("restart", unit)
         elif action == "stop":
-            helper_action = "stop"
-        elif action == "start":
-            helper_action = "enable-now"
-        res = run_systemctl_helper(helper_action, unit)
+            res = run_systemctl_helper("stop", unit)
+        else:
+            res = run_systemctl_helper(action, unit)
         ok = res.returncode == 0
         SecurityAudit().log(
             "clamav.clamd",
@@ -109,6 +119,12 @@ class ClamAVPack(Pack):
         )
         if ok and action in ("start", "restart", "ensure"):
             if not self.clamd_running():
+                if not host_daily_signatures_present():
+                    return (
+                        False,
+                        "Virus definitions are missing; download them with freshclam "
+                        f"before starting {unit}",
+                    )
                 return False, f"{unit} started but clamd process not detected"
         msg = (res.stdout or res.stderr or "").strip() or ("ok" if ok else "failed")
         return ok, msg

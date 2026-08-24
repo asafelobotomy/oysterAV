@@ -86,4 +86,5 @@ Recommended desktop schedule: daily `quick` profile, `schedule.backend=inherit`,
 | `fail2ban.unban` | Unban IP (params: `ip`, optional `jail`, `ignore`, `persist`) |
 | `clamav.clamd.ensure` | Idempotent clamd start |
 
-Full firewall DSL remains CLI-first by design (ADR-007 Wave 4 residual).
+Structured UFW/firewalld rules and firewalld rich-rules are in Shield (ADR-007
+Wave 5). Permanent CLI-first: `firewall plan` and nftables mutation.

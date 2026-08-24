@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from oyst_core.models import PackTier
+from oyst_core.privileged.helper_clamd_unit import host_daily_signatures_present
 
 SIGNATURE_STALE_HOURS = 48
 
@@ -59,7 +60,21 @@ def assess_health(status: dict[str, Any]) -> dict[str, Any]:
             ),
         )
 
-    if not status.get("clamd_running", False):
+    clamav_installed = any(p.get("name") == "clamav" and p.get("installed") for p in packs) or any(
+        p.get("name") == "freshclam" and p.get("installed") for p in packs
+    )
+    if clamav_installed and not host_daily_signatures_present():
+        issues.append(
+            _issue(
+                "signatures_missing",
+                "high",
+                "Virus definitions are missing",
+                "Host ClamAV daily signatures are not present; the daemon will not start "
+                "on Arch-family systems until they are downloaded.",
+                "Run: oyst-cli freshclam update",
+            ),
+        )
+    elif clamav_installed and not status.get("clamd_running", False):
         issues.append(
             _issue(
                 "clamd_down",

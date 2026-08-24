@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from oyst_core.virusevent import (
     ENV_FILENAME,
     ENV_VIRUSNAME,
@@ -72,3 +74,22 @@ def test_install_wrapper(tmp_path: Path, monkeypatch) -> None:  # type: ignore[n
     path = Path(str(result["path"]))
     assert path.is_file()
     assert "virusevent handle" in path.read_text(encoding="utf-8")
+
+
+def test_system_wrapper_path() -> None:
+    from oyst_core.virusevent import system_wrapper_path
+
+    assert str(system_wrapper_path()) == "/usr/lib/oysterav/oyst-virusevent"
+
+
+def test_recommended_prefers_system(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from oyst_core.virusevent import recommended_virus_event_command, system_wrapper_path
+
+    sys_path = tmp_path / "oyst-virusevent"
+    sys_path.write_text("#!/bin/sh\n# oyst-virusevent\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "oyst_core.virusevent._SYSTEM_WRAPPER",
+        sys_path,
+    )
+    assert recommended_virus_event_command() == str(sys_path)
+    assert recommended_virus_event_command(system_wrapper_path()) == str(system_wrapper_path())

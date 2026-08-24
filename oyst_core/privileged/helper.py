@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import stat
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -18,10 +19,25 @@ def detect_aur_helper() -> str | None:
     return which("paru") or which("yay")
 
 
+def _is_trusted_helper_binary(path: Path) -> bool:
+    """Require root-owned, non-group/world-writable, regular, executable helper."""
+    try:
+        st = path.stat()
+    except OSError:
+        return False
+    if not stat.S_ISREG(st.st_mode):
+        return False
+    if st.st_uid != 0:
+        return False
+    if st.st_mode & 0o022:
+        return False
+    return os.access(path, os.X_OK)
+
+
 def resolve_helper_path() -> str | None:
     """Absolute path to oyst-helper matching polkit exec.path (no PATH fallback)."""
     installed = resolve_installed_helper_path()
-    if installed is not None and os.access(installed, os.X_OK):
+    if installed is not None and _is_trusted_helper_binary(installed):
         return str(installed)
     return None
 

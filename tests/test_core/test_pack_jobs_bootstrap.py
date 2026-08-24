@@ -104,6 +104,35 @@ def test_full_bootstrap_happy_path() -> None:
     assert "maintenance" in steps
 
 
+def test_full_bootstrap_ok_requires_all_non_skipped() -> None:
+    """UX-18: overall ok is not 'any step ok'."""
+    with (
+        patch("oyst_core.runtime_full_bootstrap.is_full_mode", return_value=True),
+        patch(
+            "oyst_core.runtime_full_bootstrap.bootstrap_runtime",
+            return_value=[{"pack": "lynis", "ok": True, "message": "ok"}],
+        ),
+        patch(
+            "oyst_core.runtime_full_bootstrap.update_runtime",
+            return_value={"ok": False, "clamav": {"message": "sigs fail"}},
+        ),
+        patch(
+            "oyst_core.runtime_full_bootstrap.run_bootstrap",
+            return_value=[
+                {"step": "doctor-clamav", "ok": True},
+                {"step": "freshclam", "ok": False},
+            ],
+        ),
+        patch("oyst_core.runtime_full_bootstrap.SecurityAudit") as audit_cls,
+    ):
+        audit_cls.return_value.log = MagicMock()
+        result = run_full_runtime_bootstrap(skip_lynis=True)
+
+    assert result["ok"] is False
+    maint = next(s for s in result["steps"] if s["step"] == "maintenance")
+    assert maint["ok"] is False
+
+
 def test_full_bootstrap_skip_install_and_sigs() -> None:
     with (
         patch("oyst_core.runtime_full_bootstrap.is_full_mode", return_value=True),

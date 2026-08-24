@@ -11,6 +11,7 @@ from oyst_core.privileged.auth_grant import (
     auth_status,
     build_service_lifecycle_rules,
     grant_service_lifecycle,
+    migrate_grant_on_helper_install,
     revoke_service_lifecycle,
 )
 from oyst_core.privileged.install_privileged_helper import (
@@ -39,6 +40,7 @@ def test_polkit_policy_has_argv1_scoped_actions() -> None:
     assert 'org.freedesktop.policykit.exec.argv1">setup-harden<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">setup-concert<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">scan-concert<' in policy
+    assert 'org.freedesktop.policykit.exec.argv1">update-concert<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">install-script<' in policy
     assert 'org.freedesktop.policykit.exec.argv1">run-sealed<' in policy
     assert "io.github.asafelobotomy.run-helper" not in policy
@@ -82,6 +84,7 @@ def test_packaging_policy_matches_builder() -> None:
         "setup-harden",
         "setup-concert",
         "scan-concert",
+        "update-concert",
         "install-script",
         "run-sealed",
     ):
@@ -230,6 +233,28 @@ def test_grant_and_revoke_service_lifecycle(tmp_path: Path) -> None:
     assert not timer.is_file()
 
 
+def test_migrate_grant_preserves_valid_expires(tmp_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from oyst_core.privileged.auth_grant_scope import format_expires
+
+    expires = datetime.now(UTC) + timedelta(days=3)
+    stamp = tmp_path / "usr" / "local" / "share" / "oysterav" / "service-lifecycle.grant"
+    stamp.parent.mkdir(parents=True)
+    stamp.write_text(
+        f"user=alice\nexpires={format_expires(expires)}\nversion=10\n",
+        encoding="utf-8",
+    )
+    with patch("oyst_core.privileged.auth_grant.os.geteuid", return_value=0):
+        result = migrate_grant_on_helper_install(prefix=tmp_path)
+    assert result is not None
+    assert result["ok"] is True
+    assert result["expires"] == format_expires(expires)
+    assert stamp.read_text(encoding="utf-8").split("expires=", 1)[1].splitlines()[0] == (
+        format_expires(expires)
+    )
+
+
 def test_auth_status_uses_stamp_when_rules_unreadable(tmp_path: Path) -> None:
     from datetime import UTC, datetime, timedelta
 
@@ -262,10 +287,10 @@ def test_auth_status_survives_is_file_permission_error(tmp_path: Path) -> None:
     assert "error" in status
 
 
-def test_set_service_clamd_calls_systemctl_up_helper() -> None:
+def test_set_service_clamd_calls_enable_stack() -> None:
     mock_res = MagicMock(returncode=0, stdout="ok", stderr="")
     with (
-        patch("oyst_core.services.run_systemctl_helper", return_value=mock_res) as helper,
+        patch("oyst_core.packs.clamav.run_privileged_helper", return_value=mock_res) as helper,
         patch("oyst_core.packs.clamav.ClamAVPack.clamd_unit", return_value="clamav-daemon"),
         patch("oyst_core.packs.clamav.ClamAVPack.clamd_running", return_value=True),
         patch("oyst_core.services.SecurityAudit") as audit_cls,
@@ -273,7 +298,10 @@ def test_set_service_clamd_calls_systemctl_up_helper() -> None:
         audit_cls.return_value.log = MagicMock()
         result = set_service("clamd", "on", boot=True)
     assert result["ok"] is True
-    helper.assert_called_once_with("enable-now", "clamav-daemon")
+    helper.assert_called_once_with(
+        "clamd-cocontrol",
+        ["enable-stack", "--clamd-unit=clamav-daemon"],
+    )
 
 
 def test_set_service_clamd_off_uses_systemctl_route() -> None:

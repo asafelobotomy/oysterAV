@@ -85,3 +85,9 @@ def handle_setup_run(params: dict[str, Any], _ctx: RpcContext) -> Any:
     )
     invalidate_doctor_cache()
     return result
+
+
+def handle_setup_reset(_params: dict[str, Any], _ctx: RpcContext) -> Any:
+    from oyst_core.setup_workflow import reset_setup
+
+    return reset_setup()

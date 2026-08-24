@@ -13,8 +13,7 @@ from gi.repository import Adw, GLib  # noqa: E402
 
 from oyst_core.models import PROFILE_PACKS, PROFILE_PATHS, ScanProfile
 from oyst_core.schedule_util import parse_schedule_time
-from oysterav.gui.widgets.common import run_in_thread, show_command_dialog
-from oysterav.gui.widgets.schedule_ui import show_schedule_result
+from oysterav.gui.widgets.schedule_ui import apply_schedule_timer
 from oysterav.gui.widgets.settings_const import (
     FREQUENCY_OPTIONS,
     QUARANTINE_OPTIONS,
@@ -170,50 +169,31 @@ def run_timer_apply(page: SettingsPage) -> bool:
     page._schedule_applying = True
     page._schedule_run_btn.set_sensitive(False)
 
-    def worker() -> dict[str, Any]:
-        return page.client.schedule_apply(smoke_test=True)
-
-    def on_complete(result: dict[str, Any]) -> bool:
+    def on_complete(result: dict[str, Any]) -> None:
         page._schedule_applying = False
         page._schedule_run_btn.set_sensitive(True)
-        if not result.get("ok"):
-            show_command_dialog(
-                page._window,
-                heading="Could not update schedule timer",
-                body=str(result.get("message", "Schedule apply failed")),
-                copy_text=str(result.get("enable_hint") or "") or None,
-            )
+        if result.get("ok"):
             page.refresh()
-            return False
 
-        message = str(result.get("message", "Schedule timer updated"))
-        page._set_status(message)
-        page.refresh()
-
-        linger = result.get("linger") if isinstance(result.get("linger"), dict) else {}
-        advisory = result.get("linger_advisory")
-        if (
-            result.get("enabled")
-            and advisory
-            and isinstance(linger, dict)
-            and not linger.get("linger", True)
-            and not page._linger_prompted
-        ):
-            page._linger_prompted = True
-            show_schedule_result(
-                page._window,
-                result,
-                on_status=page._set_status,
-                client=page.client,
-            )
-        return False
-
-    def on_error(message: str) -> bool:
+    def on_error(message: str) -> None:
         page._schedule_applying = False
         page._schedule_run_btn.set_sensitive(True)
-        return page._apply_error(message)
+        page._apply_error(message)
 
-    run_in_thread(worker, on_complete, on_error)
+    def on_cancel() -> None:
+        page._schedule_applying = False
+        page._schedule_run_btn.set_sensitive(True)
+
+    apply_schedule_timer(
+        page.client,
+        window=page._window,
+        smoke_test=True,
+        prompt_linger=page.sched_enabled_row.get_active(),
+        on_status=page._set_status,
+        on_error=on_error,
+        on_complete=on_complete,
+        on_cancel=on_cancel,
+    )
     return False
 
 

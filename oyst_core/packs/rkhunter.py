@@ -6,7 +6,6 @@ import re
 
 from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier
 from oyst_core.packs.base import Pack, resolve_pack_binary
-from oyst_core.packs.rkhunter_resolve import ensure_disable_tests_overlay
 from oyst_core.privileged.helper import run_privileged
 from oyst_core.privileged.helper_validate import resolve_trusted_binary
 from oyst_core.privileged.runner import run_command
@@ -68,8 +67,8 @@ class RKHunterPack(Pack):
         path, _ = resolve_pack_binary("rkhunter", "rkhunter")
         if not path:
             return False, "rkhunter not installed"
-        # Best-effort: sync DISABLE_TESTS overlay before check (may require polkit).
-        ensure_disable_tests_overlay()
+        # DISABLE_TESTS overlay is applied by scan-concert / setup-harden /
+        # explicit resolve — not here (avoids a second polkit prompt).
         tail = ["--check", "--sk", "--rwo"] if skip_keypress else ["--check"]
         res = run_privileged_scanner(path, tail, timeout=7200)
         # --rwo warnings go to stdout via display(). Child-tool noise (egrep

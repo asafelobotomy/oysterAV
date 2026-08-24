@@ -21,8 +21,8 @@ from oyst_core.privileged.runner import which
 from oyst_core.virusevent import (
     install_wrapper,
     recommended_virus_event_command,
+    system_wrapper_path,
     virusevent_status,
-    wrapper_path,
 )
 
 _STEP_ORDER = (
@@ -117,6 +117,7 @@ def _prepare_fdpass(argv: list[str], local: list[dict[str, Any]]) -> None:
 
 def _prepare_virusevent(argv: list[str], local: list[dict[str, Any]]) -> None:
     try:
+        # XDG fallback for user/dev; privileged helper installs system wrapper.
         install_wrapper(force=False)
     except (OSError, ValueError, RuntimeError) as exc:
         local.append(_step("harden-virusevent", ok=False, message=str(exc), soft_fail=True))
@@ -149,7 +150,7 @@ def _prepare_virusevent(argv: list[str], local: list[dict[str, Any]]) -> None:
         )
         return
     argv.append(f"--ve-conf={conf}")
-    argv.append(f"--ve-cmd={recommended_virus_event_command(wrapper_path())}")
+    argv.append(f"--ve-cmd={recommended_virus_event_command(system_wrapper_path())}")
 
 
 def _prepare_disable_cache(argv: list[str], local: list[dict[str, Any]]) -> None:

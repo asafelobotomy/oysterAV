@@ -113,14 +113,20 @@ class QuarantineVault:
             dest = self.vault_dir / f"{ts}_{uuid.uuid4().hex[:8]}_{resolved.name}"
             if dest.exists():
                 raise RuntimeError(f"quarantine destination collision: {dest}")
-            with open(dest, "wb") as out_f:
+            out_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            if hasattr(os, "O_NOFOLLOW"):
+                out_flags |= os.O_NOFOLLOW
+            out_fd = os.open(str(dest), out_flags, 0o600)
+            try:
+                os.fchmod(out_fd, 0o600)
                 while True:
                     chunk = os.read(src_fd, 65536)
                     if not chunk:
                         break
-                    out_f.write(chunk)
-                out_f.flush()
-                os.fsync(out_f.fileno())
+                    os.write(out_fd, chunk)
+                os.fsync(out_fd)
+            finally:
+                os.close(out_fd)
             dir_fd = os.open(str(self.vault_dir), os.O_RDONLY)
             try:
                 os.fsync(dir_fd)

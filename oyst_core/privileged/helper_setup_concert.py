@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from oyst_core.privileged.helper_clamd import _parse_flag, _parse_multi
+from oyst_core.privileged.helper_harden_reprobe import augment_harden_argv_after_install
 from oyst_core.privileged.helper_install_script import seal_and_run_install_tarball
 from oyst_core.privileged.helper_setup_harden import (
     _has_bool,
@@ -154,10 +155,16 @@ def run_setup_concert(argv: Sequence[str]) -> int:
     """Run pack install + propupd + harden + linger; print JSON steps."""
     steps: list[dict[str, Any]] = []
     try:
-        steps.extend(_install_official_packs(argv))
-        steps.extend(_install_maldet(argv))
+        install_steps = _install_official_packs(argv)
+        steps.extend(install_steps)
+        maldet_steps = _install_maldet(argv)
+        steps.extend(maldet_steps)
         steps.extend(_propupd(argv))
-        steps.extend(collect_harden_steps(argv))
+        harden_argv = augment_harden_argv_after_install(
+            argv,
+            [*install_steps, *maldet_steps],
+        )
+        steps.extend(collect_harden_steps(harden_argv))
         steps.extend(_linger(argv))
     except (OSError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)

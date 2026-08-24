@@ -7,6 +7,7 @@ import sqlite3
 from datetime import datetime
 from typing import Any
 
+from oyst_core.audit import redact_paths
 from oyst_core.finding_status import open_findings_count, scan_is_clean
 
 
@@ -19,10 +20,11 @@ class EventHistoryMixin:
         raise NotImplementedError
 
     def log(self, kind: str, message: str, data: dict[str, Any] | None = None) -> None:
+        payload = redact_paths(data or {})
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO events (ts, kind, message, data) VALUES (?, ?, ?, ?)",
-                (datetime.now().isoformat(), kind, message, json.dumps(data or {})),
+                (datetime.now().isoformat(), kind, message, json.dumps(payload)),
             )
 
     def history(self, limit: int = 20) -> list[dict[str, Any]]:

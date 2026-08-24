@@ -52,7 +52,10 @@ def build_harden_page(wizard: SetupWizard, harden_box: Gtk.Box) -> None:
 
     expander = make_bulk_expander(
         "Steps included in Apply recommended hardenings",
-        subtitle="Toggle steps for Apply; use Ensure for a single step",
+        subtitle=(
+            "Toggle steps for Apply; each Ensure is a separate privileged action "
+            "(may prompt). Prefer Apply recommended hardenings for one concert."
+        ),
         expanded=True,
     )
     wizard.harden_switches = {}

@@ -35,6 +35,18 @@ def format_check_summary(setup: dict[str, Any], *, running: bool = False) -> str
         )
     elif not missing_required:
         lines.append("All recommended packs are installed.")
+    if setup.get("missing_signatures"):
+        lines.append(
+            "Virus definitions missing: host ClamAV daily signatures are not present yet.",
+        )
+    if setup.get("helper_missing"):
+        lines.append(
+            "Privileged helper is not installed or its polkit policy is outdated.",
+        )
+    if setup.get("install_mismatch"):
+        lines.append(
+            "Setup was completed under a different install; review first-run again.",
+        )
     return "\n".join(lines)
 
 

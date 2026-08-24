@@ -17,8 +17,8 @@ from oyst_core.privileged.runner import run_command
 from oyst_core.virusevent import (
     install_wrapper,
     recommended_virus_event_command,
+    system_wrapper_path,
     virusevent_status,
-    wrapper_path,
 )
 
 
@@ -143,7 +143,7 @@ def ensure_virusevent(*, confirm: bool = False, force_wrapper: bool = False) -> 
     conf = status.get("conf_path")
     if not conf:
         return {"ok": False, "error": "no readable clamd conf", "status": status}
-    cmd = recommended_virus_event_command(wrapper_path())
+    cmd = recommended_virus_event_command(system_wrapper_path())
     argv = ["ensure-virusevent", f"--conf={conf}", f"--cmd={cmd}"]
     _append_restart_flags(argv, probe=probe_onaccess_prevention())
     res = run_privileged_helper("clamd-cocontrol", argv)
@@ -167,7 +167,7 @@ def ensure_virusevent(*, confirm: bool = False, force_wrapper: bool = False) -> 
 
 def _allowed_include(path: str) -> bool:
     expanded = str(Path(path).expanduser().resolve())
-    if expanded == "/" or expanded in DENIED_INCLUDE_PREFIXES:
+    if expanded == "/" or expanded == "/home" or expanded in DENIED_INCLUDE_PREFIXES:
         return False
     for prefix in DENIED_INCLUDE_PREFIXES:
         if prefix != "/" and (expanded == prefix or expanded.startswith(prefix + "/")):
@@ -212,7 +212,16 @@ def ensure_prevention(*, confirm: bool = False) -> dict[str, object]:
         if not paths:
             return {"ok": False, "error": "no readable clamd conf", "probe": probe}
         conf = str(paths[0])
-    user = str(probe.get("user") or "clamav")
+    probed_user = probe.get("user")
+    if not probed_user or not str(probed_user).strip():
+        return {
+            "ok": False,
+            "error": (
+                "clamd User not found in conf — hand off (refuse guessed OnAccessExcludeUname)"
+            ),
+            "probe": probe,
+        }
+    user = str(probed_user).strip()
     includes = [str(Path(p).expanduser().resolve()) for p in cfg.clamonacc.paths]
     includes = [p for p in includes if _allowed_include(p)]
     if not includes:
@@ -233,7 +242,7 @@ def ensure_prevention(*, confirm: bool = False) -> dict[str, object]:
         success=ok,
         data={"includes": includes, "stderr": (res.stderr or "")[:500]},
     )
-    return {
+    out: dict[str, object] = {
         "ok": ok,
         "changed": ok,
         "conf_path": conf,
@@ -242,6 +251,10 @@ def ensure_prevention(*, confirm: bool = False) -> dict[str, object]:
         "message": (res.stderr or res.stdout or ("ensured" if ok else "failed")).strip(),
         "probe": probe_onaccess_prevention() if ok else probe,
     }
+    # ORD-06: after prevention write, best-effort fdpass when distro unit exists.
+    if ok and ClamonaccPack()._systemd_unit():
+        out["fdpass"] = ensure_fdpass(confirm=True)
+    return out
 
 
 def ensure_disable_cache(*, confirm: bool = False) -> dict[str, object]:

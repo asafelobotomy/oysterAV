@@ -41,6 +41,21 @@ def test_format_check_summary_lists_names() -> None:
     assert format_check_summary({}, running=True) == "Running doctor…"
 
 
+def test_format_check_summary_attention_flags() -> None:
+    text = format_check_summary(
+        {
+            "missing_required": [],
+            "missing_recommended": [],
+            "missing_signatures": True,
+            "helper_missing": True,
+            "install_mismatch": True,
+        },
+    )
+    assert "Virus definitions missing" in text
+    assert "Privileged helper" in text
+    assert "different install" in text
+
+
 def test_format_check_summary_all_installed() -> None:
     setup = {"missing_required": [], "missing_recommended": []}
     text = format_check_summary(setup)

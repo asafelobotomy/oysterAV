@@ -2,33 +2,55 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+import oyst_core
 from oyst_core.audit import SecurityAudit
 from oyst_core.config import load_config, set_config_value
-from oyst_core.maintenance import run_bootstrap
+from oyst_core.doctor_cache import doctor_all
+from oyst_core.maintenance import bootstrap_critical_ok, run_bootstrap
 from oyst_core.models import PackTier
 from oyst_core.privilege.priority import sort_pack_names
+from oyst_core.privileged.helper_clamd_unit import host_daily_signatures_present
+from oyst_core.privileged.install_privileged_helper import helper_status
 from oyst_core.registry import get_registry
 from oyst_core.runtime.manifest import is_full_mode
 from oyst_core.runtime_full_bootstrap import run_full_runtime_bootstrap
 from oyst_core.schedule_util import apply_schedule
 from oyst_core.setup_concert import run_setup_concert
 
+# Soft UI marking only — do not alone allow mark-complete when failed.
 _SOFT_FAIL_STEPS = frozenset(
     {
         "schedule",
-        "linger",
         "rkhunter-propupd",
-        "harden-clamd",
         "harden-fdpass",
         "harden-virusevent",
         "harden-disable-cache",
         "harden-rkhunter-defaults",
-        "firewall-ensure",
         "setup-concert",
     }
 )
+
+# Failed (not ok, not skipped) steps that block setup.completed.
+_BLOCKS_COMPLETE = frozenset(
+    {
+        "packs-gate",
+        "maintenance-bootstrap",
+        "maintenance",
+        "signatures",
+        "harden-clamd",
+        "firewall-ensure",
+        "firewall-select",
+        "firewall-install",
+        "linger",
+    }
+)
+
+
+def _install_fingerprint() -> str:
+    return str(Path(oyst_core.__file__).resolve().parent)
 
 
 def _missing_pack_names(packs: list[dict[str, Any]], tier: PackTier) -> list[str]:
@@ -46,17 +68,39 @@ def assess_setup() -> dict[str, Any]:
     them (``setup.skipped_steps`` contains ``required_packs``) **and** marked
     setup complete. That lets "Continue anyway" + Finish dismiss first-run without
     leaving the gate stuck forever.
-    """
-    from oyst_core.doctor_cache import doctor_all
 
+    ClamAV installed without host daily signatures also needs attention: Arch-family
+    ``clamav-daemon`` units skip start until ``/var/lib/clamav/daily.*`` exists.
+
+    Helper missing/outdated and install-path mismatch (UX-01/02) reopen attention.
+    """
     cfg = load_config()
     packs = doctor_all()
     missing_required = _missing_pack_names(packs, PackTier.REQUIRED)
     missing_recommended = _missing_pack_names(packs, PackTier.RECOMMENDED)
     skipped = set(cfg.setup.skipped_steps)
     packs_skip_honored = cfg.setup.completed and "required_packs" in skipped
-    needs_attention = (not cfg.setup.completed) or (
-        bool(missing_required) and not packs_skip_honored
+    clamav_ready = any(p.get("name") == "clamav" and p.get("installed") for p in packs) or any(
+        p.get("name") == "freshclam" and p.get("installed") for p in packs
+    )
+    missing_signatures = clamav_ready and not host_daily_signatures_present()
+    helper = helper_status()
+    helper_missing = (not bool(helper.get("installed"))) or (not bool(helper.get("policy_current")))
+    stored = (cfg.setup.completed_install or "").strip()
+    current_fp = _install_fingerprint()
+    if cfg.setup.completed and stored:
+        install_mismatch = stored != current_fp
+    elif cfg.setup.completed and not stored:
+        # Legacy configs: mismatch only when other gates already need attention.
+        install_mismatch = helper_missing or missing_signatures
+    else:
+        install_mismatch = False
+    needs_attention = (
+        (not cfg.setup.completed)
+        or (bool(missing_required) and not packs_skip_honored)
+        or missing_signatures
+        or helper_missing
+        or install_mismatch
     )
     return {
         "completed": cfg.setup.completed,
@@ -65,6 +109,9 @@ def assess_setup() -> dict[str, Any]:
         "needs_attention": needs_attention,
         "missing_required": missing_required,
         "missing_recommended": missing_recommended,
+        "missing_signatures": missing_signatures,
+        "helper_missing": helper_missing,
+        "install_mismatch": install_mismatch,
         "recommended_action": ("oyst-cli setup run" if needs_attention else None),
     }
 
@@ -73,12 +120,21 @@ def reset_setup() -> dict[str, Any]:
     """Clear setup completion so guided setup can run again."""
     set_config_value("setup.completed", "false")
     set_config_value("setup.skipped_steps", "")
+    set_config_value("setup.completed_install", "")
     return assess_setup()
 
 
-def _is_hard_failure(step: dict[str, Any]) -> bool:
-    if step.get("ok") or step.get("skipped") or step.get("soft_fail"):
+def _step_blocks_complete(step: dict[str, Any]) -> bool:
+    if step.get("ok") or step.get("skipped"):
         return False
+    return str(step.get("step", "")) in _BLOCKS_COMPLETE
+
+
+def _is_hard_failure(step: dict[str, Any]) -> bool:
+    if step.get("ok") or step.get("skipped"):
+        return False
+    if _step_blocks_complete(step):
+        return True
     name = str(step.get("step", ""))
     if name in _SOFT_FAIL_STEPS or name.startswith("rkhunter-") or name.startswith("install-"):
         return False
@@ -88,11 +144,8 @@ def _is_hard_failure(step: dict[str, Any]) -> bool:
 
 
 def _can_mark_complete(steps: list[dict[str, Any]]) -> bool:
-    """Allow completion when only soft failures or missing packs remain."""
-    failed = [s for s in steps if _is_hard_failure(s)]
-    if not failed:
-        return True
-    return len(failed) == 1 and failed[0].get("step") == "packs-gate"
+    """Allow completion only when no security blocker steps failed."""
+    return not any(_step_blocks_complete(s) for s in steps)
 
 
 def run_setup(
@@ -144,8 +197,34 @@ def run_setup(
     want_propupd = not skip_bootstrap and not (is_full_mode() and full_bootstrap)
     want_packs = packs is not None or not skip_packs
     include = frozenset(harden_include) if harden_include is not None else None
+    targets = install_targets if want_packs else None
+
+    def _run_bootstrap_steps() -> None:
+        if is_full_mode() and full_bootstrap:
+            bootstrap_result = run_full_runtime_bootstrap(
+                skip_install=False,
+                update_signatures=True,
+                run_maintenance=True,
+                skip_lynis=True,
+            )
+            steps.extend(bootstrap_result.get("steps", []))
+            return
+        maint = run_bootstrap(skip_lynis=True, skip_rkhunter_propupd=True)
+        steps.append(
+            {
+                "step": "maintenance-bootstrap",
+                "ok": bootstrap_critical_ok(maint),
+                "details": maint,
+            }
+        )
+
+    # UX-06: when packs are already present, refresh signatures before harden concert.
+    early_bootstrap = not skip_bootstrap and not (targets or [])
+    if early_bootstrap:
+        _run_bootstrap_steps()
+
     concert_steps = run_setup_concert(
-        pack_names=install_targets if want_packs else None,
+        pack_names=targets,
         confirm_aur=confirm_aur,
         skip_harden=skip_harden,
         enable_firewall=enable_firewall,
@@ -168,22 +247,12 @@ def run_setup(
     if want_packs and packs is None:
         packs_status = [p.doctor().model_dump() for p in get_registry().all()]
         if _missing_pack_names(packs_status, PackTier.REQUIRED):
-            set_config_value("setup.skipped_steps", "required_packs")
-            steps.append({"step": "packs-gate", "ok": False, "skipped": True})
+            # Explicit skip only via skip_packs=True — never auto-honor packs skip.
+            steps.append({"step": "packs-gate", "ok": False})
 
-    if not skip_bootstrap:
-        if is_full_mode() and full_bootstrap:
-            bootstrap_result = run_full_runtime_bootstrap(
-                skip_install=False,
-                update_signatures=True,
-                run_maintenance=True,
-                skip_lynis=True,
-            )
-            steps.extend(bootstrap_result.get("steps", []))
-        else:
-            maint = run_bootstrap(skip_lynis=True, skip_rkhunter_propupd=True)
-            steps.append({"step": "maintenance-bootstrap", "ok": any(s.get("ok") for s in maint)})
-    else:
+    if not skip_bootstrap and not early_bootstrap:
+        _run_bootstrap_steps()
+    elif skip_bootstrap:
         steps.append({"step": "bootstrap", "ok": True, "skipped": True})
 
     if skip_harden and not enable_firewall:
@@ -229,6 +298,7 @@ def run_setup(
     completed = False
     if mark_complete and can_complete:
         set_config_value("setup.completed", "true")
+        set_config_value("setup.completed_install", _install_fingerprint())
         completed = True
 
     for step in steps:
@@ -236,6 +306,7 @@ def run_setup(
         if (
             not step.get("ok")
             and not step.get("skipped")
+            and name not in _BLOCKS_COMPLETE
             and (
                 name in _SOFT_FAIL_STEPS
                 or name == "rkhunter-propupd"

@@ -32,9 +32,12 @@ def test_apply_safe_hardenings_single_helper_call() -> None:
         ),
         patch(
             "oyst_core.setup_harden.recommended_virus_event_command",
-            return_value="/home/u/.local/share/oysterav/oyst-virusevent",
+            return_value="/usr/lib/oysterav/oyst-virusevent",
         ),
-        patch("oyst_core.setup_harden.wrapper_path", return_value="/x/oyst-virusevent"),
+        patch(
+            "oyst_core.setup_harden.system_wrapper_path",
+            return_value="/usr/lib/oysterav/oyst-virusevent",
+        ),
         patch(
             "oyst_core.setup_harden.probe_onaccess_prevention",
             return_value={"conf_path": "/etc/clamav/clamd.conf", "disable_cache": False},

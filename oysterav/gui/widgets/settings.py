@@ -111,7 +111,6 @@ class SettingsPage:
         self._loading = True
         self._schedule_apply_timeout = 0
         self._schedule_applying = False
-        self._linger_prompted = False
         self._section_pages: dict[str, Gtk.Widget] = {}
         self._terminal_since_id = 0
         self._terminal_poll_id = 0

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from oyst_core.health import assess_health
 from oyst_core.models import PackTier
 
@@ -16,7 +18,8 @@ def test_assess_health_ok_when_protected() -> None:
         "clamd_running": True,
         "active_job": None,
     }
-    result = assess_health(status)
+    with patch("oyst_core.health.host_daily_signatures_present", return_value=True):
+        result = assess_health(status)
     assert result["severity"] == "ok"
     assert result["show_banner"] is False
 
@@ -28,7 +31,8 @@ def test_assess_health_missing_required() -> None:
         ],
         "clamd_running": True,
     }
-    result = assess_health(status)
+    with patch("oyst_core.health.host_daily_signatures_present", return_value=True):
+        result = assess_health(status)
     assert result["severity"] == "critical"
     assert any(i["code"] == "missing_required_packs" for i in result["issues"])
 
@@ -41,9 +45,24 @@ def test_assess_health_stale_signatures() -> None:
         "signature_age_hours": 72,
         "clamd_running": True,
     }
-    result = assess_health(status)
+    with patch("oyst_core.health.host_daily_signatures_present", return_value=True):
+        result = assess_health(status)
     assert result["severity"] == "high"
     assert any(i["code"] == "stale_signatures" for i in result["issues"])
+
+
+def test_assess_health_signatures_missing() -> None:
+    status = {
+        "packs": [
+            {"name": "clamav", "tier": PackTier.REQUIRED.value, "installed": True},
+        ],
+        "clamd_running": False,
+        "signature_age_hours": None,
+    }
+    with patch("oyst_core.health.host_daily_signatures_present", return_value=False):
+        result = assess_health(status)
+    assert any(i["code"] == "signatures_missing" for i in result["issues"])
+    assert not any(i["code"] == "clamd_down" for i in result["issues"])
 
 
 def test_assess_health_clamonacc_prevention_unmanaged() -> None:
@@ -56,7 +75,8 @@ def test_assess_health_clamonacc_prevention_unmanaged() -> None:
         "clamonacc_prevention_requested": True,
         "clamonacc_prevention_enforced": False,
     }
-    result = assess_health(status)
+    with patch("oyst_core.health.host_daily_signatures_present", return_value=True):
+        result = assess_health(status)
     assert any(i["code"] == "clamonacc_prevention_unmanaged" for i in result["issues"])
 
 
@@ -70,5 +90,6 @@ def test_assess_health_fangfrisch_no_providers() -> None:
         "signature_age_hours": 1,
         "fangfrisch_providers": [],
     }
-    result = assess_health(status)
+    with patch("oyst_core.health.host_daily_signatures_present", return_value=True):
+        result = assess_health(status)
     assert any(i["code"] == "fangfrisch_no_providers" for i in result["issues"])

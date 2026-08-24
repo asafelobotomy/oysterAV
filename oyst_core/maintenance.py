@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from oyst_core.events import EventLog
 from oyst_core.models import PackTier
 from oyst_core.packs.fangfrisch import FangfrischPack
@@ -9,6 +11,20 @@ from oyst_core.packs.freshclam import FreshclamPack
 from oyst_core.packs.lynis import LynisPack
 from oyst_core.packs.rkhunter import RKHunterPack
 from oyst_core.registry import get_registry
+
+
+def bootstrap_critical_ok(steps: list[dict[str, Any]] | list[dict[str, object]]) -> bool:
+    """True when freshclam succeeded or was skipped (not installed).
+
+    Doctor-* success alone must not mask a freshclam failure. Skipped freshclam
+    (binary missing) counts as OK for bootstrap aggregation.
+    """
+    fresh = next((s for s in steps if s.get("step") == "freshclam"), None)
+    if fresh is None:
+        return True
+    if fresh.get("skipped"):
+        return True
+    return bool(fresh.get("ok"))
 
 
 def run_bootstrap(

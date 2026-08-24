@@ -178,6 +178,7 @@ def grant_service_lifecycle(
     user: str | None = None,
     *,
     prefix: Path | None = None,
+    expires: datetime | None = None,
 ) -> dict[str, object]:
     """Install polkit rules.d grant (requires root)."""
     if os.geteuid() != 0 and prefix is None:
@@ -198,11 +199,11 @@ def grant_service_lifecycle(
         if prefix
         else GRANT_STAMP_PATH
     )
-    expires = grant_expires_at()
+    expires_at = expires if expires is not None else grant_expires_at()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         write_text_nofollow(path, build_service_lifecycle_rules(target_user), mode=0o644)
-        _write_grant_stamp(target_user, stamp, expires=expires)
+        _write_grant_stamp(target_user, stamp, expires=expires_at)
         install_expire_timer(prefix=prefix)
         if prefix is None:
             run_command(["systemctl", "reload", "polkit"], timeout=15)
@@ -229,13 +230,13 @@ def grant_service_lifecycle(
         "ok": True,
         "message": (
             f"Granted passwordless AV start/enable for user {target_user} "
-            f"until {format_expires(expires)}. "
+            f"until {format_expires(expires_at)}. "
             "Applies to systemctl-up + maldet-config only; stop/disable still prompt."
         ),
         "rules_path": str(path),
         "stamp_path": str(stamp),
         "granted_user": target_user,
-        "expires": format_expires(expires),
+        "expires": format_expires(expires_at),
         "actions": list(SERVICE_LIFECYCLE_ACTION_IDS),
     }
 
@@ -327,4 +328,10 @@ def migrate_grant_on_helper_install(*, prefix: Path | None = None) -> dict[str, 
     user = fields.get("user")
     if not user:
         return None
+    # Preserve remaining TTL when the existing stamp is still valid.
+    expires_raw = fields.get("expires")
+    exp = parse_expires(expires_raw) if expires_raw else None
+    clock = datetime.now(UTC)
+    if exp is not None and clock < exp:
+        return grant_service_lifecycle(user, prefix=prefix, expires=exp)
     return grant_service_lifecycle(user, prefix=prefix)

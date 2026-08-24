@@ -214,8 +214,8 @@ def _validate_clamonacc_list_path(flag: str, arg: str) -> str:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
             raise ValueError(f"clamonacc {flag} must be a regular file")
-        if st.st_mode & 0o002:
-            raise ValueError(f"clamonacc {flag} refuses world-writable list file")
+        if st.st_mode & 0o022:
+            raise ValueError(f"clamonacc {flag} refuses group- or world-writable list file")
     finally:
         os.close(fd)
     return f"{flag}={path}"
