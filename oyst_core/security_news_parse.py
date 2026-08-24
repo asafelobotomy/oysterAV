@@ -3,14 +3,26 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any
-from xml.etree.ElementTree import Element
+from typing import Any, Protocol
 
 import defusedxml.ElementTree as ET
 
 from oyst_core.security_news_sources import SEVERITY_RULES
+
+
+class Element(Protocol):
+    """Structural type for XML nodes produced by defusedxml."""
+
+    tag: Any
+    text: str | None
+    attrib: dict[str, str]
+
+    def __iter__(self) -> Iterator[Element]: ...
+    def itertext(self) -> Iterator[str]: ...
+
 
 _NVR_TITLE_RE = re.compile(
     r"^[a-zA-Z0-9._+-]+-[0-9][a-zA-Z0-9._+-]*-[0-9][a-zA-Z0-9._+]*$",

@@ -129,9 +129,7 @@ def present_ufw_multi_add_dialog(page: ShieldPage) -> None:
             page._set_status("Enter at least one port")
             return
         force = ssh_port_in_rules(rules)
-        labels = ", ".join(
-            f"{r['action']} {r['port']}/{r['proto']}" for r in rules[:6]
-        )
+        labels = ", ".join(f"{r['action']} {r['port']}/{r['proto']}" for r in rules[:6])
         extra = f" (+{len(rules) - 6} more)" if len(rules) > 6 else ""
         confirm_and_run(
             page,

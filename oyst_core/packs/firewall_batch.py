@@ -32,9 +32,7 @@ def normalize_batch_rules(rules: list[dict[str, Any]]) -> list[dict[str, str]]:
     # Reuse helper normalization by encoding then parsing.
     import json
 
-    argv = [
-        f"--rule={json.dumps(r, separators=(',', ':'), sort_keys=True)}" for r in rules
-    ]
+    argv = [f"--rule={json.dumps(r, separators=(',', ':'), sort_keys=True)}" for r in rules]
     return parse_ufw_batch_rules(argv)
 
 

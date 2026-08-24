@@ -31,6 +31,8 @@ def _is_safe_abs_path(path: str) -> bool:
     if not _PATH_RE.match(path):
         return False
     return ".." not in Path(path).parts
+
+
 _SSH_PROT_VALUES = frozenset({"2"})
 _SSH_ROOT_VALUES = frozenset({"unset"})
 

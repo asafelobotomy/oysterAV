@@ -34,7 +34,7 @@ def test_wrapper_cmd_rejects_group_writable(tmp_path: Path) -> None:
     dest.parent.mkdir(parents=True)
     dest.write_text("#!/bin/sh\n# oyst-virusevent\n", encoding="utf-8")
     dest.chmod(0o775)
-    # Path must match allowlisted suffix shape — use real home-shaped path via symlink? 
+    # Path must match allowlisted suffix shape — use real home-shaped path via symlink?
     # Validate on a constructed path that ends with the required suffix.
     home_shaped = Path.home() / ".local" / "share" / "oysterav" / "bin" / "oyst-virusevent"
     home_shaped.parent.mkdir(parents=True, exist_ok=True)

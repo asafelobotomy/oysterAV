@@ -167,9 +167,11 @@ class ShieldPage:
             rules_raw = data.get("rules")
             rules: dict[str, Any] = rules_raw if isinstance(rules_raw, dict) else {}
             entries_raw = rules.get("entries")
-            entries = [e for e in entries_raw if isinstance(e, dict)] if isinstance(
-                entries_raw, list
-            ) else []
+            entries = (
+                [e for e in entries_raw if isinstance(e, dict)]
+                if isinstance(entries_raw, list)
+                else []
+            )
             shield_firewall_ui.rebuild_rule_rows(
                 self,
                 entries,
@@ -237,9 +239,11 @@ class ShieldPage:
 
         def done(result: dict[str, Any]) -> bool:
             entries_raw = result.get("entries")
-            entries = [e for e in entries_raw if isinstance(e, dict)] if isinstance(
-                entries_raw, list
-            ) else []
+            entries = (
+                [e for e in entries_raw if isinstance(e, dict)]
+                if isinstance(entries_raw, list)
+                else []
+            )
             shield_firewall_ui.rebuild_rule_rows(
                 self,
                 entries,
