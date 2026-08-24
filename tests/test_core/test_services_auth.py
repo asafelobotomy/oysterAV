@@ -96,9 +96,7 @@ def test_install_privileged_helper_writes_policy(tmp_path: Path) -> None:
         patch(
             "oyst_core.privileged.install_privileged_helper._helper_script_text",
             return_value=(
-                "#!/usr/bin/python3\n"
-                "from oyst_core.privileged.oyst_helper import main\n"
-                "main()\n"
+                "#!/usr/bin/python3\nfrom oyst_core.privileged.oyst_helper import main\nmain()\n"
             ),
         ),
     ):
