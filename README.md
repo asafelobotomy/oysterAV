@@ -4,6 +4,8 @@
 
 <h1 align="center">oysterAV</h1>
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5R225QZH3)
+
 <p align="center">
   <strong>Linux security orchestrator</strong> — CLI-first backend with a thin GTK4 GUI.<br>
   ClamAV spine, pack adapters, quarantine, scheduling — without reimplementing engines.
