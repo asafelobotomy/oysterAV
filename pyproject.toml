@@ -29,7 +29,7 @@ Repository = "https://github.com/asafelobotomy/oysterAV"
 Issues = "https://github.com/asafelobotomy/oysterAV/issues"
 
 [project.optional-dependencies]
-gui = ["PyGObject>=3.56.3"]
+gui = ["PyGObject>=3.58.0"]
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
