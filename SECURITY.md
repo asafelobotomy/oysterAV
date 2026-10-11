@@ -17,10 +17,15 @@ Please **do not** open a public GitHub issue for security bugs that could enable
 privilege escalation, auth bypass, or remote/local code execution via oysterAV’s
 RPC, polkit helper, or host co-control paths.
 
-Prefer one of:
+Report privately through **GitHub private vulnerability reporting**:
+[Report a vulnerability](https://github.com/asafelobotomy/oysterAV/security/advisories/new)
+(Security tab → *Report a vulnerability*). Only the maintainers can see the
+report. Include enough detail to reproduce: version (`VERSION` /
+`oyst-cli version`), distro / OS, steps, and impact.
 
-1. **GitHub Security Advisories** — [Report a vulnerability](https://github.com/asafelobotomy/oysterAV/security/advisories/new) on this repository (private report to maintainers).
-2. If advisories are unavailable, email the maintainer contact listed on the [GitHub profile](https://github.com/asafelobotomy) with subject `oysterAV security` and enough detail to reproduce (version/`VERSION`, OS, steps, impact).
+If that form is unavailable to you, open a public issue that says only that you
+have a security report and need a private channel — no technical details — and a
+maintainer will follow up.
 
 We aim to acknowledge reports within **7 days** and to share a remediation plan
 or clarifying questions soon after. Coordinated disclosure: please wait until a

@@ -23,7 +23,7 @@ Living document mapping every GTK user-facing feature to CLI-first equivalents
 
 | GUI feature | CLI equivalent |
 |-------------|----------------|
-| Auto-start RPC backend on launch | `oyst-cli serve` / `oyst-cli serve --foreground` (flag kept for compatibility; always foreground; or systemd user unit in docs) |
+| Auto-start RPC backend on launch | GUI spawns a detached `oyst-cli serve --idle-exit 900` process (never an in-GUI thread); or run `oyst-cli serve` / a systemd user unit yourself |
 | Tab switcher (Dashboard / Scan / Shield / Quarantine / Settings) | No single command — use tab-specific commands below |
 | Global status bar (operational messages) | stderr/stdout from CLI commands |
 | Update alert (idle; yellow; above news) | **`oyst-cli updates check --json`** (`updates.check`) — oysterAV GitHub Release + pack packages |
@@ -69,7 +69,7 @@ Two-column layout (stacks vertically on narrow windows): **Scan** controls (left
 
 | GUI feature | RPC / client | CLI equivalent |
 |-------------|--------------|----------------|
-| **Run scan** | `job.start` (quarantine follows Settings `quarantine.auto`) | `oyst-cli scan [paths] --profile <p> [--quarantine] [--json]` |
+| **Run scan** | `job.start` (quarantine follows Settings `quarantine.auto`) | `oyst-cli scan [paths] --profile <p> [--quarantine --confirm] [--json]` |
 | Browse folder / Browse file / Clear path | — | Path arguments to `oyst-cli scan` |
 | Selected path label | — | — |
 | Profile: Quick / Full / Suite / Integrity / Custom | — (passed to scan) | `oyst-cli scan --profile quick\|full\|suite\|integrity\|custom` |
@@ -351,7 +351,7 @@ RPC methods invoked from GTK widgets (via `OystClient`) have CLI commands. Dashb
 | `quarantine.add` | `oyst-cli quarantine add --confirm` |
 | `pack.doctor` | `oyst-cli doctor --json` |
 | `pack.install` | `oyst-cli packs install <name>` |
-| `job.start` | `oyst-cli scan [paths] [--profile] [--quarantine]` |
+| `job.start` | `oyst-cli scan [paths] [--profile] [--quarantine --confirm]` |
 | `job.cancel` | `oyst-cli job cancel [--force]` |
 | `job.status` | `oyst-cli job status --json` |
 | `rkhunter.update` | `oyst-cli rkhunter update` |
