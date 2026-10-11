@@ -1,4 +1,4 @@
-oysterav (0.2.2-1) UNRELEASED; urgency=medium
+oysterav (0.2.3-1) UNRELEASED; urgency=medium
 
   * Sync scaffold to 0.2.2; GitHub Release .deb remains the community binary.
 

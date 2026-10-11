@@ -70,6 +70,6 @@
   <!-- No OARS 1.1 attribute applies (no user content sharing, chat, ads or purchases). -->
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.2.2" date="2026-07-27"/>
+    <release version="0.2.3" date="2026-10-11"/>
   </releases>
 </component>
