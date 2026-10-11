@@ -44,7 +44,7 @@ for Lite/Full mode as needed.
 
 install -d %{buildroot}/usr/lib/oysterav
 cat > %{buildroot}/usr/lib/oysterav/oyst-helper <<'EOF'
-#!/usr/bin/env python3
+#!/usr/bin/python3 -I
 from oyst_core.privileged.oyst_helper import main
 main()
 EOF
