@@ -437,8 +437,10 @@ def test_set_service_clamonacc_enable() -> None:
 
 
 def test_set_service_freshclam_timer() -> None:
+    """Lite mode toggles the distro unit (full mode uses the oysterAV user timer)."""
     mock_res = MagicMock(returncode=0, stdout="ok", stderr="")
     with (
+        patch("oyst_core.runtime.manifest.is_full_mode", return_value=False),
         patch("oyst_core.services._freshclam_timer_unit", return_value="clamav-freshclam.timer"),
         patch("oyst_core.services.run_systemctl_helper", return_value=mock_res) as helper,
         patch("oyst_core.services.SecurityAudit") as audit_cls,

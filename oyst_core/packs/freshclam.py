@@ -11,6 +11,7 @@ from oyst_core.packs.base import Pack, detect_distro_family, resolve_pack_binary
 from oyst_core.privileged.runner import run_command
 from oyst_core.runtime.bundles.clamav import (
     clamav_db_dir,
+    clamscan_database_args,
     freshclam_conf_path,
     update_clamav_signatures,
 )
@@ -50,14 +51,22 @@ class FreshclamPack(Pack):
             age = self.signature_age_hours()
             runtime_db = clamav_db_dir()
             yara_count = len(list(runtime_db.glob("*.yar"))) + len(list(runtime_db.glob("*.yara")))
+            ages = self.signature_ages()
             status.details = {
                 "signature_age_hours": age,
+                "runtime_age_hours": ages["runtime"],
+                "host_age_hours": ages["host"],
                 "tool_source": source,
                 "binary": path,
                 "yara_rules_in_db": yara_count,
                 "db_dir": str(runtime_db),
             }
-            if age is not None and age > 48:
+            if age is not None and age > 48 and clamscan_database_args():
+                status.message = (
+                    f"Virus definitions are {age:.0f}h old; run oyst-cli freshclam update "
+                    "or turn on the signature update timer in Settings → Services"
+                )
+            elif age is not None and age > 48:
                 family = detect_distro_family()
                 timer_hint = (
                     "sudo systemctl enable --now clamav-freshclam.timer"
@@ -69,20 +78,35 @@ class FreshclamPack(Pack):
                 )
         return status
 
-    def signature_age_hours(self) -> float | None:
+    def _newest_mtime(self, candidates: list[Path]) -> float | None:
         newest: float | None = None
-        runtime_db = clamav_db_dir()
-        candidates = list(DAILY_CVD) + [str(p) for p in runtime_db.glob("*.cvd")]
-        candidates.extend(str(p) for p in runtime_db.glob("*.cld"))
-        for cvd in candidates:
-            p = Path(cvd)
-            if p.exists():
+        for p in candidates:
+            try:
                 mtime = p.stat().st_mtime
-                if newest is None or mtime > newest:
-                    newest = mtime
-        if newest is None:
-            return None
-        return (datetime.now().timestamp() - newest) / 3600.0
+            except OSError:
+                continue
+            if newest is None or mtime > newest:
+                newest = mtime
+        return newest
+
+    def signature_ages(self) -> dict[str, float | None]:
+        """Age in hours of the private runtime DB and the host DB, separately."""
+        now = datetime.now().timestamp()
+        runtime_db = clamav_db_dir()
+        runtime = self._newest_mtime([*runtime_db.glob("*.cvd"), *runtime_db.glob("*.cld")])
+        host = self._newest_mtime([Path(p) for p in DAILY_CVD])
+        return {
+            "runtime": None if runtime is None else (now - runtime) / 3600.0,
+            "host": None if host is None else (now - host) / 3600.0,
+        }
+
+    def signature_age_hours(self) -> float | None:
+        """Age of the DB scans actually load (same rule as clamscan_database_args).
+
+        A fresh host DB must not mask a stale private DB that clamscan is using.
+        """
+        ages = self.signature_ages()
+        return ages["runtime"] if clamscan_database_args() else ages["host"]
 
     def update(self) -> tuple[bool, str]:
         path, _ = resolve_pack_binary("freshclam", "freshclam")

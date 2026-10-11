@@ -225,6 +225,8 @@ def save_config(config: OysterConfig) -> None:
     lines.append("")
     lines.append("[runtime]")
     lines.append(f"mode = {_toml_str(config.runtime.mode)}")
+    auto_sigs = "true" if config.runtime.auto_update_signatures else "false"
+    lines.append(f"auto_update_signatures = {auto_sigs}")
     lines.append("")
     lines.append("[firewall]")
     backend = config.firewall.managed_backend

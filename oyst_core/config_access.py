@@ -217,6 +217,8 @@ def set_config_value(key: str, value: str) -> None:
         if value not in ("full", "lite"):
             raise KeyError("runtime.mode must be 'full' or 'lite'")
         cfg.runtime.mode = cast(RuntimeMode, value)
+    elif key == "runtime.auto_update_signatures":
+        cfg.runtime.auto_update_signatures = _parse_bool(value)
     elif key == "schedule.enabled":
         cfg.schedule.enabled = _parse_bool(value)
     elif key == "schedule.profile":
@@ -328,6 +330,14 @@ def set_config_value(key: str, value: str) -> None:
         from oyst_core.packs.fangfrisch import FangfrischPack
 
         FangfrischPack().ensure_config(force=True)
+    elif key in ("runtime.mode", "runtime.auto_update_signatures") and old != value:
+        # Full mode owns a user timer for its private signature DB; lite uses the distro's.
+        from oyst_core.signature_timer import apply_signature_timer
+
+        try:
+            apply_signature_timer()
+        except (OSError, ValueError):
+            pass  # reported by `services status`; never blocks the config save
 
     from oyst_core.audit import SecurityAudit
 

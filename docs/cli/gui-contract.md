@@ -172,7 +172,7 @@ Probe tray + autostart: `oyst-cli desktop status --json`. Theme and desktop laun
 |-------------|--------------|----------------|
 | Privileged helper Install/Reinstall/Update | `helper.install` | `oyst-cli install-privileged-helper` (via Polkit) |
 | Passwordless service control | `auth.grant_service_lifecycle` / `auth.revoke_service_lifecycle` | `oyst-cli auth grant/revoke-service-lifecycle` |
-| Per-service on/off (clamd, freshclam-timer, fail2ban, maldet-monitor, schedule-linger) | `services.set` | `oyst-cli services set <name> on\|off` |
+| Per-service on/off (clamd, freshclam-timer, fail2ban, maldet-monitor, schedule-linger) | `services.set` | `oyst-cli services set <name> on\|off` (`freshclam-timer`: full mode = oysterAV user timer `oyst-signatures.timer`, no polkit; lite = distro freshclam unit) |
 | Clamonacc unit status (read-only) | `services.status` | Status only — enable/disable under **Real-time** |
 
 Clamonacc under Services is **status-only** (no `services.set` toggle). Paths and on-access enable live under **Real-time** (`clamonacc.*`). See also [Settings Services / Auth](#settings-services--auth-adr-007-wave-2).

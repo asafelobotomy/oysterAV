@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from oyst_core.config import load_config
 from oyst_core.events import EventLog
@@ -203,11 +204,16 @@ class JobOrchestrator(OrchestratorHelpersMixin):
                     state="running",
                     on_progress=on_progress,
                 )
+                scan_kwargs: dict[str, Any] = {"backend": backend, "profile": profile.value}
+                if getattr(pack, "supports_cancel", False):
+                    scan_kwargs["should_cancel"] = self.events.cancel_requested
                 try:
-                    findings = pack.scan_paths(scan_paths, backend=backend, profile=profile.value)
+                    findings = pack.scan_paths(scan_paths, **scan_kwargs)
                     result.findings.extend(findings)
                 except PartialScanError as exc:
                     result.findings.extend(exc.findings)
+                    if self.events.cancel_requested():
+                        return self._cancel_result(result, job_id, on_progress)
                     result.pack_errors.append(PackError(pack=name, error=str(exc)))
                 except Exception as exc:  # noqa: BLE001 — pack boundary
                     result.pack_errors.append(PackError(pack=name, error=str(exc)))

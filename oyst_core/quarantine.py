@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
-import json
 import os
 import re
 import sqlite3
@@ -15,6 +15,7 @@ from pathlib import Path
 from oyst_core.audit import SecurityAudit
 from oyst_core.config import load_config
 from oyst_core.models import QuarantineEntry
+from oyst_core.quarantine_meta import apply_restored_metadata, capture_metadata, read_metadata
 
 
 def _write_all(fd: int, data: bytes) -> None:
@@ -188,7 +189,7 @@ class QuarantineVault:
                         sha,
                         threat_name,
                         datetime.now().isoformat(),
-                        json.dumps({}),
+                        capture_metadata(st),
                     ),
                 )
                 entry_id = int(cur.lastrowid or 0)
@@ -210,10 +211,8 @@ class QuarantineVault:
         finally:
             for fd in (src_fd, parent_fd):
                 if fd >= 0:
-                    try:
+                    with contextlib.suppress(OSError):
                         os.close(fd)
-                    except OSError:
-                        pass
         return QuarantineEntry(
             id=entry_id,
             original_path=str(src),
@@ -259,9 +258,10 @@ class QuarantineVault:
         vault = self._contained_vault_path(entry.vault_path)
         if not vault.exists():
             raise FileNotFoundError(entry.vault_path)
-        current = self._sha256(vault)
-        if current != entry.sha256:
+        if self._sha256(vault) != entry.sha256:
             raise ValueError("vault file hash mismatch — possible tampering")
+        with self._connect() as conn:
+            meta = read_metadata(conn, entry_id)
         dest = Path(entry.original_path).expanduser()
         if not dest.is_absolute() or dest.name in ("", ".", ".."):
             raise ValueError(f"invalid restore destination: {dest}")
@@ -285,12 +285,11 @@ class QuarantineVault:
                 with open(vault, "rb") as src_f:
                     for chunk in iter(lambda: src_f.read(65536), b""):
                         _write_all(dest_fd, chunk)
+                apply_restored_metadata(dest_fd, meta)
                 os.fsync(dest_fd)
             except BaseException:
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(name, dir_fd=parent_fd)
-                except OSError:
-                    pass
                 raise
             finally:
                 os.close(dest_fd)

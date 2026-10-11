@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 
@@ -14,6 +16,8 @@ class CommandResult:
     returncode: int
     stdout: str
     stderr: str
+    # "cancel" / "timeout" when run_command_cancellable stopped the process.
+    stopped: str | None = None
 
 
 ALLOWED_COMMANDS = frozenset(
@@ -220,14 +224,63 @@ def run_command(
     return CommandResult(proc.returncode, proc.stdout, proc.stderr)
 
 
+def run_command_cancellable(
+    argv: Sequence[str],
+    *,
+    timeout: int = 3600,
+    should_cancel: Callable[[], bool] | None = None,
+    poll: float = 1.0,
+    grace: float = 5.0,
+) -> CommandResult:
+    """Like run_command, but stoppable mid-run; keeps output read so far.
+
+    On cancel or timeout the process gets SIGTERM, then SIGKILL after
+    ``grace`` seconds. ``stopped`` on the result says why it ended early.
+    """
+    if not argv:
+        raise ValueError("empty argv")
+    base = _command_basename(argv)
+    if base not in ALLOWED_COMMANDS:
+        raise ValueError(f"command not allowlisted: {base}")
+    proc = subprocess.Popen(  # noqa: S603 — allowlisted argv, no shell
+        list(argv),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        errors="backslashreplace",
+        env=scrubbed_env_for_argv(argv),
+    )
+    deadline = time.monotonic() + timeout
+    stopped: str | None = None
+    while stopped is None:
+        try:
+            # Retrying communicate() after TimeoutExpired loses no output.
+            out, err = proc.communicate(timeout=poll)
+            return CommandResult(proc.returncode, out, err)
+        except subprocess.TimeoutExpired:
+            pass
+        if should_cancel is not None and should_cancel():
+            stopped = "cancel"
+        elif time.monotonic() >= deadline:
+            stopped = "timeout"
+    proc.terminate()
+    try:
+        out, err = proc.communicate(timeout=grace)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        out, err = proc.communicate()
+    return CommandResult(proc.returncode, out or "", err or "", stopped=stopped)
+
+
+_VERSION_RE = re.compile(r"\d+(?:\.\d+)*")
+
+
 def parse_version(text: str) -> tuple[int, ...]:
-    parts: list[int] = []
-    for token in text.replace("_", ".").split():
-        for piece in token.split("."):
-            if piece.isdigit():
-                parts.append(int(piece))
-                break
-    return tuple(parts) if parts else (0,)
+    """First dotted number in ``text``: ``"ClamAV 1.5.4-1"`` -> ``(1, 5, 4)``."""
+    match = _VERSION_RE.search(text.replace("_", "."))
+    if not match:
+        return (0,)
+    return tuple(int(piece) for piece in match.group(0).split("."))
 
 
 def version_gte(found: str | None, minimum: str) -> bool:

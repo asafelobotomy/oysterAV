@@ -83,8 +83,25 @@ def run_full_runtime_bootstrap(
     else:
         steps.append({"step": "maintenance", "ok": True, "skipped": True})
 
+    if update_signatures:
+        # Keep the private DB fresh afterwards (user timer; honours the opt-out).
+        from oyst_core.signature_timer import apply_signature_timer
+
+        try:
+            timer = apply_signature_timer()
+        except (OSError, ValueError) as exc:
+            timer = {"ok": False, "message": str(exc)}
+        steps.append(
+            {
+                "step": "signature-timer",
+                "ok": bool(timer.get("ok")),
+                "advisory": True,
+                "message": str(timer.get("message", "")),
+            },
+        )
+
     ok_count = sum(1 for s in steps if s.get("ok"))
-    success = all(bool(s.get("ok") or s.get("skipped")) for s in steps)
+    success = all(bool(s.get("ok") or s.get("skipped") or s.get("advisory")) for s in steps)
     emit_progress(on_progress, "bootstrap", 100)
     result: dict[str, Any] = {
         "ok": success,

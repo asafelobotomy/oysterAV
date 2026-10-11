@@ -29,3 +29,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         path = str(item.fspath)
         if "/test_gui/" in path or item.get_closest_marker("gui"):
             item.add_marker(skip_gi)
+
+
+@pytest.fixture(autouse=True)
+def _sandbox_signature_timer(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Never write ~/.config/systemd/user units or call real `systemctl --user`.
+
+    Bootstrap / config.set paths reconcile the full-mode signature timer; tests
+    that exercise it re-patch these with their own fakes.
+    """
+    from oyst_core import signature_timer
+    from oyst_core.privileged.runner import CommandResult
+
+    unit_dir = tmp_path_factory.mktemp("systemd-user")
+    monkeypatch.setattr(signature_timer, "_user_systemd_dir", lambda: unit_dir)
+    monkeypatch.setattr(
+        signature_timer, "_run_user_systemctl", lambda _args: CommandResult(0, "", "")
+    )

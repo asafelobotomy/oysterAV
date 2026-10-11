@@ -19,11 +19,22 @@ def freshclam_group() -> None:
 
 
 @freshclam_group.command("update")
+@click.option(
+    "--fangfrisch",
+    "with_fangfrisch",
+    is_flag=True,
+    help="Also refresh unofficial signatures when fangfrisch is installed",
+)
 @click.option("--json", "json_mode", is_flag=True)
-def freshclam_update(json_mode: bool) -> None:
+def freshclam_update(with_fangfrisch: bool, json_mode: bool) -> None:
     """Update virus signatures (upstream: freshclam)."""
     ok, msg = FreshclamPack().update()
-    payload = {"ok": ok, "message": msg}
+    payload: dict[str, object] = {"ok": ok, "message": msg}
+    fang = FangfrischPack()
+    if with_fangfrisch and fang.doctor().installed:
+        # Third-party feeds are best-effort; the official update decides the exit code.
+        fang_ok, fang_msg = fang.refresh()
+        payload["fangfrisch"] = {"ok": fang_ok, "message": fang_msg[:500]}
     if json_mode:
         emit(payload, json_mode=True)
     else:

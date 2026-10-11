@@ -28,6 +28,7 @@ def _quarantined(vault: QuarantineVault, tmp_path: Path) -> tuple[Path, int]:
     work.mkdir()
     sample = work / "sample.bin"
     sample.write_bytes(b"payload" * 1000)
+    sample.chmod(0o644)  # umask-independent original mode
     return sample, vault.add(str(sample), "t").id
 
 
@@ -37,7 +38,8 @@ def test_restore_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     restored = vault.restore(entry_id)
     assert restored == sample
     assert sample.read_bytes() == b"payload" * 1000
-    assert sample.stat().st_mode & 0o777 == 0o600
+    # Original mode comes back, masked to <= 0755 and never below owner rw.
+    assert sample.stat().st_mode & 0o777 == 0o644
     assert vault.get(entry_id) is None
 
 

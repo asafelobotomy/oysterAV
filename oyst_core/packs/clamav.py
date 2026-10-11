@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from oyst_core.audit import SecurityAudit
@@ -16,24 +19,38 @@ from oyst_core.models import (
     ScanProfile,
 )
 from oyst_core.packs.base import Pack, detect_distro_family, resolve_pack_binary
+from oyst_core.packs.clamav_version import security_advisory
+from oyst_core.packs.clamd_client import (
+    CLAMD_SOCKETS,
+    clamd_ping,
+    clamdscan_argv,
+    discover_endpoint,
+)
 from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.helper_clamd_unit import host_daily_signatures_present
-from oyst_core.privileged.runner import CommandResult, run_command, version_gte
+from oyst_core.privileged.runner import (
+    CommandResult,
+    run_command,
+    run_command_cancellable,
+    version_gte,
+)
 from oyst_core.privileged.systemctl_route import run_systemctl_helper
 from oyst_core.runtime.bundles.clamav import clamav_db_dir, clamscan_database_args
 from oyst_core.runtime.manifest import is_full_mode
-from oyst_core.scan_excludes import clamav_exclude_dir_regex, merged_clamav_exclude_dirs
+from oyst_core.scan_excludes import (
+    clamav_exclude_dir_regex,
+    merged_clamav_exclude_dirs,
+    path_under_any,
+)
 
-CLAMD_SOCKETS = [
-    "/run/clamav/clamd.ctl",
-    "/run/clamav/clamd.sock",
-    "/var/run/clamav/clamd.ctl",
-    "/var/run/clamav/clamd.sock",
-]
+__all__ = ["CLAMD_SOCKETS", "ClamAVPack"]
 
 # Default clamscan limits live in ScanDefaults (config.toml [scan]).
 
 IGNORE_SIGS_FILENAME = "oysterav.ign2"
+
+# clamscan can take hours on a full home scan.
+SCAN_TIMEOUT_SEC = 7200
 
 
 class ClamAVPack(Pack):
@@ -56,7 +73,12 @@ class ClamAVPack(Pack):
                 continue
         return None
 
+    supports_cancel = True
+
     def _clamd_socket(self) -> str | None:
+        configured = discover_endpoint().local_socket
+        if configured and Path(configured).exists():
+            return configured
         for sock in CLAMD_SOCKETS:
             if Path(sock).exists():
                 return sock
@@ -165,24 +187,44 @@ class ClamAVPack(Pack):
         elif installed:
             sock = self._clamd_socket()
             clamd_up = self.clamd_running()
+            full = is_full_mode()
             status.details = {
                 "clamd_running": clamd_up,
                 "socket": sock,
-                "backend": "clamd" if clamd_up else "clamscan",
+                "backend": self.resolve_backend("auto"),
                 "binary": clamscan_path or "",
                 "tool_source": source,
             }
+            advisory = security_advisory(version)
+            if advisory:
+                status.details["advisory"] = advisory
+            if self.ignore_sigs_blocked():
+                status.details["ignore_sigs_note"] = (
+                    "Ignored signatures can't be applied to the system virus definitions "
+                    "without admin rights; use full mode to apply them"
+                )
             if version and version.startswith("0."):
                 status.version_ok = False
                 status.message = "ClamAV 0.x is EOL and blocked from signature updates"
-            elif not clamd_up:
+            elif advisory:
+                status.message = advisory
+            elif full and clamd_up:
+                status.details["clamd_note"] = (
+                    "clamd uses the system's virus definitions; oysterAV scans use its own"
+                )
+            elif not clamd_up and not full:
                 status.message = self._clamd_service_hint()
         return status
 
     def resolve_backend(self, backend: str = "auto") -> str:
+        """Pick clamd only when it answers PING; full mode keeps private signatures."""
         if backend in ("clamd", "clamscan"):
             return backend
-        if self.clamd_running() and resolve_pack_binary("clamav", "clamdscan")[0]:
+        # Full mode: clamd loads the host DB and never sees oysterav.ign2.
+        if is_full_mode():
+            return "clamscan"
+        clamdscan = resolve_pack_binary("clamav", "clamdscan")[0]
+        if clamdscan and self.clamd_running() and clamd_ping(clamdscan):
             return "clamd"
         return "clamscan"
 
@@ -201,15 +243,25 @@ class ClamAVPack(Pack):
         target = self.ignore_sigs_path()
         if not cfg.clamav.ignore_sigs:
             if target.is_file():
-                try:
+                with contextlib.suppress(OSError):
                     target.unlink()
-                except OSError:
-                    pass
             return None
-        target.parent.mkdir(parents=True, exist_ok=True)
-        body = "\n".join(cfg.clamav.ignore_sigs) + "\n"
-        target.write_text(body, encoding="utf-8")
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("\n".join(cfg.clamav.ignore_sigs) + "\n", encoding="utf-8")
+        except OSError:
+            # Lite mode: /var/lib/clamav is clamav-owned. Never fail the scan over it.
+            return None
         return target
+
+    def ignore_sigs_blocked(self) -> bool:
+        """True when ignored signatures are configured but can't be written."""
+        if not load_config().clamav.ignore_sigs:
+            return False
+        target = self.ignore_sigs_path()
+        if target.exists():
+            return not os.access(target, os.W_OK)
+        return not os.access(target.parent, os.W_OK)
 
     def scan_limit_flags(self, profile: ScanProfile | str) -> list[str]:
         """Build clamscan size/recursion limits from config."""
@@ -244,6 +296,7 @@ class ClamAVPack(Pack):
         path: str,
         backend: str = "auto",
         profile: ScanProfile | str = ScanProfile.QUICK,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> CommandResult:
         self.ensure_ignore_sigs()
         target = Path(path).expanduser().resolve()
@@ -252,17 +305,18 @@ class ClamAVPack(Pack):
         bin_path, _source = resolve_pack_binary("clamav", binary)
         if not bin_path:
             raise FileNotFoundError(f"{binary} not found")
-        argv = [bin_path, "-r", "--stdout", str(target)]
-        argv.extend(clamscan_database_args())
         if cmd == "clamd":
-            sock = self._clamd_socket()
-            if sock:
-                argv[1:1] = ["--config-file=/dev/null"]
-        if cmd == "clamscan":
+            # clamdscan ignores -r/--database/limits/--exclude-dir (clamd.conf owns them).
+            profile_value = profile.value if isinstance(profile, ScanProfile) else str(profile)
+            multiscan = profile_value in (ScanProfile.FULL.value, ScanProfile.SUITE.value)
+            argv = clamdscan_argv(bin_path, str(target), multiscan=multiscan)
+        else:
+            argv = [bin_path, "-r", "--stdout", str(target)]
+            argv.extend(clamscan_database_args())
             self._append_profile_flags(argv, profile)
             self._append_exclude_dirs(argv)
             self._append_profile_scan_mode(argv)
-        return run_command(argv, timeout=7200)
+        return run_command_cancellable(argv, timeout=SCAN_TIMEOUT_SEC, should_cancel=should_cancel)
 
     def parse_findings(self, result: CommandResult) -> list[Finding]:
         """Parse ``<path>: <threat> FOUND`` lines from clamscan/clamdscan stdout.
@@ -304,19 +358,35 @@ class ClamAVPack(Pack):
         paths: list[str],
         backend: str = "auto",
         profile: ScanProfile | str = ScanProfile.QUICK,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> list[Finding]:
         all_findings: list[Finding] = []
         failures: list[str] = []
+        resolved = self.resolve_backend(backend)
+        # clamd ignores --exclude-dir: drop hits under excluded dirs (e.g. the vault).
+        excluded = (
+            [str(Path(d).expanduser()) for d in merged_clamav_exclude_dirs()]
+            if resolved == "clamd"
+            else []
+        )
         for p in paths:
             try:
-                res = self.scan(p, backend=backend, profile=profile)
+                res = self.scan(p, backend=resolved, profile=profile, should_cancel=should_cancel)
             except (FileNotFoundError, OSError) as exc:
                 raise RuntimeError(str(exc)) from exc
-            all_findings.extend(self.parse_findings(res))
+            found = self.parse_findings(res)
+            all_findings.extend(f for f in found if not path_under_any(f.path, excluded))
+            if res.stopped == "cancel":
+                raise PartialScanError("scan stopped; results may be incomplete", all_findings)
+            if res.stopped == "timeout":
+                failures.append(f"{p}: timed out after {SCAN_TIMEOUT_SEC // 60} minutes")
+                continue
             # clamscan/clamdscan: 0 clean, 1 virus found, >=2 error (DB load failure,
             # unreadable files, bad option). An error is never a clean result.
             if res.returncode not in (0, 1):
-                detail = (res.stderr or "").strip().splitlines()
+                detail = (res.stderr or "").strip().splitlines() or [
+                    ln for ln in res.stdout.splitlines() if ln.startswith("ERROR:")
+                ]
                 failures.append(
                     f"{p}: exit {res.returncode}" + (f" ({detail[-1][:200]})" if detail else "")
                 )

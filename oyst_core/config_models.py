@@ -175,6 +175,8 @@ class RuntimeConfig(BaseModel):
     """Install/delivery mode only — PE scan mode lives under scan.clamav_profile."""
 
     mode: RuntimeMode = "full"
+    # Full mode only: oysterAV user timer refreshes the private signature DB.
+    auto_update_signatures: bool = True
 
 
 class FirewallConfig(BaseModel):

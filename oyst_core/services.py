@@ -103,8 +103,7 @@ def services_status() -> dict[str, object]:
     clamonacc_pack = ClamonaccPack()
     clamonacc_doc = clamonacc_pack.doctor()
     clamonacc_unit = _clamonacc_systemd_unit()
-    fresh_unit = _freshclam_timer_unit()
-    fresh = _systemctl_probe(fresh_unit)
+    fresh_entry = _freshclam_timer_status()
     f2b_doc = Fail2banPack().doctor()
     f2b_details = f2b_doc.details if isinstance(f2b_doc.details, dict) else {}
     f2b_unit = _systemctl_probe("fail2ban")
@@ -139,14 +138,7 @@ def services_status() -> dict[str, object]:
             "unit": clamonacc_unit,
             "details": clamonacc_doc.model_dump(),
         },
-        "freshclam-timer": {
-            "name": "freshclam-timer",
-            "kind": "systemctl",
-            "running": bool(fresh.get("active")),
-            "enabled": bool(fresh.get("enabled")),
-            "unit": fresh_unit,
-            "details": fresh,
-        },
+        "freshclam-timer": fresh_entry,
         "fail2ban": {
             "name": "fail2ban",
             "kind": "systemctl",
@@ -172,6 +164,34 @@ def services_status() -> dict[str, object]:
         },
     }
     return {"services": services, "names": list(SERVICE_NAMES)}
+
+
+def _freshclam_timer_status() -> dict[str, object]:
+    """Full mode: oysterAV user timer (private DB). Lite: the distro freshclam unit."""
+    from oyst_core.runtime.manifest import is_full_mode
+
+    if is_full_mode():
+        from oyst_core.signature_timer import signature_timer_status
+
+        user = signature_timer_status()
+        return {
+            "name": "freshclam-timer",
+            "kind": "user-timer",
+            "running": bool(user.get("active")),
+            "enabled": bool(user.get("enabled")),
+            "unit": user.get("unit"),
+            "details": user,
+        }
+    unit = _freshclam_timer_unit()
+    probe = _systemctl_probe(unit)
+    return {
+        "name": "freshclam-timer",
+        "kind": "systemctl",
+        "running": bool(probe.get("active")),
+        "enabled": bool(probe.get("enabled")),
+        "unit": unit,
+        "details": probe,
+    }
 
 
 def load_clamonacc_enabled() -> bool:
@@ -221,6 +241,22 @@ def set_service(
         return {"ok": ok, "name": name, "state": state, "boot": boot, "message": msg}
 
     if name == "freshclam-timer":
+        from oyst_core.runtime.manifest import is_full_mode
+
+        if is_full_mode():
+            from oyst_core.signature_timer import UNIT_TIMER, set_auto_update
+
+            result = set_auto_update(on)
+            ok = bool(result.get("ok"))
+            audit.log("services.set", name, success=ok, data={"state": state, "unit": UNIT_TIMER})
+            return {
+                "ok": ok,
+                "name": name,
+                "state": state,
+                "boot": boot,
+                "unit": UNIT_TIMER,
+                "message": str(result.get("message", "")),
+            }
         unit = _freshclam_timer_unit()
         ok, msg = _systemctl_set(unit, on=on, boot=boot or unit.endswith(".timer"))
         audit.log(

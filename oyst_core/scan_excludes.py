@@ -63,3 +63,8 @@ def merged_clamav_exclude_dirs() -> list[str]:
 def maldet_ignore_paths_value() -> str:
     """Space-separated paths for LMD ignore_paths conf."""
     return " ".join(default_scan_exclude_dirs())
+
+
+def path_under_any(path: str, roots: list[str]) -> bool:
+    """True when ``path`` equals or sits below one of ``roots`` (plain prefix, no regex)."""
+    return any(path == root or path.startswith(root.rstrip("/") + "/") for root in roots)
