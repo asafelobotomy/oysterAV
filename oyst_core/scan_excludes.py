@@ -32,12 +32,27 @@ def default_scan_exclude_dirs() -> list[str]:
     return out
 
 
+# POSIX ERE metacharacters (clamscan --exclude-dir is an extended regex).
+_ERE_SPECIAL = frozenset(".[]()*+?{}|^$\\")
+
+
+def clamav_exclude_dir_regex(path: str) -> str:
+    """Anchored regex matching ``path`` and its subtree only (not ``/optional``)."""
+    escaped = "".join(f"\\{ch}" if ch in _ERE_SPECIAL else ch for ch in path)
+    return f"^{escaped}(/|$)"
+
+
 def merged_clamav_exclude_dirs() -> list[str]:
-    """Config excludes plus oysterAV defaults."""
-    cfg = load_config().scan.exclude_dirs
+    """Config excludes plus oysterAV defaults (absolute paths only)."""
+    cfg = [str(Path(p).expanduser()) for p in load_config().scan.exclude_dirs]
     defaults = default_scan_exclude_dirs()
-    seen = {str(Path(p).expanduser()) for p in cfg}
-    merged = [str(Path(p).expanduser()) for p in cfg]
+    seen: set[str] = set()
+    merged: list[str] = []
+    # Relative entries ("." / "cache") would match anywhere: drop legacy ones.
+    for path in cfg:
+        if Path(path).is_absolute() and path not in seen:
+            merged.append(path)
+            seen.add(path)
     for path in defaults:
         if path not in seen:
             merged.append(path)

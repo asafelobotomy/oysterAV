@@ -166,7 +166,11 @@ def test_maldet_filters_self_signature_path() -> None:
             message="hit",
         ),
     ]
-    kept = filter_malware_findings(findings)
+    with patch(
+        "oyst_core.packs.maldet_parse.runtime_maldet_prefix",
+        return_value=Path("/home/u/.local/share/oysterav/runtime/x86_64/maldetect"),
+    ):
+        kept = filter_malware_findings(findings)
     assert len(kept) == 1
     assert kept[0].path == "/tmp/evil.bin"
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -234,7 +235,72 @@ def test_vault_add_refuses_scanner_basename(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     vault = _vault(tmp_path, monkeypatch)
-    scanner = tmp_path / "clamscan"
+    runtime = tmp_path / "runtime"
+    (runtime / "bin").mkdir(parents=True)
+    monkeypatch.setattr("oyst_core.quarantine_guards.runtime_root", lambda: runtime)
+    monkeypatch.setattr("oyst_core.quarantine_guards.runtime_bin_dir", lambda: runtime / "bin")
+    scanner = runtime / "bin" / "clamscan"
     scanner.write_bytes(b"fake")
-    with pytest.raises(ValueError, match="scanner binary"):
+    with pytest.raises(ValueError, match="refusing"):
         vault.add(str(scanner), "Eicar")
+    # Same basename outside real install/runtime dirs is a normal detection.
+    decoy = tmp_path / "Downloads" / "clamscan"
+    decoy.parent.mkdir()
+    decoy.write_bytes(b"fake")
+    from oyst_core.quarantine_guards import quarantine_refuse_reason
+
+    assert quarantine_refuse_reason(str(decoy)) is None
+
+
+def test_quarantine_add_parent_swap_never_deletes_victim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit S4: swapping a parent dir for a symlink mid-copy must not hit the victim."""
+    from oyst_core import quarantine as q_mod
+
+    vault = _vault(tmp_path, monkeypatch)
+    attacker = tmp_path / "attacker"
+    (attacker / "d").mkdir(parents=True)
+    (attacker / "d" / ".bashrc").write_bytes(b"X5O!P%@AP eicar-ish")
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / ".bashrc").write_bytes(b"victim config")
+
+    real_write_all = q_mod._write_all
+    swapped = False
+
+    def _swap_then_write(fd: int, data: bytes) -> None:
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            (attacker / "d").rename(attacker / "d-old")
+            (attacker / "d").symlink_to(victim)
+        real_write_all(fd, data)
+
+    monkeypatch.setattr(q_mod, "_write_all", _swap_then_write)
+    entry = vault.add(str(attacker / "d" / ".bashrc"), "Eicar")
+    assert (victim / ".bashrc").read_bytes() == b"victim config"
+    assert not (attacker / "d-old" / ".bashrc").exists()
+    assert entry.original_path == str(attacker / "d-old" / ".bashrc")
+    assert Path(entry.vault_path).read_bytes() == b"X5O!P%@AP eicar-ish"
+
+
+def test_open_dir_nofollow_refuses_symlink_component(tmp_path: Path) -> None:
+    from oyst_core.quarantine import _open_dir_nofollow
+
+    real = tmp_path / "real" / "sub"
+    real.mkdir(parents=True)
+    (tmp_path / "link").symlink_to(tmp_path / "real")
+    os.close(_open_dir_nofollow(real))
+    with pytest.raises(OSError):
+        _open_dir_nofollow(tmp_path / "link" / "sub")
+
+
+def test_quarantine_add_long_filename(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    vault = _vault(tmp_path, monkeypatch)
+    sample = tmp_path / ("a" * 250)
+    sample.write_bytes(b"evil")
+    entry = vault.add(str(sample), "Eicar")
+    assert not sample.exists()
+    assert entry.original_path == str(sample)
+    assert Path(entry.vault_path).read_bytes() == b"evil"

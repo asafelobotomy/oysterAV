@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from oyst_core import rpc_progress
 from oyst_core.config import setup_status
+from oyst_core.rpc_handlers.params import opt_bool, opt_str, req_str
 
 if TYPE_CHECKING:
     from oyst_core.rpc_handlers import RpcContext
@@ -30,14 +32,19 @@ def handle_pack_install(params: dict[str, Any], ctx: RpcContext) -> Any:
     from oyst_core.doctor_cache import invalidate_doctor_cache
     from oyst_core.pack_install import install_pack
 
-    install_result = install_pack(
-        str(params["name"]),
-        confirm_aur=bool(params.get("confirm_aur", False)),
-    )
+    name = req_str(params, "name")
+    try:
+        install_result = install_pack(
+            name,
+            confirm_aur=opt_bool(params, "confirm_aur"),
+            on_progress=rpc_progress.callback_for(params),
+        )
+    finally:
+        rpc_progress.finish(params)
     invalidate_doctor_cache()
     ctx.audit.log(
         "pack.install",
-        str(params["name"]),
+        name,
         success=install_result.ok,
         data={"mode": install_result.mode, "strategy": install_result.strategy},
     )
@@ -68,17 +75,17 @@ def handle_setup_run(params: dict[str, Any], _ctx: RpcContext) -> Any:
         firewall_backend = raw_fw.strip().lower()
 
     result = run_setup(
-        skip_packs=bool(params.get("skip_packs", False)),
-        skip_schedule=bool(params.get("skip_schedule", False)),
-        skip_bootstrap=bool(params.get("skip_bootstrap", False)),
-        skip_harden=bool(params.get("skip_harden", False)),
-        confirm_aur=bool(params.get("confirm_aur", False)),
+        skip_packs=opt_bool(params, "skip_packs"),
+        skip_schedule=opt_bool(params, "skip_schedule"),
+        skip_bootstrap=opt_bool(params, "skip_bootstrap"),
+        skip_harden=opt_bool(params, "skip_harden"),
+        confirm_aur=opt_bool(params, "confirm_aur"),
         auto_quarantine=params.get("auto_quarantine"),
-        schedule_profile=str(params.get("schedule_profile", "quick")),
-        full_bootstrap=bool(params.get("full_bootstrap", True)),
-        enable_linger=bool(params.get("enable_linger", False)),
-        enable_firewall=bool(params.get("enable_firewall", True)),
-        mark_complete=bool(params.get("mark_complete", True)),
+        schedule_profile=opt_str(params, "schedule_profile") or "quick",
+        full_bootstrap=opt_bool(params, "full_bootstrap", True),
+        enable_linger=opt_bool(params, "enable_linger"),
+        enable_firewall=opt_bool(params, "enable_firewall", True),
+        mark_complete=opt_bool(params, "mark_complete", True),
         packs=packs,
         harden_include=harden_include,
         firewall_backend=firewall_backend,

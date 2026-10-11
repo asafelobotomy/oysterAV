@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,6 +18,10 @@ from oyst_core.quarantine_guards import quarantine_refuse_reason
 if TYPE_CHECKING:
     from oyst_core.events import EventLog
     from oyst_core.registry import PackRegistry
+
+
+# Must stay well under events_jobs.STALE_JOB_HEARTBEAT.
+JOB_HEARTBEAT_INTERVAL_SEC = 60.0
 
 
 class OrchestratorHelpersMixin:
@@ -35,6 +40,7 @@ class OrchestratorHelpersMixin:
         state: str,
         on_progress: Callable[[str, float], None] | None,
     ) -> None:
+        self._ensure_job_heartbeat(job_id)
         self.events.set_job_progress(
             job_id,
             pack=pack,
@@ -61,6 +67,26 @@ class OrchestratorHelpersMixin:
             pass
         if on_progress is not None:
             on_progress(pack or message, percent)
+
+    def _ensure_job_heartbeat(self, job_id: str) -> None:
+        """Keep the job lock's heartbeat fresh while a pack blocks for a long time."""
+        started: set[str] = self.__dict__.setdefault("_heartbeat_jobs", set())
+        if job_id in started:
+            return
+        started.add(job_id)
+        events = self.events
+
+        def _beat() -> None:
+            stop = threading.Event()
+            while not stop.wait(JOB_HEARTBEAT_INTERVAL_SEC):
+                try:
+                    if not events.touch_job_heartbeat(job_id):
+                        break  # released or taken over: stop beating
+                except Exception:  # noqa: BLE001 — heartbeat must never crash
+                    break
+            started.discard(job_id)
+
+        threading.Thread(target=_beat, name=f"job-heartbeat-{job_id}", daemon=True).start()
 
     def _run_audit_pack(self, pack: object) -> list[Finding]:
         """Run audit-only packs (e.g. lynis) and map results to findings."""
@@ -146,13 +172,14 @@ class OrchestratorHelpersMixin:
                 "job_id": active,
             }
         if self.events.cancel_requested():
-            prev = self.events.force_release_job_lock()
+            # active_job() already dropped the lock if the worker stopped heartbeating;
+            # a still-live job keeps its lock (use force=True / clear_job to override).
             return {
                 "ok": True,
                 "cancelled": True,
-                "cleared": True,
-                "message": "job lock cleared (cancel was already pending)",
-                "job_id": prev,
+                "cleared": False,
+                "message": "cancel already pending",
+                "job_id": active,
             }
         requested = self.events.request_cancel(active)
         return {

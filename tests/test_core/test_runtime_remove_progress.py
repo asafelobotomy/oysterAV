@@ -46,7 +46,7 @@ def test_download_file_reports_increasing_percent(tmp_path: Path) -> None:
         seen.append((stage, percent))
 
     with patch(
-        "oyst_core.runtime.download.urlopen",
+        "oyst_core.runtime.download.https_urlopen",
         return_value=_FakeResponse(payload),
     ):
         import hashlib

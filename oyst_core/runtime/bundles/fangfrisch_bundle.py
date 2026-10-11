@@ -11,6 +11,24 @@ from pathlib import Path
 from oyst_core.runtime.manifest import record_artifact, runtime_bin_dir, runtime_root
 from oyst_core.runtime.progress import ProgressCallback, emit_progress
 
+# Hash-pinned closure of fangfrisch==1.9.2 (ships in the wheel next to this module),
+# so pip never resolves transitive deps live or builds an sdist.
+FANGFRISCH_REQUIREMENTS = Path(__file__).with_name("fangfrisch-requirements.txt")
+
+
+def _pip_install_argv(pip: Path) -> list[str]:
+    return [
+        str(pip),
+        "install",
+        "--disable-pip-version-check",
+        "--require-hashes",
+        "--no-deps",
+        "--only-binary",
+        ":all:",
+        "-r",
+        str(FANGFRISCH_REQUIREMENTS),
+    ]
+
 
 def install_fangfrisch_runtime(*, on_progress: ProgressCallback | None = None) -> dict[str, object]:
     """Install fangfrisch into a private venv under the runtime root."""
@@ -42,9 +60,11 @@ def install_fangfrisch_runtime(*, on_progress: ProgressCallback | None = None) -
     if not pip.is_file():
         return {"ok": False, "message": "pip missing after venv creation"}
 
+    if not FANGFRISCH_REQUIREMENTS.is_file():
+        return {"ok": False, "message": f"missing {FANGFRISCH_REQUIREMENTS.name}"}
     emit_progress(on_progress, "pip", 40)
     install = subprocess.run(
-        [str(pip), "install", "--disable-pip-version-check", "fangfrisch==1.9.2"],
+        _pip_install_argv(pip),
         capture_output=True,
         text=True,
         timeout=900,

@@ -7,7 +7,14 @@ from pathlib import Path
 
 from oyst_core.audit import SecurityAudit
 from oyst_core.config import load_config
-from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier, ScanProfile
+from oyst_core.models import (
+    Finding,
+    FindingSeverity,
+    PackStatus,
+    PackTier,
+    PartialScanError,
+    ScanProfile,
+)
 from oyst_core.packs.base import Pack, detect_distro_family, resolve_pack_binary
 from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.helper_clamd_unit import host_daily_signatures_present
@@ -15,7 +22,7 @@ from oyst_core.privileged.runner import CommandResult, run_command, version_gte
 from oyst_core.privileged.systemctl_route import run_systemctl_helper
 from oyst_core.runtime.bundles.clamav import clamav_db_dir, clamscan_database_args
 from oyst_core.runtime.manifest import is_full_mode
-from oyst_core.scan_excludes import merged_clamav_exclude_dirs
+from oyst_core.scan_excludes import clamav_exclude_dir_regex, merged_clamav_exclude_dirs
 
 CLAMD_SOCKETS = [
     "/run/clamav/clamd.ctl",
@@ -221,10 +228,11 @@ class ClamAVPack(Pack):
         argv.extend(self.scan_limit_flags(profile))
 
     def _append_exclude_dirs(self, argv: list[str]) -> None:
+        # --exclude-dir is a regex: anchor + escape so /opt never hits ~/x/options/.
         for raw in merged_clamav_exclude_dirs():
             expanded = str(Path(raw).expanduser())
-            if expanded:
-                argv.append(f"--exclude-dir={expanded}")
+            if expanded and Path(expanded).is_absolute():
+                argv.append(f"--exclude-dir={clamav_exclude_dir_regex(expanded)}")
 
     def _append_profile_scan_mode(self, argv: list[str]) -> None:
         """linux-only skips Windows PE scanning for faster desktop clamscan runs."""
@@ -257,27 +265,38 @@ class ClamAVPack(Pack):
         return run_command(argv, timeout=7200)
 
     def parse_findings(self, result: CommandResult) -> list[Finding]:
+        """Parse ``<path>: <threat> FOUND`` lines from clamscan/clamdscan stdout.
+
+        Paths may contain ``:`` (split on the *last* ``": "``) and newlines: a
+        filename with an embedded newline prints as orphan line(s) followed by
+        the result line, so orphans are re-joined onto the next result line's
+        path. Only lines that *end* in `` FOUND`` are detections.
+        """
         findings: list[Finding] = []
-        for line in result.stdout.splitlines():
-            if "FOUND" in line:
-                parts = line.split(":", 2)
-                if len(parts) >= 2:
-                    fpath = parts[0].strip()
-                    threat = (
-                        parts[1].replace("FOUND", "").strip()
-                        if len(parts) == 2
-                        else parts[2].strip()
-                    )
-                    findings.append(
-                        Finding(
-                            pack=self.name,
-                            path=fpath,
-                            threat_name=threat or "unknown",
-                            severity=FindingSeverity.HIGH,
-                            message=line.strip() or f"{threat} in {fpath}",
-                            raw_line=line,
-                        )
-                    )
+        pending: list[str] = []
+        for line in result.stdout.split("\n"):
+            if line.startswith("----------- SCAN SUMMARY"):
+                break
+            head, sep, status = line.rpartition(": ")
+            if not sep or not head:
+                if line:
+                    pending.append(line)
+                continue
+            fpath = "\n".join([*pending, head])
+            pending = []
+            if not status.endswith(" FOUND"):
+                continue
+            threat = status[: -len(" FOUND")].strip()
+            findings.append(
+                Finding(
+                    pack=self.name,
+                    path=fpath,
+                    threat_name=threat or "unknown",
+                    severity=FindingSeverity.HIGH,
+                    message=line.strip(),
+                    raw_line=line,
+                )
+            )
         return findings
 
     def scan_paths(
@@ -287,10 +306,20 @@ class ClamAVPack(Pack):
         profile: ScanProfile | str = ScanProfile.QUICK,
     ) -> list[Finding]:
         all_findings: list[Finding] = []
+        failures: list[str] = []
         for p in paths:
             try:
                 res = self.scan(p, backend=backend, profile=profile)
-                all_findings.extend(self.parse_findings(res))
             except (FileNotFoundError, OSError) as exc:
                 raise RuntimeError(str(exc)) from exc
+            all_findings.extend(self.parse_findings(res))
+            # clamscan/clamdscan: 0 clean, 1 virus found, >=2 error (DB load failure,
+            # unreadable files, bad option). An error is never a clean result.
+            if res.returncode not in (0, 1):
+                detail = (res.stderr or "").strip().splitlines()
+                failures.append(
+                    f"{p}: exit {res.returncode}" + (f" ({detail[-1][:200]})" if detail else "")
+                )
+        if failures:
+            raise PartialScanError("clamav reported errors: " + "; ".join(failures), all_findings)
         return all_findings

@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
+import time
 import tomllib
 import warnings
 from pathlib import Path
 from typing import Any
+
+from pydantic import ValidationError
 
 from oyst_core.config_models import OysterConfig
 
@@ -78,21 +83,70 @@ def load_config() -> OysterConfig:
         cfg = OysterConfig()
         save_config(cfg)
         return cfg
-    with path.open("rb") as f:
-        raw = tomllib.load(f)
-    return OysterConfig.model_validate(_migrate_raw_config(raw))
+    try:
+        with path.open("rb") as f:
+            raw = tomllib.load(f)
+        return OysterConfig.model_validate(_migrate_raw_config(raw))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, ValidationError) as exc:
+        return _recover_corrupt_config(path, exc)
+
+
+def _recover_corrupt_config(path: Path, exc: Exception) -> OysterConfig:
+    """Move an unreadable config aside and fall back to defaults."""
+    backup = path.with_name(f"{path.name}.corrupt-{int(time.time())}")
+    try:
+        os.replace(path, backup)
+        _log.error("config.toml is corrupt (%s); moved to %s, using defaults", exc, backup)
+    except OSError as move_exc:
+        _log.error("config.toml is corrupt (%s); backup failed: %s", exc, move_exc)
+    return OysterConfig()
+
+
+_TOML_SHORT_ESCAPES = {
+    "\\": "\\\\",
+    '"': '\\"',
+    "\b": "\\b",
+    "\t": "\\t",
+    "\n": "\\n",
+    "\f": "\\f",
+    "\r": "\\r",
+}
 
 
 def _toml_str(value: str) -> str:
-    """Escape a string for double-quoted TOML."""
-    escaped = (
-        value.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-        .replace("\t", "\\t")
-    )
-    return f'"{escaped}"'
+    """Escape a string for a TOML basic (double-quoted) string."""
+    out: list[str] = []
+    for ch in value:
+        short = _TOML_SHORT_ESCAPES.get(ch)
+        if short is not None:
+            out.append(short)
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append(f"\\u{ord(ch):04x}")
+        else:
+            out.append(ch)
+    return '"' + "".join(out) + '"'
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write via temp file + fsync + rename so readers never see partial TOML."""
+    try:
+        mode = path.stat().st_mode & 0o777
+    except FileNotFoundError:
+        mode = 0o600
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fchmod(f.fileno(), mode)
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _toml_str_list(values: list[str]) -> str:
@@ -187,4 +241,5 @@ def save_config(config: OysterConfig) -> None:
     )
     lines.append(f"security_news_max_age_days = {int(config.ui.security_news_max_age_days)}")
     lines.append(f"theme = {_toml_str(config.ui.theme)}")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    lines.append(f"terminal_show_raw = {'true' if config.ui.terminal_show_raw else 'false'}")
+    _atomic_write_text(path, "\n".join(lines) + "\n")

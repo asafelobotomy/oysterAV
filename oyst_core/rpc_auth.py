@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import secrets
 import socket
+import stat
 import struct
+import tempfile
+import time
 from pathlib import Path
 
 from oyst_core.config import data_dir
@@ -14,60 +18,87 @@ from oyst_core.rpc_errors import RpcAuthError
 TOKEN_FILENAME = "oyst.token"
 TOKEN_BYTES = 32
 _MIN_TOKEN_LEN = 22
+_MAX_TOKEN_FILE_BYTES = 4096
+_READ_RETRIES = 5
+_READ_RETRY_DELAY_S = 0.02
 
 
 def token_path() -> Path:
     return data_dir() / TOKEN_FILENAME
 
 
-def _write_token_file(path: Path, token: str) -> None:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+def _read_token(path: Path) -> str | None:
+    """Read the token without following symlinks; ``None`` when missing."""
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
     try:
-        fd = os.open(str(path), flags, 0o600)
-    except FileExistsError:
-        fd = os.open(str(path), os.O_WRONLY | os.O_TRUNC, 0o600)
+        fd = os.open(str(path), flags)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "rb") as handle:
+        st = os.fstat(handle.fileno())
+        if not stat.S_ISREG(st.st_mode):
+            raise OSError(f"RPC token is not a regular file: {path}")
+        if st.st_uid == os.getuid() and st.st_mode & 0o777 != 0o600:
+            os.fchmod(handle.fileno(), 0o600)
+        raw = handle.read(_MAX_TOKEN_FILE_BYTES)
+    return raw.decode("utf-8", errors="replace").strip()
+
+
+def _install_token(path: Path, *, replace: bool) -> None:
+    """Write a fresh token to a 0600 temp file, then link/replace it into place.
+
+    ``os.link`` fails with ``FileExistsError`` when another process won the race,
+    so readers never observe a partially written token file.
+    """
+    fd, tmp_name = tempfile.mkstemp(prefix=".oyst.token.", dir=str(path.parent))
     try:
-        os.write(fd, (token + "\n").encode())
-    finally:
+        os.fchmod(fd, 0o600)
+        os.write(fd, (secrets.token_urlsafe(TOKEN_BYTES) + "\n").encode())
+        os.fsync(fd)
         os.close(fd)
-    path.chmod(0o600)
+        fd = -1
+        if replace:
+            os.replace(tmp_name, path)
+        else:
+            os.link(tmp_name, path)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_name)
 
 
 def ensure_rpc_token() -> str:
     """Create or load the RPC auth token (mode 0600, atomic create)."""
     path = token_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.is_file():
-        token = path.read_text(encoding="utf-8").strip()
+    for _attempt in range(_READ_RETRIES):
+        token = _read_token(path)
+        if token is None:
+            try:
+                _install_token(path, replace=False)
+            except FileExistsError:
+                pass  # another process created it; re-read
+            continue
         if len(token) >= _MIN_TOKEN_LEN:
-            path.chmod(0o600)
             return token
-    token = secrets.token_urlsafe(TOKEN_BYTES)
-    try:
-        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        existing = path.read_text(encoding="utf-8").strip()
-        if len(existing) >= _MIN_TOKEN_LEN:
-            path.chmod(0o600)
-            return existing
-        _write_token_file(path, token)
-        return token
-    try:
-        os.write(fd, (token + "\n").encode())
-    finally:
-        os.close(fd)
-    path.chmod(0o600)
+        time.sleep(_READ_RETRY_DELAY_S)
+    # Persistently short/corrupt (legacy) file: swap in a new one atomically.
+    _install_token(path, replace=True)
+    token = _read_token(path)
+    if token is None or len(token) < _MIN_TOKEN_LEN:
+        raise OSError(f"could not create RPC token at {path}")
     return token
 
 
 def load_rpc_token() -> str | None:
-    path = token_path()
-    if not path.is_file():
+    try:
+        token = _read_token(token_path())
+    except OSError:
         return None
-    token = path.read_text(encoding="utf-8").strip()
-    if len(token) < _MIN_TOKEN_LEN:
+    if token is None or len(token) < _MIN_TOKEN_LEN:
         return None
-    return token or None
+    return token
 
 
 def verify_peer_credentials(conn: socket.socket) -> None:
@@ -89,5 +120,11 @@ def verify_rpc_token(provided: str | None) -> None:
     expected = load_rpc_token()
     if expected is None:
         expected = ensure_rpc_token()
-    if not provided or not secrets.compare_digest(provided, expected):
+    if not isinstance(provided, str) or not provided:
+        raise RpcAuthError("invalid or missing RPC token")
+    try:
+        provided_bytes = provided.encode("utf-8")
+    except UnicodeEncodeError as exc:  # lone surrogates
+        raise RpcAuthError("invalid or missing RPC token") from exc
+    if not secrets.compare_digest(provided_bytes, expected.encode("utf-8")):
         raise RpcAuthError("invalid or missing RPC token")

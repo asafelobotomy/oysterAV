@@ -23,6 +23,7 @@ ExportFormat = Literal["txt", "jsonl"]
 RPC_SKIP_METHODS = frozenset(
     {
         "job.status",
+        "progress.get",
         "terminal.list",
         "terminal.clear",
         "terminal.export",
@@ -97,16 +98,43 @@ def _alloc_id(path: Path) -> int:
         return _next_id
 
 
+_SECRET_KEY_PARTS = (
+    "token",
+    "password",
+    "passwd",
+    "passphrase",
+    "secret",
+    "api_key",
+    "apikey",
+    "api-key",
+    "private_key",
+    "privatekey",
+    "authorization",
+    "cookie",
+    "credential",
+)
+
+
+def _is_secret_key(key: object) -> bool:
+    lk = str(key).lower()
+    return lk == "auth" or any(part in lk for part in _SECRET_KEY_PARTS)
+
+
+def _strip_secrets_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _strip_secrets(value)
+    if isinstance(value, (list, tuple)):
+        return [_strip_secrets_value(v) for v in value]
+    return value
+
+
 def _strip_secrets(data: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, value in data.items():
-        lk = str(key).lower()
-        if lk in {"auth", "token", "password", "secret"} or "token" in lk:
+        if _is_secret_key(key):
             out[str(key)] = "<redacted>"
-        elif isinstance(value, dict):
-            out[str(key)] = _strip_secrets(value)
         else:
-            out[str(key)] = value
+            out[str(key)] = _strip_secrets_value(value)
     return out
 
 

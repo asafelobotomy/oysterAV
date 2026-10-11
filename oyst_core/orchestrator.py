@@ -9,6 +9,7 @@ from pathlib import Path
 
 from oyst_core.config import load_config
 from oyst_core.events import EventLog
+from oyst_core.finding_status import scan_is_clean
 from oyst_core.models import (
     AUDIT_ONLY_PACKS,
     PROFILE_AUDIT_PACKS,
@@ -18,6 +19,7 @@ from oyst_core.models import (
     JobState,
     PackError,
     PackTier,
+    PartialScanError,
     ScanProfile,
     ScanResult,
 )
@@ -204,6 +206,9 @@ class JobOrchestrator(OrchestratorHelpersMixin):
                 try:
                     findings = pack.scan_paths(scan_paths, backend=backend, profile=profile.value)
                     result.findings.extend(findings)
+                except PartialScanError as exc:
+                    result.findings.extend(exc.findings)
+                    result.pack_errors.append(PackError(pack=name, error=str(exc)))
                 except Exception as exc:  # noqa: BLE001 — pack boundary
                     result.pack_errors.append(PackError(pack=name, error=str(exc)))
                 self._emit_progress(
@@ -233,7 +238,10 @@ class JobOrchestrator(OrchestratorHelpersMixin):
                 state="completed",
                 on_progress=on_progress,
             )
-            code = ExitCode.SUCCESS if result.clean else ExitCode.THREATS_FOUND
+            # Exit code reflects open findings; pack errors are handled below
+            # (result.clean is False for either, so it can't distinguish them).
+            has_open = not scan_is_clean(result.findings)
+            code = ExitCode.THREATS_FOUND if has_open else ExitCode.SUCCESS
             if result.pack_errors and not result.findings:
                 required_failed = any(
                     ((p := self.registry.get(e.pack)) is not None and p.tier == PackTier.REQUIRED)

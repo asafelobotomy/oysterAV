@@ -9,31 +9,33 @@ import shutil
 import tarfile
 import tempfile
 from pathlib import Path
-from urllib.parse import urlparse
-from urllib.request import urlopen
 
+from oyst_core.net_util import DEFAULT_MAX_DOWNLOAD_BYTES, download_to_path
 from oyst_core.privileged.helper import run_privileged_install_script
+from oyst_core.privileged.pins import MALDET_SHA256
 from oyst_core.privileged.runner import CommandResult
 from oyst_core.privileged.safe_write import write_text_nofollow
 from oyst_core.scan_excludes import maldet_ignore_paths_value
 from oyst_core.schedule_linger import current_username
 
-MALDET_URL = "https://www.rfxn.com/downloads/maldetect-current.tar.gz"
-# In-repo pin (fail-closed). Update via PR after reviewing a new upstream release.
-MALDET_SHA256 = "76f1d260dac5e0bb3ca487f8d3e119655196de87b08ec89dfd73155e083feb5d"
+MALDET_VERSION = "1.6.6"
+# Versioned tarball: ``maldetect-current`` changes on every upstream release and
+# would break the in-repo SHA-256 pin (oyst_core.privileged.pins, fail-closed).
+MALDET_URL = f"https://www.rfxn.com/downloads/maldetect-{MALDET_VERSION}.tar.gz"
+MALDET_MAX_BYTES = 32 * 1024 * 1024
 
 
-def _download(url: str, dest: Path) -> None:
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.netloc:
-        raise ValueError(f"refusing non-https download URL: {url!r}")
-    with urlopen(url, timeout=120) as response:  # noqa: S310  # nosec B310
-        dest.write_bytes(response.read())
+def _download(url: str, dest: Path, *, max_bytes: int = DEFAULT_MAX_DOWNLOAD_BYTES) -> None:
+    """Stream ``url`` to ``dest`` (https-only, size-capped, partial file removed)."""
+    download_to_path(url, dest, timeout=120, max_bytes=max_bytes)
 
 
 def _verify_sha256(file_path: Path, expected: str) -> bool:
-    digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
-    return digest == expected.lower()
+    digest = hashlib.sha256()
+    with file_path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest() == expected.lower()
 
 
 def stage_maldet_install_script() -> tuple[str, str, str, Path] | CommandResult:
@@ -46,8 +48,8 @@ def stage_maldet_install_script() -> tuple[str, str, str, Path] | CommandResult:
     """
     work = Path(tempfile.mkdtemp(prefix="oyst-maldet-"))
     try:
-        tarball = work / "maldetect-current.tar.gz"
-        _download(MALDET_URL, tarball)
+        tarball = work / f"maldetect-{MALDET_VERSION}.tar.gz"
+        _download(MALDET_URL, tarball, max_bytes=MALDET_MAX_BYTES)
         if not _verify_sha256(tarball, MALDET_SHA256):
             shutil.rmtree(work, ignore_errors=True)
             return CommandResult(
@@ -70,7 +72,7 @@ def stage_maldet_install_script() -> tuple[str, str, str, Path] | CommandResult:
             return CommandResult(1, "", "install.sh not found in tarball")
         install_sh.chmod(0o755)
         return str(tarball), MALDET_SHA256, str(install_sh), work
-    except OSError as exc:
+    except (OSError, ValueError, tarfile.TarError) as exc:
         shutil.rmtree(work, ignore_errors=True)
         return CommandResult(1, "", str(exc))
 

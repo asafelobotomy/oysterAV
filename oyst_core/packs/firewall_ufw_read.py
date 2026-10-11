@@ -11,7 +11,7 @@ _UFW_USER6_RULES = Path("/etc/ufw/user6.rules")
 
 _STATUS_LINE_RE = re.compile(
     r"^(?:\[\s*\d+\]\s+)?"
-    r"(?P<port_proto>\S+)\s+"
+    r"(?P<port_proto>\S+)(?:\s+\(v6\))?\s+"
     r"(?P<action>ALLOW|DENY|REJECT|LIMIT)\s+"
     r"(?P<direction>IN|OUT)\s+"
     r"(?P<rest>.+?)\s*$",
@@ -32,14 +32,26 @@ def _entry(
     direction: str,
     from_addr: str | None,
     ipv6: bool,
+    exact: bool = True,
 ) -> dict[str, Any]:
-    port_proto = f"{port}/{proto}" if port != "any" else proto
+    """Build a Shield row; ``removable`` only when a delete can target it exactly.
+
+    The delete path emits ``ufw delete VERB N/P`` or
+    ``ufw delete VERB from SRC proto P to any port N`` (inbound, any destination,
+    any source port). Other directions, destinations, source ports, interfaces,
+    app profiles, logging or ``proto any`` cannot be expressed that way, so a
+    delete would hit a different (often broader) rule.
+    """
+    if port == "any":
+        port_proto = proto
+    else:
+        port_proto = port if proto == "any" else f"{port}/{proto}"
     bits = [direction.upper(), "Anywhere"]
     if from_addr:
         bits.append(f"from {from_addr}")
     if ipv6:
         bits.append("IPv6")
-    return {
+    out: dict[str, Any] = {
         "port": port,
         "proto": proto,
         "action": action.lower(),
@@ -48,8 +60,21 @@ def _entry(
         "ipv6": ipv6,
         "title": f"{port_proto} · {action.upper()}",
         "subtitle": " · ".join(bits),
-        "removable": port.isdigit() and action.lower() in {"allow", "deny", "limit", "reject"},
+        "exact": exact,
     }
+    # A lone v6 row without a source would be deleted via the v4+v6 simple syntax.
+    out["removable"] = _deletable(out) and (not ipv6 or bool(from_addr))
+    return out
+
+
+def _deletable(entry: dict[str, Any]) -> bool:
+    return bool(
+        entry.get("exact", True)
+        and str(entry.get("port") or "").isdigit()
+        and entry.get("proto") in {"tcp", "udp"}
+        and entry.get("direction") == "in"
+        and entry.get("action") in {"allow", "deny", "limit", "reject"},
+    )
 
 
 def _format_tuple_line(raw: str, *, ipv6: bool) -> str:
@@ -67,10 +92,20 @@ def _format_tuple_line(raw: str, *, ipv6: bool) -> str:
     return f"{port_proto:22} {action.upper():8} {direction.upper()} {dest}{src}{suffix}"
 
 
+_ANY_ADDR = frozenset({"0.0.0.0/0", "::/0", "any"})
+
+
 def _entry_from_tuple_parts(parts: list[str], *, ipv6: bool) -> dict[str, Any]:
-    action, proto, dport, _daddr, _sport, saddr, direction = parts[:7]
-    from_addr = None if saddr in {"0.0.0.0/0", "::/0", "any"} else saddr
-    direction = "in" if direction.lower().startswith("in") else "out"
+    action, proto, dport, daddr, sport, saddr = parts[:6]
+    raw_direction = parts[-1].lower()
+    from_addr = None if saddr in _ANY_ADDR else saddr
+    direction = "in" if raw_direction.startswith("in") else "out"
+    exact = (
+        len(parts) == 7  # app-profile tuples carry extra dapp/sapp fields
+        and raw_direction in {"in", "out"}  # e.g. "in_eth0" is interface-bound
+        and daddr in _ANY_ADDR
+        and sport == "any"
+    )
     return _entry(
         port=dport,
         proto=proto.lower(),
@@ -78,6 +113,7 @@ def _entry_from_tuple_parts(parts: list[str], *, ipv6: bool) -> dict[str, Any]:
         direction=direction,
         from_addr=from_addr,
         ipv6=ipv6,
+        exact=exact,
     )
 
 
@@ -119,6 +155,7 @@ def ufw_rule_entries_from_files(
 def parse_ufw_status_entries(text: str) -> list[dict[str, Any]]:
     """Parse ``ufw status`` / numbered / file-fallback lines into entries."""
     entries: list[dict[str, Any]] = []
+    file_format = _FILE_NOTE in text
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.lower().startswith("status:"):
@@ -133,14 +170,12 @@ def parse_ufw_status_entries(text: str) -> list[dict[str, Any]]:
         action = groups.get("action") or groups.get("act") or ""
         direction = groups.get("direction") or groups.get("dir") or ""
         rest = groups.get("rest") or ""
-        ipv6 = "(v6)" in rest.lower()
-        from_addr = None
-        if " from " in rest.lower():
-            from_addr = rest.split(" from ", 1)[-1].replace("(v6)", "").strip() or None
+        ipv6 = "(v6)" in stripped.lower()
+        from_addr, exact = _source_from_rest(rest, file_format=file_format)
         if "/" in port_proto:
             port, proto = port_proto.split("/", 1)
         else:
-            port, proto = port_proto, "tcp"
+            port, proto = port_proto, "any"
         entries.append(
             _entry(
                 port=port,
@@ -149,15 +184,45 @@ def parse_ufw_status_entries(text: str) -> list[dict[str, Any]]:
                 direction=direction.lower(),
                 from_addr=from_addr,
                 ipv6=ipv6,
+                exact=exact,
             ),
         )
     return merge_ufw_entries(entries)
 
 
+_FILE_NOTE = "(from /etc/ufw/user*.rules)"
+_NET_RE = re.compile(r"^[0-9A-Fa-f:.]+(?:/\d{1,3})?$")
+
+
+def _source_from_rest(rest: str, *, file_format: bool) -> tuple[str | None, bool]:
+    """Return ``(from_addr, exact)`` for the text after ``ACTION DIRECTION``.
+
+    Live ``ufw status`` puts the From column here (``Anywhere``, ``192.0.2.0/24``,
+    ``192.0.2.5 22/tcp``); the file fallback writes ``DEST[ from SRC]``.
+    """
+    tokens = [t for t in rest.split("#", 1)[0].split() if t.lower() != "(v6)"]
+    if any(t.lower() in {"(log)", "(log-all)"} for t in tokens):
+        return None, False
+    if file_format:
+        if not tokens or tokens[0] != "Anywhere":
+            return None, False  # explicit destination address
+        tokens = tokens[1:]
+        if not tokens:
+            return None, True
+        if len(tokens) == 2 and tokens[0] == "from" and _NET_RE.match(tokens[1]):
+            return tokens[1], True
+        return None, False
+    if tokens == ["Anywhere"]:
+        return None, True
+    if len(tokens) == 1 and _NET_RE.match(tokens[0]):
+        return tokens[0], True
+    return None, False  # source port, interface, app profile, …
+
+
 def merge_ufw_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Collapse matching IPv4+IPv6 pairs into one row for the Shield list."""
-    order: list[tuple[str, str, str, str, str | None]] = []
-    by_key: dict[tuple[str, str, str, str, str | None], dict[str, Any]] = {}
+    order: list[tuple[str, str, str, str, str | None, bool]] = []
+    by_key: dict[tuple[str, str, str, str, str | None, bool], dict[str, Any]] = {}
     for entry in entries:
         key = (
             str(entry.get("port") or ""),
@@ -165,6 +230,7 @@ def merge_ufw_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             str(entry.get("action") or ""),
             str(entry.get("direction") or ""),
             entry.get("from_addr") if isinstance(entry.get("from_addr"), str) else None,
+            bool(entry.get("exact", True)),
         )
         existing = by_key.get(key)
         if existing is None:
@@ -178,6 +244,7 @@ def merge_ufw_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             bits.append("IPv4+IPv6")
             existing["subtitle"] = " · ".join(bits)
             existing["ipv6"] = False
+            existing["removable"] = _deletable(existing)
     return [by_key[k] for k in order]
 
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
+from oyst_core import rpc_progress
 from oyst_core.rpc_errors import RpcValidationError
+from oyst_core.rpc_handlers.params import opt_bool, opt_str, req_str
 from oyst_core.runtime_full_bootstrap import run_full_runtime_bootstrap
 from oyst_core.services import SERVICE_NAMES, set_service
 
@@ -34,14 +36,18 @@ def handle_runtime_status(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 def handle_runtime_install(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.runtime.bootstrap import bootstrap_runtime, install_pack_runtime
 
-    pack = params.get("pack")
-    if pack:
-        return install_pack_runtime(str(pack))
-    packs_raw = params.get("packs")
-    pack_list: list[str] | None = None
-    if isinstance(packs_raw, list) and packs_raw:
-        pack_list = [str(p) for p in packs_raw if str(p).strip()]
-    results = bootstrap_runtime(pack_list)
+    pack = opt_str(params, "pack")
+    on_progress = rpc_progress.callback_for(params)
+    try:
+        if pack:
+            return install_pack_runtime(pack, on_progress=on_progress)
+        packs_raw = params.get("packs")
+        pack_list: list[str] | None = None
+        if isinstance(packs_raw, list) and packs_raw:
+            pack_list = [str(p) for p in packs_raw if str(p).strip()]
+        results = bootstrap_runtime(pack_list, on_progress=on_progress)
+    finally:
+        rpc_progress.finish(params)
     ok_count = sum(1 for r in results if r.get("ok"))
     return {
         "ok": ok_count == len(results) and bool(results),
@@ -53,7 +59,12 @@ def handle_runtime_install(params: dict[str, Any], _ctx: RpcContext) -> Any:
 def handle_runtime_remove(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.runtime.bootstrap import remove_pack_runtime
 
-    return remove_pack_runtime(str(params["pack"]))
+    try:
+        return remove_pack_runtime(
+            req_str(params, "pack"), on_progress=rpc_progress.callback_for(params)
+        )
+    finally:
+        rpc_progress.finish(params)
 
 
 def handle_runtime_update(_params: dict[str, Any], _ctx: RpcContext) -> Any:
@@ -63,12 +74,23 @@ def handle_runtime_update(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 
 
 def handle_runtime_bootstrap(params: dict[str, Any], _ctx: RpcContext) -> Any:
-    return run_full_runtime_bootstrap(
-        skip_install=bool(params.get("skip_install", False)),
-        update_signatures=bool(params.get("update_signatures", True)),
-        run_maintenance=bool(params.get("run_maintenance", True)),
-        skip_lynis=bool(params.get("skip_lynis", True)),
-    )
+    try:
+        return run_full_runtime_bootstrap(
+            skip_install=opt_bool(params, "skip_install"),
+            update_signatures=opt_bool(params, "update_signatures", True),
+            run_maintenance=opt_bool(params, "run_maintenance", True),
+            skip_lynis=opt_bool(params, "skip_lynis", True),
+            on_progress=rpc_progress.callback_for(params),
+        )
+    finally:
+        rpc_progress.finish(params)
+
+
+def handle_progress_get(params: dict[str, Any], _ctx: RpcContext) -> Any:
+    token = req_str(params, "token")
+    if not rpc_progress.valid_token(token):
+        raise RpcValidationError("invalid progress token")
+    return rpc_progress.get(token)
 
 
 def handle_firewall_status(_params: dict[str, Any], _ctx: RpcContext) -> Any:
@@ -80,18 +102,15 @@ def handle_firewall_status(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 def handle_fail2ban_unban(params: dict[str, Any], ctx: RpcContext) -> Any:
     from oyst_core.packs.fail2ban import Fail2banPack
 
+    ip = req_str(params, "ip")
+    jail = opt_str(params, "jail")
     ok, msg = Fail2banPack().unban(
-        str(params["ip"]),
-        jail=params.get("jail"),
-        ignore=bool(params.get("ignore", False)),
-        persist=bool(params.get("persist", False)),
+        ip,
+        jail=jail,
+        ignore=opt_bool(params, "ignore"),
+        persist=opt_bool(params, "persist"),
     )
-    ctx.audit.log(
-        "fail2ban.unban",
-        str(params["ip"]),
-        success=ok,
-        data={"jail": params.get("jail")},
-    )
+    ctx.audit.log("fail2ban.unban", ip, success=ok, data={"jail": jail})
     return {"ok": ok, "message": msg}
 
 
@@ -110,14 +129,14 @@ def handle_services_status(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 
 
 def handle_services_set(params: dict[str, Any], _ctx: RpcContext) -> Any:
-    name = str(params.get("name", ""))
-    state = str(params.get("state", ""))
+    name = opt_str(params, "name") or ""
+    state = opt_str(params, "state") or ""
     if name not in SERVICE_NAMES:
         raise RpcValidationError(f"unknown service: {name}")
     if state not in ("on", "off"):
         raise RpcValidationError("state must be on or off")
     state_lit: Literal["on", "off"] = "on" if state == "on" else "off"
-    return set_service(name, state_lit, boot=bool(params.get("boot", False)))
+    return set_service(name, state_lit, boot=opt_bool(params, "boot"))
 
 
 def handle_auth_status(_params: dict[str, Any], _ctx: RpcContext) -> Any:
@@ -136,8 +155,7 @@ def handle_helper_install(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 def handle_auth_grant_service_lifecycle(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.privileged.elevate_cli import grant_service_lifecycle_elevated
 
-    user = params.get("user")
-    return grant_service_lifecycle_elevated(str(user) if user is not None else None)
+    return grant_service_lifecycle_elevated(opt_str(params, "user"))
 
 
 def handle_auth_revoke_service_lifecycle(_params: dict[str, Any], _ctx: RpcContext) -> Any:
@@ -185,14 +203,14 @@ def handle_clamonacc_disable(_params: dict[str, Any], ctx: RpcContext) -> Any:
 def handle_clamonacc_add_path(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.clamonacc import ClamonaccPack
 
-    ClamonaccPack().add_path(str(params["path"]))
+    ClamonaccPack().add_path(req_str(params, "path"))
     return True
 
 
 def handle_clamonacc_remove_path(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.clamonacc import ClamonaccPack
 
-    ClamonaccPack().remove_path(str(params["path"]))
+    ClamonaccPack().remove_path(req_str(params, "path"))
     return True
 
 
@@ -223,7 +241,7 @@ def handle_virusevent_ensure(params: dict[str, Any], ctx: RpcContext) -> Any:
 
     result = ensure_virusevent(
         confirm=True,
-        force_wrapper=bool(params.get("force_wrapper", False)),
+        force_wrapper=opt_bool(params, "force_wrapper"),
     )
     ctx.audit.log("clamav.ensure_virusevent", "rpc", success=bool(result.get("ok")))
     return result
@@ -241,7 +259,7 @@ def handle_news_list(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.security_news import list_security_news
 
     return list_security_news(
-        force_refresh=bool(params.get("force", False)),
+        force_refresh=opt_bool(params, "force"),
         sources=_news_sources(params),
     )
 
@@ -258,7 +276,7 @@ def handle_updates_check(_params: dict[str, Any], _ctx: RpcContext) -> Any:
     return check_available_updates()
 
 
-def handle_updates_apply(_params: dict[str, Any], _ctx: RpcContext) -> Any:
+def handle_updates_apply(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.updates import apply_all_updates
 
-    return apply_all_updates()
+    return apply_all_updates(confirm_aur=params.get("confirm_aur") is True)

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 import defusedxml.ElementTree as ET
 
@@ -27,6 +29,27 @@ class Element(Protocol):
 _NVR_TITLE_RE = re.compile(
     r"^[a-zA-Z0-9._+-]+-[0-9][a-zA-Z0-9._+-]*-[0-9][a-zA-Z0-9._+]*$",
 )
+
+
+_SAFE_LINK_SCHEMES = frozenset({"https", "http"})
+
+
+def strip_control_chars(text: str) -> str:
+    """Drop C0/C1 controls and format chars (Cc/Cf) except newline and tab."""
+    return "".join(
+        ch for ch in text if ch in "\n\t" or unicodedata.category(ch) not in ("Cc", "Cf")
+    )
+
+
+def safe_link(raw: str) -> str:
+    """Return ``raw`` if it is an absolute http(s) URL, else ``""``."""
+    text = strip_control_chars(raw).strip()
+    if not text or any(ch.isspace() for ch in text):
+        return ""
+    parsed = urlparse(text)
+    if parsed.scheme.lower() not in _SAFE_LINK_SCHEMES or not parsed.netloc:
+        return ""
+    return text
 
 
 def local_tag(tag: str) -> str:
@@ -153,12 +176,12 @@ def parse_feed_xml(source: str, xml_text: str) -> list[dict[str, Any]]:
                 entries.append(el)
 
     for entry in entries:
-        title = child_text(entry, {"title"})
+        title = strip_control_chars(child_text(entry, {"title"})).strip()
         if not title:
             continue
-        link = child_link(entry)
-        published = entry_published(entry)
-        description = entry_description(entry)
+        link = safe_link(child_link(entry))
+        published = strip_control_chars(entry_published(entry))
+        description = strip_control_chars(entry_description(entry))
         display_title = enrich_title(title, description)
         severity, severity_label = score_severity(display_title, description)
         items.append(
