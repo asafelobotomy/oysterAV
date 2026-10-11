@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 import re
 from pathlib import Path
 
@@ -46,12 +47,28 @@ FIREWALLD_SERVICE_ACTIONS = frozenset({"add-service", "remove-service"})
 FIREWALLD_RICH_ACTIONS = frozenset({"add-rich-rule", "remove-rich-rule"})
 
 
+# Plain IPv4/IPv6 literal characters only. ``ipaddress`` accepts IPv6 scope IDs
+# (``fe80::1%<anything>``, including newlines) and echoes them back via str(),
+# which would let callers inject lines into root-written config files.
+_IP_CHARS_RE = re.compile(r"^[0-9A-Fa-f:.]+$")
+_CIDR_CHARS_RE = re.compile(r"^[0-9A-Fa-f:.]+/[0-9]{1,3}$")
+
+
 def validate_ip(value: str) -> str:
-    return str(ipaddress.ip_address(value.strip()))
+    cleaned = value.strip()
+    if not _IP_CHARS_RE.fullmatch(cleaned):
+        raise ValueError(f"invalid IP address: {value!r}")
+    addr = ipaddress.ip_address(cleaned)
+    if isinstance(addr, ipaddress.IPv6Address) and addr.scope_id:
+        raise ValueError("IPv6 scope IDs are not supported")
+    return str(addr)
 
 
 def validate_cidr(value: str) -> str:
-    network = ipaddress.ip_network(value.strip(), strict=False)
+    cleaned = value.strip()
+    if not _CIDR_CHARS_RE.fullmatch(cleaned):
+        raise ValueError(f"invalid CIDR: {value!r}")
+    network = ipaddress.ip_network(cleaned, strict=False)
     return str(network)
 
 
@@ -131,6 +148,41 @@ def validate_port_spec(value: str) -> str:
     return validate_port(value)
 
 
+# maldet interpolates monitor paths into bash; allow only plain path characters.
+_MONITOR_PATH_RE = re.compile(r"^/[A-Za-z0-9._/@+-]*$")
+# Top-level system dirs (and pseudo-filesystems) never valid as monitor roots.
+_MONITOR_DENY_EXACT = frozenset(
+    {
+        "/",
+        "/bin",
+        "/boot",
+        "/dev",
+        "/etc",
+        "/lib",
+        "/lib32",
+        "/lib64",
+        "/libx32",
+        "/nix",
+        "/proc",
+        "/root",
+        "/run",
+        "/sbin",
+        "/snap",
+        "/sys",
+        "/usr",
+        "/var",
+    },
+)
+_MONITOR_DENY_TREES = ("/proc", "/sys", "/dev", "/run", "/boot")
+
+
+def _monitor_path_denied(path: str) -> bool:
+    norm = os.path.normpath(path)
+    if norm in _MONITOR_DENY_EXACT:
+        return True
+    return any(norm == t or norm.startswith(t + "/") for t in _MONITOR_DENY_TREES)
+
+
 def validate_monitor_mode(value: str) -> str:
     cleaned = value.strip()
     if cleaned == "users":
@@ -140,19 +192,45 @@ def validate_monitor_mode(value: str) -> str:
             part = part.strip()
             if not part:
                 continue
-            if any(ch in part for ch in ('"', "\n", "\r", ";", "|", "&", "$", "`", "\\")):
-                raise ValueError(f"monitor path contains disallowed characters: {part}")
+            if not _MONITOR_PATH_RE.fullmatch(part):
+                raise ValueError(f"monitor path contains disallowed characters: {part!r}")
             path = Path(part)
-            if not path.is_absolute():
-                raise ValueError(f"monitor path must be absolute: {part}")
             if ".." in path.parts:
                 raise ValueError(f"monitor path must not contain '..': {part}")
+            resolved = os.path.realpath(part)
+            if _monitor_path_denied(part) or _monitor_path_denied(resolved):
+                raise ValueError(f"monitor path is a protected system directory: {part}")
+            if not os.path.isdir(resolved):
+                raise ValueError(f"monitor path must be an existing directory: {part}")
         return cleaned
     raise ValueError("monitor mode must be 'users' or comma-separated absolute paths")
 
 
-def validate_rich_rule(rule: str) -> str:
-    """Allow a small firewalld rich-rule subset (no shell metacharacters)."""
+_RICH_RULE_RE = re.compile(
+    r"^rule"
+    r"(?:\s+family=(ipv4|ipv6))?"
+    r"(?:\s+source\s+address=([0-9a-fA-F:.]+(?:/\d{1,3})?))?"
+    r"(?:"
+    r"(?:\s+port\s+port=(\d{1,5})\s+protocol=(tcp|udp))"
+    r"|"
+    r"(?:\s+service\s+name=([a-zA-Z0-9][a-zA-Z0-9._-]{0,63}))"
+    r")"
+    r"\s+(accept|reject|drop)$",
+    re.IGNORECASE,
+)
+
+
+def _rich_rule_port_bounds(port: str) -> tuple[int, int]:
+    """Return ``(low, high)`` for a rich-rule ``port=N`` or ``port=N-M`` value."""
+    low_s, _, high_s = port.partition("-")
+    low = int(validate_port(low_s))
+    high = int(validate_port(high_s)) if high_s else low
+    if high < low:
+        raise ValueError(f"rich rule port range is reversed: {port}")
+    return low, high
+
+
+def _match_rich_rule(rule: str) -> re.Match[str]:
     cleaned = rule.strip()
     if not cleaned or len(cleaned) > 512:
         raise ValueError("rich rule empty or too long")
@@ -160,19 +238,7 @@ def validate_rich_rule(rule: str) -> str:
         raise ValueError("rich rule contains disallowed characters")
     # rule [family=ipv4|ipv6] [source address=IP/CIDR]
     #   (port port=N protocol=tcp|udp | service name=NAME) accept|reject|drop
-    pattern = re.compile(
-        r"^rule"
-        r"(?:\s+family=(ipv4|ipv6))?"
-        r"(?:\s+source\s+address=([0-9a-fA-F:.]+(?:/\d{1,3})?))?"
-        r"(?:"
-        r"(?:\s+port\s+port=(\d{1,5})\s+protocol=(tcp|udp))"
-        r"|"
-        r"(?:\s+service\s+name=([a-zA-Z0-9][a-zA-Z0-9._-]{0,63}))"
-        r")"
-        r"\s+(accept|reject|drop)$",
-        re.IGNORECASE,
-    )
-    match = pattern.fullmatch(cleaned)
+    match = _RICH_RULE_RE.fullmatch(cleaned)
     if not match:
         raise ValueError(
             "rich rule must match: rule [family=…] [source address=…] "
@@ -180,22 +246,33 @@ def validate_rich_rule(rule: str) -> str:
         )
     port = match.group(3)
     if port is not None:
-        validate_port(port)
+        _rich_rule_port_bounds(port)
     src = match.group(2)
     if src is not None:
         if "/" in src:
             validate_cidr(src)
         else:
             validate_ip(src)
-    return cleaned
+    return match
+
+
+def validate_rich_rule(rule: str) -> str:
+    """Allow a small firewalld rich-rule subset (no shell metacharacters)."""
+    return _match_rich_rule(rule).group(0)
 
 
 def rich_rule_ssh_lockout_risk(rule: str) -> bool:
-    """True when a validated rich rule would drop/reject SSH (service or port 22)."""
-    cleaned = validate_rich_rule(rule)
-    lowered = cleaned.lower()
-    if not lowered.endswith((" drop", " reject")):
+    """True when a validated rich rule would drop/reject SSH (service or port 22).
+
+    Uses the parsed port value (``int``), so ``port=022`` and tab separators
+    are detected; a ``N-M`` range covering 22 would be too (the grammar
+    currently rejects ranges outright).
+    """
+    match = _match_rich_rule(rule)
+    if match.group(6).lower() not in ("drop", "reject"):
         return False
-    if "service name=ssh" in lowered:
-        return True
-    return "port port=22 " in lowered
+    service = match.group(5)
+    if service is not None:
+        return service.lower() == "ssh"
+    low, high = _rich_rule_port_bounds(match.group(3))
+    return low <= 22 <= high

@@ -178,6 +178,9 @@ def run_install_command(
         list(argv),
         capture_output=True,
         text=True,
+        # Non-UTF-8 bytes (e.g. filenames in scanner output) must not raise and
+        # discard a whole scan's results; keep them visible as \xNN escapes.
+        errors="backslashreplace",
         timeout=timeout,
         check=False,
         cwd=cwd,
@@ -203,6 +206,9 @@ def run_command(
         list(argv),
         capture_output=True,
         text=True,
+        # Non-UTF-8 bytes (e.g. filenames in scanner output) must not raise and
+        # discard a whole scan's results; keep them visible as \xNN escapes.
+        errors="backslashreplace",
         timeout=timeout,
         check=False,
         input=input_text,

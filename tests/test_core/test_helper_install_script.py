@@ -17,6 +17,16 @@ from oyst_core.privileged.helper_install_script import (
     seal_and_run_install_script,
     seal_and_run_install_tarball,
 )
+from oyst_core.privileged.pins import MALDET_SHA256, require_pinned_maldet_sha256
+
+
+@pytest.fixture(autouse=True)
+def _pin_test_tarballs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fixture tarballs are not the real maldet release; accept any well-formed digest."""
+    monkeypatch.setattr(
+        "oyst_core.privileged.helper_install_script.require_pinned_maldet_sha256",
+        lambda value: value.lower(),
+    )
 
 
 def _stage_tarball() -> tuple[Path, str]:
@@ -159,3 +169,10 @@ def test_seal_and_run_fails_closed_on_same_inode_mutation(
         run.assert_not_called()
     finally:
         shutil.rmtree(tarball.parent, ignore_errors=True)
+
+
+def test_unpinned_digest_refused_before_any_root_exec() -> None:
+    """Audit P3: a caller-supplied digest alone must never authorise install.sh."""
+    with pytest.raises(ValueError, match="not pinned"):
+        require_pinned_maldet_sha256("a" * 64)
+    assert require_pinned_maldet_sha256(MALDET_SHA256.upper()) == MALDET_SHA256

@@ -105,16 +105,18 @@ def _validate_package_manager_argv(base: str, argv: Sequence[str]) -> list[str]:
     """Allow only install/sync shapes with validated package names."""
     args = list(argv[1:])
     if base == "pacman":
-        if not args or args[0] not in ("-S", "-Sy"):
-            raise ValueError("pacman only allows -S/-Sy install")
-        sync_flag = args[0]
+        # -Sy (sync db without -u) is an unsupported partial upgrade on Arch.
+        if not args or args[0] != "-S":
+            raise ValueError("pacman only allows -S install")
         rest = args[1:]
         if "--noconfirm" not in rest:
             raise ValueError("pacman install requires --noconfirm")
-        packages = [a for a in rest if a != "--noconfirm"]
+        needed = "--needed" in rest
+        packages = [a for a in rest if a not in ("--noconfirm", "--needed")]
         if not packages:
             raise ValueError("pacman install requires package names")
-        return [base, sync_flag, "--noconfirm", *(_validate_package_name(p) for p in packages)]
+        flags = ["-S", *(["--needed"] if needed else []), "--noconfirm"]
+        return [base, *flags, *(_validate_package_name(p) for p in packages)]
     if base == "dnf":
         if len(args) < 2 or args[0] != "install" or args[1] != "-y":
             raise ValueError("dnf only allows: install -y <packages>")
@@ -196,14 +198,31 @@ def _validate_scanner_argv(base: str, argv: Sequence[str]) -> list[str]:
     raise ValueError(f"scanner not allowlisted: {base}")
 
 
+_CLAMONACC_ROOT_LIST_DIR = "/etc/clamav/"
+
+
+def _list_caller_uid() -> int | None:
+    raw = os.environ.get("PKEXEC_UID") or os.environ.get("SUDO_UID")
+    return int(raw) if raw and raw.isdigit() else None
+
+
 def _validate_clamonacc_list_path(flag: str, arg: str) -> str:
-    """Validate --include-list= / --exclude-list= absolute file paths (no symlink follow)."""
+    """Validate --include-list= / --exclude-list= absolute file paths (no symlink follow).
+
+    Root reads the list, so only accept a regular, non-group/world-writable file
+    that is either root-owned under /etc/clamav/ or owned by the polkit caller
+    (whose own data-dir list it already can read) — never e.g. /etc/shadow.
+    """
     path = Path(arg.split("=", 1)[1])
     if not path.is_absolute() or ".." in path.parts:
         raise ValueError(f"clamonacc {flag} must be an absolute path")
     if any(ch in str(path) for ch in (";", "|", "&", "$", "`", "\n", "\r")):
         raise ValueError(f"clamonacc {flag} path contains disallowed characters")
-    flags = os.O_RDONLY
+    if path.is_symlink():
+        raise ValueError(f"clamonacc {flag} list not readable: {path} (symlink)")
+    # Resolve parent symlinks (e.g. /home -> /var/home); final component is nofollow.
+    path = Path(os.path.realpath(path))
+    flags = os.O_RDONLY | os.O_NONBLOCK
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
@@ -216,6 +235,11 @@ def _validate_clamonacc_list_path(flag: str, arg: str) -> str:
             raise ValueError(f"clamonacc {flag} must be a regular file")
         if st.st_mode & 0o022:
             raise ValueError(f"clamonacc {flag} refuses group- or world-writable list file")
+        if st.st_uid == 0:
+            if not str(path).startswith(_CLAMONACC_ROOT_LIST_DIR):
+                raise ValueError(f"clamonacc {flag} root-owned list must live under /etc/clamav/")
+        elif st.st_uid != _list_caller_uid():
+            raise ValueError(f"clamonacc {flag} list must be root- or caller-owned")
     finally:
         os.close(fd)
     return f"{flag}={path}"

@@ -15,6 +15,8 @@ from oyst_core.privileged.safe_write import write_text_nofollow
 from oyst_core.privileged.validators import validate_unit
 
 FDPASS_DROPIN_NAME = "oysterav-fdpass.conf"
+# Only clamonacc units may receive the clamonacc ExecStart drop-in.
+FDPASS_UNITS = frozenset({"clamav-clamonacc"})
 _CLAMONACC_BIN_PREFIXES = ("/usr/bin/", "/usr/sbin/")
 _ARGV_RE = re.compile(r"argv\[\]=(.+?)\s*;", re.DOTALL)
 _PATH_RE = re.compile(r"path=([^ ;\n]+)")
@@ -183,8 +185,16 @@ def _unit_file_listed(unit: str) -> bool:
     return needle in (proc.stdout or "")
 
 
+def validate_fdpass_unit(unit: str) -> str:
+    """Allowlisted unit that is also a clamonacc unit (fdpass drop-in target)."""
+    cleaned = validate_unit(unit)
+    if cleaned not in FDPASS_UNITS:
+        raise ValueError(f"unit not allowed for fdpass drop-in: {unit}")
+    return cleaned
+
+
 def ensure_fdpass_dropin(unit: str, *, sockets: list[str] | None = None) -> None:
-    unit = validate_unit(unit)
+    unit = validate_fdpass_unit(unit)
     # Soft-preflight: signatures + clamd up before touching clamonacc (ORD-04/05).
     ensure_host_daily_signatures()
     if _unit_file_listed("clamav-daemon"):
@@ -287,6 +297,7 @@ def enable_clam_stack(
 
 __all__ = [
     "FDPASS_DROPIN_NAME",
+    "FDPASS_UNITS",
     "build_fdpass_dropin_body",
     "enable_clam_stack",
     "ensure_fdpass_dropin",
@@ -294,5 +305,6 @@ __all__ = [
     "host_daily_signatures_present",
     "parse_systemctl_exec_start",
     "restart_clam_stack",
+    "validate_fdpass_unit",
     "wait_for_clamd_ready",
 ]

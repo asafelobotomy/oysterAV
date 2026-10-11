@@ -18,8 +18,9 @@ def _rule_label(rule: dict[str, Any], index: int) -> str:
     proto = str(rule.get("proto") or "tcp")
     if action == "delete":
         verb = str(rule.get("rule_action") or "allow")
-        return f"{index}. Delete {verb} {port}/{proto}"
-    label = f"{index}. {action.title()} {port}/{proto}"
+        label = f"{index}. Delete {verb} {port}/{proto}"
+    else:
+        label = f"{index}. {action.title()} {port}/{proto}"
     from_addr = rule.get("from_addr")
     if from_addr:
         label += f" from {from_addr}"

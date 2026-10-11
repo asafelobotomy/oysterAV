@@ -11,7 +11,10 @@ from typing import Any
 from oyst_core.privileged.helper_clamd import _parse_flag
 from oyst_core.privileged.helper_validate import resolve_trusted_argv
 
-_CLAMD_UNITS = ("clamav-daemon", "clamd@scan", "clamd")
+# Only names validate_unit() allowlists: Debian/Arch ship clamav-daemon,
+# Fedora/RHEL ship clamd@.service (instance clamd@scan). A bare "clamd" would
+# be probed and then rejected by the helper's unit validator.
+_CLAMD_UNITS = ("clamav-daemon", "clamd@scan")
 _CLAMONACC_UNIT = "clamav-clamonacc"
 _CONF_CANDIDATES = (
     "/etc/clamav/clamd.conf",

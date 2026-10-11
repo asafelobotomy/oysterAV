@@ -16,6 +16,7 @@ from oyst_core.privileged.helper_validate import (
     _SHA256_HEX_RE,
     resolve_trusted_binary,
 )
+from oyst_core.privileged.pins import require_pinned_maldet_sha256
 
 
 def _secure_exec_env() -> dict[str, str]:
@@ -47,6 +48,8 @@ def open_maldet_tarball_fd(path: str, expected_sha256: str) -> int:
     """Open tarball with O_NOFOLLOW and verify SHA-256; return seekable fd."""
     if not _SHA256_HEX_RE.fullmatch(expected_sha256 or ""):
         raise ValueError("install-script requires a 64-char sha256 hex digest")
+    # The caller's digest is untrusted; only a helper-side pin authorises root exec.
+    expected_sha256 = require_pinned_maldet_sha256(expected_sha256)
     tarball = Path(path).resolve()
     _tarball_path_ok(tarball)
     flags = os.O_RDONLY
@@ -79,6 +82,7 @@ def seal_and_run_install_tarball(tarball_path: str, expected_sha256: str) -> int
 
     Never reopens the caller path after hash verification (A-02-R TOCTOU).
     """
+    expected_sha256 = require_pinned_maldet_sha256(expected_sha256)
     fd = open_maldet_tarball_fd(tarball_path, expected_sha256)
     seal_dir = "/var/tmp" if Path("/var/tmp").is_dir() else None  # nosec B108
     seal_root = Path(tempfile.mkdtemp(prefix="oyst-seal-", dir=seal_dir))

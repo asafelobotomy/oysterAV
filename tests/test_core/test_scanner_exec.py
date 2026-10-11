@@ -1,4 +1,4 @@
-"""Tests for privileged scanner exec routing (system vs sealed)."""
+"""Tests for privileged scanner exec routing (system binaries only)."""
 
 from __future__ import annotations
 
@@ -26,7 +26,8 @@ def test_run_privileged_scanner_prefers_system_binary() -> None:
     assert run_priv.call_args[0][0][0] == "/usr/bin/rkhunter"
 
 
-def test_run_privileged_scanner_sealed_validates_argv(tmp_path: Path) -> None:
+def test_run_privileged_scanner_never_runs_runtime_copy_as_root(tmp_path: Path) -> None:
+    """User-writable runtime binaries must never reach pkexec (audit P2)."""
     runtime = (
         tmp_path / "home" / "u" / ".local" / "share" / "oysterav" / "runtime" / "x86_64" / "bin"
     )
@@ -42,39 +43,21 @@ def test_run_privileged_scanner_sealed_validates_argv(tmp_path: Path) -> None:
             "oyst_core.privileged.scanner_exec.runtime_root",
             return_value=runtime.parent.parent,
         ),
-        patch("oyst_core.privileged.scanner_exec.resolve_helper_path", return_value="/usr/lib/x"),
-        patch("oyst_core.privileged.scanner_exec.which", return_value="/usr/bin/pkexec"),
-        patch(
-            "oyst_core.privileged.scanner_exec.run_install_command",
-            return_value=CommandResult(0, "", ""),
-        ) as run_cmd,
+        patch("oyst_core.privileged.scanner_exec.run_privileged") as run_priv,
+        patch("oyst_core.privileged.runner.subprocess.run") as sp_run,
     ):
         res = run_privileged_scanner(str(bin_path), [])
-    assert res.returncode == 0
-    argv = run_cmd.call_args[0][0]
-    assert "run-sealed" in argv
-    assert "chkrootkit" in argv
-
-
-def test_run_privileged_scanner_rejects_bad_sealed_argv(tmp_path: Path) -> None:
-    runtime = (
-        tmp_path / "home" / "u" / ".local" / "share" / "oysterav" / "runtime" / "x86_64" / "bin"
-    )
-    runtime.mkdir(parents=True)
-    bin_path = runtime / "chkrootkit"
-    bin_path.write_bytes(b"x")
-    with (
-        patch(
-            "oyst_core.privileged.scanner_exec.resolve_trusted_binary",
-            side_effect=ValueError("missing"),
-        ),
-        patch(
-            "oyst_core.privileged.scanner_exec.runtime_root",
-            return_value=runtime.parent.parent,
-        ),
-        patch("oyst_core.privileged.scanner_exec.resolve_helper_path", return_value="/usr/lib/x"),
-        patch("oyst_core.privileged.scanner_exec.which", return_value="/usr/bin/pkexec"),
-    ):
-        res = run_privileged_scanner(str(bin_path), ["--evil"])
     assert res.returncode == 1
-    assert "argument" in (res.stderr or "").lower() or "no arguments" in (res.stderr or "")
+    assert "system package" in res.stderr
+    run_priv.assert_not_called()
+    sp_run.assert_not_called()
+
+
+def test_run_privileged_scanner_missing_everywhere() -> None:
+    with patch(
+        "oyst_core.privileged.scanner_exec.resolve_trusted_binary",
+        side_effect=ValueError("missing"),
+    ):
+        res = run_privileged_scanner("/nonexistent/rkhunter", [])
+    assert res.returncode == 1
+    assert "trusted system binary" in res.stderr

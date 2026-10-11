@@ -15,41 +15,38 @@ from oyst_core.privileged.helper_install_script import (
     seal_and_run_install_tarball,
 )
 from oyst_core.privileged.helper_scan_concert import _validate_job_id
-from oyst_core.privileged.helper_sealed_scanner import validate_sealed_source
+from oyst_core.privileged.oyst_helper import run_helper_argv
 from tests.test_security.corpora import BAD_SHA256, CONCERT_ABUSE_CASES, PATH_TRAVERSAL, Case
 
 pytestmark = pytest.mark.security
+
+
+def test_install_tarball_refuses_unpinned_digest() -> None:
+    """Audit P3: attacker tarball + its own sha must be refused by the helper."""
+    with patch("oyst_core.privileged.helper_install_script.subprocess.run") as run:
+        with pytest.raises(ValueError, match="not pinned"):
+            seal_and_run_install_tarball("/tmp/oyst-maldet-x/evil.tar.gz", "b" * 64)
+    run.assert_not_called()
+
 
 _CONCERT_RECIPE_CASES = tuple(c for c in CONCERT_ABUSE_CASES if c.surface == "helper_concert")
 _INSTALL_PKG_CASES = tuple(c for c in CONCERT_ABUSE_CASES if c.surface == "helper_fw_install")
 
 
 @pytest.mark.parametrize(
-    ("path", "basename", "sha"),
+    "path",
     [
-        ("/tmp/evil", "rkhunter", "a" * 64),
-        ("/home/u/.local/share/oysterav/runtime/x/bin/rkhunter", "bash", "a" * 64),
-        (
-            "/home/u/.local/share/oysterav/runtime/x/bin/rkhunter",
-            "rkhunter",
-            BAD_SHA256[1],
-        ),
-        (
-            "/home/u/.local/share/oysterav/runtime/x/bin/chkrootkit",
-            "rkhunter",
-            "a" * 64,
-        ),
-        *[(p, "rkhunter", "a" * 64) for p in PATH_TRAVERSAL],
+        "/home/u/.local/share/oysterav/runtime/x/bin/rkhunter",
+        "/tmp/x/.local/share/oysterav/runtime/a/rkhunter",
+        *PATH_TRAVERSAL,
     ],
 )
-def test_validate_sealed_source_rejects(path: str, basename: str, sha: str) -> None:
-    with pytest.raises(ValueError):
-        validate_sealed_source(path, basename, sha)
-
-
-def test_validate_sealed_source_accepts_runtime_shape() -> None:
-    homeish = Path("/home/tester/.local/share/oysterav/runtime/pack/bin/rkhunter")
-    assert validate_sealed_source(str(homeish), "rkhunter", "a" * 64) == homeish
+def test_run_sealed_is_always_refused(path: str) -> None:
+    """Audit P2: root never executes user-writable runtime binaries."""
+    with patch("oyst_core.privileged.oyst_helper.subprocess.run") as run:
+        rc = run_helper_argv(["run-sealed", path, "rkhunter", "a" * 64, "--check"])
+    assert rc == 2
+    run.assert_not_called()
 
 
 @pytest.mark.parametrize("sha", BAD_SHA256)
@@ -108,6 +105,10 @@ def test_seal_tarball_uses_fd_bytes_not_path_after_verify(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A-02-R: sealed extract uses verified fd bytes after unlink+recreate at path."""
+    monkeypatch.setattr(
+        "oyst_core.privileged.helper_install_script.require_pinned_maldet_sha256",
+        lambda value: value.lower(),
+    )
     import hashlib
     import os
     import shutil

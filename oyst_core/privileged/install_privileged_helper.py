@@ -14,6 +14,7 @@ from oyst_core.privileged.auth_grant import migrate_grant_on_helper_install
 from oyst_core.privileged.auth_grant_scope import (
     SERVICE_LIFECYCLE_ACTION_IDS as SERVICE_LIFECYCLE_ACTION_IDS,
 )
+from oyst_core.privileged.helper_site_trust import untrusted_site_reason
 from oyst_core.privileged.polkit_policy import build_polkit_policy
 from oyst_core.privileged.runner import run_command
 from oyst_core.privileged.safe_write import write_text_nofollow
@@ -45,9 +46,11 @@ POLKIT_ACTION_IDS = (
     "io.github.asafelobotomy.helper.run-sealed",
 )
 
+# ``-I`` (isolated mode): ignore PYTHON* env vars, the script dir/cwd and the
+# user site-packages; the explicit sys.path.insert below still applies.
 HELPER_SCRIPT = textwrap.dedent(
     """\
-    #!{python}
+    #!{python} -I
     from oyst_core.privileged.oyst_helper import main
     main()
     """,
@@ -55,7 +58,7 @@ HELPER_SCRIPT = textwrap.dedent(
 
 HELPER_SCRIPT_WITH_SITE = textwrap.dedent(
     """\
-    #!{python}
+    #!{python} -I
     import sys
     sys.path.insert(0, {site_root!r})
     from oyst_core.privileged.oyst_helper import main
@@ -110,7 +113,8 @@ def _python_imports_oyst_core(python: str, *, site_root: Path | None = None) -> 
         code = f"import sys; sys.path.insert(0, {str(site_root)!r}); import oyst_core"
     try:
         proc = subprocess.run(
-            [python, "-c", code],
+            # -I matches the helper shebang: no PYTHON* env, cwd or user site.
+            [python, "-I", "-c", code],
             capture_output=True,
             text=True,
             timeout=20,
@@ -135,19 +139,13 @@ def _validate_site_root(path: Path, *, require_root_owned: bool = True) -> Path:
         raise OSError(f"oyst_core package not found under {resolved}")
     if not require_root_owned:
         return resolved
-    try:
-        st = resolved.stat()
-    except OSError as exc:
-        raise OSError(f"cannot stat oyst_core site root {resolved}: {exc}") from exc
-    if st.st_uid != 0:
+    reason = untrusted_site_reason(resolved)
+    if reason:
         raise OSError(
-            f"Refusing to embed user-writable site root {resolved} in oyst-helper "
-            "(must be root-owned). Install oysterAV via a distro package, or place "
-            "oyst_core under a root-owned prefix.",
-        )
-    if st.st_mode & 0o022:
-        raise OSError(
-            f"Refusing to embed world/group-writable site root {resolved} in oyst-helper",
+            f"Refusing to embed site root {resolved} in oyst-helper: {reason}. "
+            "The site root, every ancestor and the oyst_core tree must be root-owned "
+            "and not group/world-writable. Install oysterAV via a distro package, or "
+            "place oyst_core under a root-owned prefix.",
         )
     return resolved
 

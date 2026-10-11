@@ -17,15 +17,22 @@ from oyst_core.privileged.auth_grant_scope import (
     grant_expires_at,
     parse_expires,
 )
+from oyst_core.privileged.helper_site_trust import helper_untrusted_site_reason
 from oyst_core.privileged.runner import run_command
 from oyst_core.privileged.safe_write import write_text_nofollow
-from oyst_core.schedule_linger import current_username
 
 RULES_PATH = Path("/etc/polkit-1/rules.d/49-oysterav-service-lifecycle.rules")
 # World-readable stamp: rules.d is typically root:polkitd mode 750, so unprivileged
 # auth.status cannot read the rules file directly.
 GRANT_STAMP_PATH = Path("/usr/local/share/oysterav/service-lifecycle.grant")
 _USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+
+
+def current_username() -> str:
+    # Lazy: schedule_linger imports oyst_core.privileged, which imports this module.
+    from oyst_core.schedule_linger import current_username as _current_username
+
+    return _current_username()
 
 
 def _validate_username(user: str) -> str:
@@ -189,6 +196,21 @@ def grant_service_lifecycle(
         }
 
     target_user = _validate_username(user or current_username())
+    if prefix is None:
+        # Passwordless YES on a helper that imports user-writable code is
+        # silent root for any process running as that user (audit P4).
+        untrusted = helper_untrusted_site_reason()
+        if untrusted:
+            return {
+                "ok": False,
+                "message": (
+                    "Refusing passwordless grant: oyst-helper embeds an untrusted "
+                    f"oyst_core site root ({untrusted}). Install oysterAV from a "
+                    "distro package (or a root-owned prefix) first."
+                ),
+                "rules_path": str(RULES_PATH),
+                "granted_user": target_user,
+            }
     path = (
         prefix / "etc" / "polkit-1" / "rules.d" / "49-oysterav-service-lifecycle.rules"
         if prefix
@@ -204,7 +226,7 @@ def grant_service_lifecycle(
         path.parent.mkdir(parents=True, exist_ok=True)
         write_text_nofollow(path, build_service_lifecycle_rules(target_user), mode=0o644)
         _write_grant_stamp(target_user, stamp, expires=expires_at)
-        install_expire_timer(prefix=prefix)
+        install_expire_timer(prefix=prefix, expires=expires_at)
         if prefix is None:
             run_command(["systemctl", "reload", "polkit"], timeout=15)
     except (OSError, ValueError) as exc:
@@ -328,10 +350,15 @@ def migrate_grant_on_helper_install(*, prefix: Path | None = None) -> dict[str, 
     user = fields.get("user")
     if not user:
         return None
-    # Preserve remaining TTL when the existing stamp is still valid.
+    # Preserve remaining TTL when the existing stamp is still valid; an expired
+    # or undated stamp must be revoked, never renewed by a helper reinstall.
     expires_raw = fields.get("expires")
     exp = parse_expires(expires_raw) if expires_raw else None
     clock = datetime.now(UTC)
-    if exp is not None and clock < exp:
-        return grant_service_lifecycle(user, prefix=prefix, expires=exp)
-    return grant_service_lifecycle(user, prefix=prefix)
+    if exp is None or clock >= exp:
+        return revoke_service_lifecycle(prefix=prefix)
+    result = grant_service_lifecycle(user, prefix=prefix, expires=exp)
+    if not result.get("ok"):
+        # Do not leave a legacy grant live when re-grant was refused.
+        revoke_service_lifecycle(prefix=prefix)
+    return result

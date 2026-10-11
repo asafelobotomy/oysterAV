@@ -181,7 +181,7 @@ def test_helper_script_plain_when_system_python_has_oyst_core() -> None:
     ):
         text = mod._helper_script_text(allow_untrusted_python=False)
     assert "sys.path.insert" not in text
-    assert text.startswith("#!/usr/bin/python3\n")
+    assert text.startswith("#!/usr/bin/python3 -I\n")
 
 
 def test_freshclam_timer_allowlisted() -> None:

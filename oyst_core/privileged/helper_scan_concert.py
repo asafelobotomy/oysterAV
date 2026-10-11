@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -15,13 +16,13 @@ from oyst_core.packs.rkhunter_disable_tests import apply_disable_tests_overlay
 from oyst_core.privileged.helper_clamd import _parse_flag, _parse_multi
 from oyst_core.privileged.helper_setup_harden import _has_bool, _step
 from oyst_core.privileged.helper_validate import resolve_trusted_argv, resolve_trusted_binary
-from oyst_core.privileged.safe_write import write_text_nofollow
 
 _JOB_ID_RE = re.compile(r"^[0-9a-fA-F-]{8,64}$")
 _UNHIDE_MODES = frozenset({"sys", "brute", "quick", "check", "fork", "proc", "reverse"})
 _ALLOWED_PACKS = frozenset({"rkhunter", "chkrootkit", "unhide", "lynis"})
 # Root-owned under /var/lib (not world-writable /var/tmp).
 _REPORT_ROOT = Path("/var/lib/oysterav/scan-reports")
+_REPORT_DIR_OWNER = 0  # tests patch to the test uid
 
 
 def _caller_uid() -> int | None:
@@ -39,54 +40,79 @@ def _validate_job_id(raw: str) -> str:
     return cleaned
 
 
-def _assert_root_owned_dir(path: Path) -> None:
-    """Fail closed: refuse user-owned or group/world-writable parents (no chown/chmod)."""
+_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def _open_root_owned_dir(name: str, *, dir_fd: int | None, mode: int) -> int:
+    """Open (creating if missing) a root-owned dir without following symlinks.
+
+    Refuses user-owned or group/world-writable entries. Traverse bits are set on
+    the fd (fchmod), never via a path, so a swapped entry cannot redirect them.
+    """
     try:
-        st = path.stat()
-    except OSError as exc:
-        raise ValueError(f"cannot stat report parent {path}: {exc}") from exc
-    if st.st_uid != 0:
-        raise ValueError(f"report parent must be root-owned: {path}")
-    if st.st_mode & 0o022:
-        raise ValueError(f"report parent must not be group- or world-writable: {path}")
-    # Prefer sticky on world-writable parents; 0o022 rejection above covers that case.
+        os.mkdir(name, mode, dir_fd=dir_fd)
+    except FileExistsError:
+        pass
+    fd = os.open(name, _DIR_FLAGS, dir_fd=dir_fd)
+    try:
+        st = os.fstat(fd)
+        if st.st_uid != _REPORT_DIR_OWNER:
+            raise ValueError(f"report dir must be root-owned: {name}")
+        if st.st_mode & 0o022:
+            raise ValueError(f"report dir must not be group- or world-writable: {name}")
+        if stat.S_IMODE(st.st_mode) != mode:
+            os.fchmod(fd, mode)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
 
 
-def _ensure_report_root() -> Path:
-    parent = _REPORT_ROOT.parent
-    if parent.exists():
-        _assert_root_owned_dir(parent)
-    else:
-        parent.mkdir(mode=0o750, parents=True, exist_ok=True)
-        os.chmod(parent, 0o750)  # root+group traverse only  # nosec B103
-    if _REPORT_ROOT.exists():
-        _assert_root_owned_dir(_REPORT_ROOT)
-    else:
-        _REPORT_ROOT.mkdir(mode=0o750, parents=False, exist_ok=True)
-        os.chmod(_REPORT_ROOT, 0o750)  # root+group traverse only  # nosec B103
-        _assert_root_owned_dir(_REPORT_ROOT)
-    return _REPORT_ROOT
+def _open_report_dir(job_id: str) -> int:
+    """Return an fd for ``<root>/<job_id>``: every level root-owned, others may traverse.
 
-
-def _report_dir(job_id: str) -> Path:
-    root = _ensure_report_root()
-    path = root / job_id
-    path.mkdir(parents=True, exist_ok=True)
-    uid = _caller_uid()
-    if uid is not None:
-        os.chown(path, uid, -1)
-    os.chmod(path, 0o700)
-    return path
+    The unprivileged caller reads reports (orchestrator_scan_concert), so the
+    root and parent are 0711 and the job dir 0755 — but none is caller-owned,
+    so the caller cannot rename or replace report entries.
+    """
+    fd = os.open(str(_REPORT_ROOT.parent.parent), _DIR_FLAGS)
+    try:
+        for name, mode in (
+            (_REPORT_ROOT.parent.name, 0o711),
+            (_REPORT_ROOT.name, 0o711),
+            (job_id, 0o755),
+        ):
+            child = _open_root_owned_dir(name, dir_fd=fd, mode=mode)
+            os.close(fd)
+            fd = child
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
 
 
 def _write_report(job_id: str, pack: str, text: str) -> str:
-    dest = _report_dir(job_id) / f"{pack}.out"
-    write_text_nofollow(dest, text, mode=0o600)
-    uid = _caller_uid()
-    if uid is not None:
-        os.chown(dest, uid, -1)
-    os.chmod(dest, 0o600)
-    return str(dest)
+    name = f"{pack}.out"
+    dir_fd = _open_report_dir(job_id)
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC
+        fd = os.open(name, flags, 0o600, dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(f"refusing non-regular report file: {name}")
+        data = text.encode("utf-8")
+        written = 0
+        while written < len(data):
+            written += os.write(fd, data[written:])
+        uid = _caller_uid()
+        if uid is not None:
+            os.fchown(fd, uid, -1)
+        os.fchmod(fd, 0o600)
+    finally:
+        os.close(fd)
+    return str(_REPORT_ROOT / job_id / name)
 
 
 def _secure_env() -> dict[str, str]:

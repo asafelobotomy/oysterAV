@@ -69,7 +69,8 @@ def _family_install_argv(family: str, packages: list[str]) -> list[str]:
     if not pkgs:
         raise ValueError("no packages to install")
     if family == "arch":
-        return _validate_run_argv(["pacman", "-Sy", "--noconfirm", *pkgs])
+        # -S without -y: a db refresh without -u is an unsupported Arch partial upgrade.
+        return _validate_run_argv(["pacman", "-S", "--needed", "--noconfirm", *pkgs])
     if family == "fedora":
         return _validate_run_argv(["dnf", "install", "-y", *pkgs])
     if family in ("debian", "ubuntu"):

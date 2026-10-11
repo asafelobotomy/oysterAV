@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import os
 import textwrap
+from datetime import UTC, datetime
 from pathlib import Path
 
 from oyst_core.privileged.auth_grant_scope import (
     EXPIRE_SCRIPT_PATH,
     EXPIRE_SERVICE_UNIT,
     EXPIRE_TIMER_UNIT,
-    GRANT_TTL,
+    grant_expires_at,
 )
+from oyst_core.privileged.helper_site_trust import helper_untrusted_site_reason
 from oyst_core.privileged.runner import run_command
 from oyst_core.privileged.safe_write import write_text_nofollow
 
@@ -19,19 +21,22 @@ _SYSTEMD_DIR = Path("/etc/systemd/system")
 
 
 def _expire_script_text(python: str, site_insert: str = "") -> str:
-    insert = f"{site_insert}\n" if site_insert else ""
-    return textwrap.dedent(
-        f"""\
-        #!{python}
-        {insert}from oyst_core.privileged.auth_grant import revoke_service_lifecycle
-        raise SystemExit(0 if revoke_service_lifecycle().get("ok") else 1)
-        """,
-    )
+    # Built line by line: dedent() over an interpolated multi-line site insert
+    # left the shebang indented (unexecutable timer script).
+    lines = [f"#!{python} -I"]
+    if site_insert:
+        lines.extend(line.strip() for line in site_insert.splitlines() if line.strip())
+    lines.append("from oyst_core.privileged.auth_grant import revoke_service_lifecycle")
+    lines.append('raise SystemExit(0 if revoke_service_lifecycle().get("ok") else 1)')
+    return "\n".join(lines) + "\n"
 
 
 def _site_insert_from_helper() -> str:
     helper = Path("/usr/lib/oysterav/oyst-helper")
     if not helper.is_file():
+        return ""
+    if helper_untrusted_site_reason(helper):
+        # Never let a root timer import user-writable code (audit P4).
         return ""
     try:
         text = helper.read_text(encoding="utf-8")
@@ -56,12 +61,28 @@ def _resolve_expire_python() -> str:
         except OSError:
             first = ""
         if first.startswith("#!"):
-            return first[2:].strip() or "/usr/bin/python3"
+            # Interpreter only; flags such as ``-I`` are re-added by the template.
+            parts = first[2:].split()
+            return parts[0] if parts else "/usr/bin/python3"
     return "/usr/bin/python3"
 
 
-def install_expire_timer(*, prefix: Path | None = None) -> None:
-    """Install oneshot timer that revokes the grant after GRANT_TTL."""
+def _on_calendar(expires: datetime) -> str:
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    return expires.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def install_expire_timer(
+    *,
+    prefix: Path | None = None,
+    expires: datetime | None = None,
+) -> None:
+    """Install oneshot timer that revokes the grant at the absolute *expires* time.
+
+    OnCalendar (not OnActiveSec) so the deadline survives reboots; Persistent=true
+    fires a missed expiry on the next boot.
+    """
     if prefix is not None:
         script = prefix / "usr" / "lib" / "oysterav" / "oyst-auth-expire"
         systemd = prefix / "etc" / "systemd" / "system"
@@ -75,7 +96,7 @@ def install_expire_timer(*, prefix: Path | None = None) -> None:
         _expire_script_text(_resolve_expire_python(), _site_insert_from_helper()),
         mode=0o755,
     )
-    secs = int(GRANT_TTL.total_seconds())
+    when = _on_calendar(expires if expires is not None else grant_expires_at())
     service = textwrap.dedent(
         f"""\
         [Unit]
@@ -90,7 +111,7 @@ def install_expire_timer(*, prefix: Path | None = None) -> None:
         [Unit]
         Description=oysterAV passwordless grant expiry
         [Timer]
-        OnActiveSec={secs}
+        OnCalendar={when}
         AccuracySec=1min
         Persistent=true
         Unit={EXPIRE_SERVICE_UNIT}

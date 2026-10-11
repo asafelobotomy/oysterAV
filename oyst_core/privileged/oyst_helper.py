@@ -28,7 +28,6 @@ from oyst_core.privileged.helper_firewall import (
 )
 from oyst_core.privileged.helper_firewall_batch import run_ufw_batch
 from oyst_core.privileged.helper_install_script import seal_and_run_install_tarball
-from oyst_core.privileged.helper_sealed_scanner import seal_and_run_scanner
 from oyst_core.privileged.helper_services import (
     _apply_maldet_monitor_mode,
     _build_maldet_config_argv,
@@ -124,7 +123,7 @@ def _secure_exec_env() -> dict[str, str]:
 def run_helper_argv(argv: Sequence[str]) -> int:
     if not argv:
         print(
-            "usage: oyst-helper run|run-sealed|install-script|firewall|fail2ban|"
+            "usage: oyst-helper run|install-script|firewall|fail2ban|"
             "systemctl|systemctl-up|maldet-config|rkhunter-whitelist|"
             "clamd-cocontrol|setup-harden|setup-concert|scan-concert|update-concert",
             file=sys.stderr,
@@ -148,17 +147,15 @@ def run_helper_argv(argv: Sequence[str]) -> int:
         proc = subprocess.run(cmd, check=False, env=_secure_exec_env())
         return proc.returncode
     if subcommand == "run-sealed":
-        if len(argv) < 4:
-            print(
-                "usage: oyst-helper run-sealed /path/to/runtime/bin <basename> <sha256> [args...]",
-                file=sys.stderr,
-            )
-            return 2
-        try:
-            return seal_and_run_scanner(argv[1], argv[2], argv[3], list(argv[4:]))
-        except (ValueError, OSError) as exc:
-            print(str(exc), file=sys.stderr)
-            return 2
+        # Retired: the expected digest came from the unprivileged caller and the
+        # source lived in a user-writable runtime tree, so "sealing" could not
+        # establish trust. Privileged scans require root-owned system binaries.
+        print(
+            "run-sealed is disabled: privileged scans require a system package "
+            "(user-writable runtime binaries are never executed as root)",
+            file=sys.stderr,
+        )
+        return 2
     if subcommand == "install-script":
         if len(argv) < 3:
             print(

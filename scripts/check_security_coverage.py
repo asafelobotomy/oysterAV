@@ -29,6 +29,8 @@ SECURITY_MODULES = (
     "oyst_core/packs/firewall_select.py",
     "oyst_core/packs/firewall_ensure.py",
     "oyst_core/audit.py",
+    "oyst_core/privileged/pins.py",
+    "oyst_core/privileged/helper_site_trust.py",
 )
 
 # Follow-up (not yet ≥85% under the focused suite): helper_clamd, oyst_helper,
