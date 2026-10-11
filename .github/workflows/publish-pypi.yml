@@ -3,6 +3,12 @@ name: Publish PyPI
 # Publishes wheel/sdist from a GitHub Release to PyPI via Trusted Publishing.
 # One-time setup: https://pypi.org/manage/account/publishing/
 #   - Owner: asafelobotomy, Repository: oysterAV, Workflow: publish-pypi.yml, Environment: pypi
+#
+# release.yml dispatches this workflow (workflow_dispatch, tag=vX.Y.Z) after the
+# GitHub Release is published: releases created with GITHUB_TOKEN never fire
+# `release: published`. That trigger is kept for manually created releases.
+# This must stay a top-level (non-reusable) workflow: Trusted Publishing from a
+# reusable workflow is unsupported by pypa/gh-action-pypi-publish.
 
 on:
   release:
@@ -26,6 +32,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true

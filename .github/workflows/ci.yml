@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
@@ -42,9 +44,21 @@ jobs:
         run: uv run pytest -m security -q --no-cov
       - name: Security module coverage (≥85%)
         run: uv run python scripts/check_security_coverage.py
+      # Tool pins: keep in sync with scripts/check.sh. Python 3.12 is required to
+      # parse PEP 695 syntax; bandit silently skips unparseable files, so fail on skips.
       - name: Bandit (medium+ severity/confidence)
-        run: uv tool run bandit -c bandit.yaml -r oyst_core oyst_cli -ll -ii
-      - run: uv tool run pip-audit
+        run: |
+          set -euo pipefail
+          uv tool run --python 3.12 bandit==1.9.4 -c bandit.yaml -r oyst_core oyst_cli -ll -ii \
+            | tee "$RUNNER_TEMP/bandit.txt"
+          grep -q '^Files skipped (0):' "$RUNNER_TEMP/bandit.txt" || {
+            echo "::error::bandit skipped files (see 'Files skipped' above)"; exit 1; }
+      - name: pip-audit (project lockfile)
+        run: |
+          set -euo pipefail
+          uv export --frozen --all-extras --no-emit-project --quiet -o "$RUNNER_TEMP/requirements.txt"
+          uv tool run pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" \
+            --require-hashes --disable-pip --progress-spinner off
       - name: GUI must not call security binaries directly
         run: |
           ! rg -n "subprocess\.(run|call|Popen)|os\.system\(|\bpkexec\b|\bsystemctl\b.*\bclam" oysterav/ || \

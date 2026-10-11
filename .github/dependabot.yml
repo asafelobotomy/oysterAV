@@ -7,7 +7,9 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
 
-  - package-ecosystem: pip
+  # uv ecosystem updates pyproject.toml and uv.lock together (the pip ecosystem
+  # only touched pyproject.toml, leaving the lockfile the gates audit stale).
+  - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
