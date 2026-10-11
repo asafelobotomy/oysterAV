@@ -25,7 +25,7 @@ optdepends=(
   'lynis: hardening audits'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('72f28e0c1a219831ff5bc587c3a267c62c1ad82f79d0414262037b1bec20a443')
 
 build() {
   cd "oysterAV-$pkgver"
