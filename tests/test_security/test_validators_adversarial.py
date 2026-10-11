@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from pathlib import Path
 from unittest.mock import patch
 
@@ -89,7 +90,11 @@ def test_validate_ip_rejects(value: str) -> None:
 def test_validate_ip_accepts() -> None:
     assert validate_ip("192.0.2.1") == "192.0.2.1"
     assert validate_ip(" 2001:db8::1 ") == "2001:db8::1"
-    assert validate_ip("::ffff:192.0.2.1") == "::ffff:192.0.2.1"
+    # str() of IPv4-mapped addresses differs across Python versions
+    # (3.12: '::ffff:c000:201', 3.13+: '::ffff:192.0.2.1'); compare addresses.
+    assert ipaddress.ip_address(validate_ip("::ffff:192.0.2.1")) == ipaddress.ip_address(
+        "::ffff:192.0.2.1"
+    )
 
 
 @pytest.mark.parametrize(
