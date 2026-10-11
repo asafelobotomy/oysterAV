@@ -90,7 +90,7 @@ def _issue_lines(steps: list[dict[str, Any]]) -> list[str]:
 
 
 def _run_auto_install(wizard: SetupWizard) -> None:
-    wizard._load_preferences()
+    # Preferences were loaded when the wizard opened; keep the user's toggles.
     wizard._auto_install_busy = True
     wizard.welcome_status.set_text("Running Auto-Install with recommended defaults…")
     wizard._set_status("Running Auto-Install…")

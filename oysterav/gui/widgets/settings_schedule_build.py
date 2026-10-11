@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import action_row, combo_row, entry_row, switch_row
 from oysterav.gui.widgets.common import bind_string_combo_row, make_button
 from oysterav.gui.widgets.settings_const import (
     FREQUENCY_LABELS,
@@ -45,11 +46,11 @@ def build_schedule_group(page: SettingsPage) -> None:
         "Changes save automatically and update the timer.",
     )
 
-    page.schedule_status_row = Adw.ActionRow(title="Timer status")
+    page.schedule_status_row = action_row(title="Timer status")
     page.schedule_status_row.set_subtitle("Loading…")
     schedule.add(page.schedule_status_row)
 
-    page.sched_enabled_row = Adw.SwitchRow(title="Enable scheduled scan")
+    page.sched_enabled_row = switch_row(title="Enable scheduled scan")
     page.sched_enabled_row.set_subtitle("Enable or disable the systemd user timer")
     page.sched_enabled_row.connect(
         "notify::active",
@@ -57,7 +58,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     )
     schedule.add(page.sched_enabled_row)
 
-    page.sched_profile_row = Adw.ComboRow(title="Scan profile")
+    page.sched_profile_row = combo_row(title="Scan profile")
     page.sched_profile_row.set_subtitle("Preset packs and paths (custom needs packs)")
     bind_string_combo_row(page.sched_profile_row, SCHEDULE_PROFILE_LABELS)
     page.sched_profile_row.connect(
@@ -66,7 +67,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     )
     schedule.add(page.sched_profile_row)
 
-    page.sched_frequency_row = Adw.ComboRow(title="Frequency")
+    page.sched_frequency_row = combo_row(title="Frequency")
     page.sched_frequency_row.set_subtitle("How often the user timer fires")
     bind_string_combo_row(page.sched_frequency_row, FREQUENCY_LABELS)
     page.sched_frequency_row.connect(
@@ -75,13 +76,13 @@ def build_schedule_group(page: SettingsPage) -> None:
     )
     schedule.add(page.sched_frequency_row)
 
-    page.sched_time_row = Adw.EntryRow(title="Time (HH:MM)")
+    page.sched_time_row = entry_row(title="Time (HH:MM)")
     page.sched_time_row.set_tooltip_text("Local time for daily and weekly schedules")
     page.sched_time_row.set_show_apply_button(True)
     page.sched_time_row.connect("apply", lambda *a: on_sched_time_saved(page, *a))
     schedule.add(page.sched_time_row)
 
-    page.sched_weekday_row = Adw.ComboRow(title="Weekday")
+    page.sched_weekday_row = combo_row(title="Weekday")
     page.sched_weekday_row.set_subtitle("Used when frequency is weekly")
     bind_string_combo_row(page.sched_weekday_row, WEEKDAY_LABELS)
     page.sched_weekday_row.connect(
@@ -90,7 +91,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     )
     schedule.add(page.sched_weekday_row)
 
-    page.sched_calendar_row = Adw.EntryRow(title="Custom OnCalendar")
+    page.sched_calendar_row = entry_row(title="Custom OnCalendar")
     page.sched_calendar_row.set_tooltip_text(
         "Required when frequency is Custom. Example: *-*-* 03:30:00. "
         "Press the row checkmark to save.",
@@ -102,7 +103,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     )
     schedule.add(page.sched_calendar_row)
 
-    page.sched_packs_row = Adw.EntryRow(title="Packs override")
+    page.sched_packs_row = entry_row(title="Packs override")
     page.sched_packs_row.set_tooltip_text(
         "Comma-separated packs; empty uses the profile default. Press the row checkmark to save.",
     )
@@ -110,7 +111,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     page.sched_packs_row.connect("apply", lambda *a: on_sched_packs_saved(page, *a))
     schedule.add(page.sched_packs_row)
 
-    page.sched_paths_row = Adw.EntryRow(title="Paths override")
+    page.sched_paths_row = entry_row(title="Paths override")
     page.sched_paths_row.set_tooltip_text(
         "Comma-separated paths; empty uses the profile default. Press the row checkmark to save.",
     )
@@ -118,7 +119,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     page.sched_paths_row.connect("apply", lambda *a: on_sched_paths_saved(page, *a))
     schedule.add(page.sched_paths_row)
 
-    page.sched_quarantine_row = Adw.ComboRow(title="Quarantine")
+    page.sched_quarantine_row = combo_row(title="Quarantine")
     page.sched_quarantine_row.set_subtitle(
         "Timer override — Auto follows General auto-quarantine",
     )
@@ -129,7 +130,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     )
     schedule.add(page.sched_quarantine_row)
 
-    page.sched_backend_row = Adw.ComboRow(title="Scan backend")
+    page.sched_backend_row = combo_row(title="Scan backend")
     page.sched_backend_row.set_subtitle(
         "Timer override — Inherit follows General scan backend",
     )
@@ -140,7 +141,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     )
     schedule.add(page.sched_backend_row)
 
-    page.sched_persistent_row = Adw.SwitchRow(title="Catch up missed runs")
+    page.sched_persistent_row = switch_row(title="Catch up missed runs")
     page.sched_persistent_row.set_subtitle(
         "Run missed scans after boot or login (systemd Persistent=true)",
     )
@@ -150,7 +151,7 @@ def build_schedule_group(page: SettingsPage) -> None:
     )
     schedule.add(page.sched_persistent_row)
 
-    run_row = Adw.ActionRow(title="Run scheduled scan now")
+    run_row = action_row(title="Run scheduled scan now")
     run_row.set_subtitle(
         "Runs once with the current saved schedule (does not change the timer)",
     )

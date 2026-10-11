@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import combo_row
 from oysterav.gui.widgets.common import make_button, run_in_thread
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ def build_firewall_page(wizard: SetupWizard, box: Gtk.Box) -> None:
     box.append(wizard.firewall_status_label)
 
     group = Adw.PreferencesGroup(title="Managed firewall choice")
-    wizard.firewall_backend_row = Adw.ComboRow(title="Backend")
+    wizard.firewall_backend_row = combo_row(title="Backend")
     wizard.firewall_backend_row.set_model(
         Gtk.StringList.new(["UFW (recommended)", "firewalld", "Keep host as-is"]),
     )
@@ -59,7 +60,12 @@ def _choice_to_backend(index: int) -> str:
 
 def refresh_firewall_page(wizard: SetupWizard) -> None:
     def worker() -> dict[str, Any]:
-        return wizard.client.firewall_recommend()
+        data = dict(wizard.client.firewall_recommend())
+        try:
+            data["_saved_backend"] = wizard.client.config_get("firewall.managed_backend")
+        except Exception:  # noqa: BLE001 — optional preference
+            data["_saved_backend"] = None
+        return data
 
     def done(data: dict[str, Any]) -> bool:
         rec = str(data.get("recommended") or "ufw")
@@ -87,10 +93,7 @@ def refresh_firewall_page(wizard: SetupWizard) -> None:
         ]
         wizard.firewall_backend_row.set_model(Gtk.StringList.new(titles))
         pref = 0 if rec == "ufw" else 1
-        try:
-            saved = wizard.client.config_get("firewall.managed_backend")
-        except Exception:
-            saved = None
+        saved = data.get("_saved_backend")
         if saved == "firewalld":
             pref = 1
         elif saved == "none":

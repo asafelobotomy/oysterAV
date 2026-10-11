@@ -16,6 +16,7 @@ from gi.repository import Adw, Gtk  # noqa: E402
 from oyst_core.client import OystClient
 from oyst_core.models import ScanProfile
 from oyst_core.privilege import build_scan_privileged_plan
+from oysterav.gui.widgets.plain_rows import banner, combo_row
 from oysterav.gui.scan_helpers import PackCardState, expected_packs_for_profile, pack_card_title
 from oysterav.gui.widgets.common import (
     PreferencesGroup,
@@ -60,6 +61,7 @@ class ScanPage:
         self._scanning = False
         self._custom_path: str | None = None
         self._poll_id = 0
+        self._poll_inflight = False
         self._last_scan: dict[str, Any] | None = None
         self._expected_packs: list[str] = []
         self._job_percent = 0.0
@@ -124,7 +126,7 @@ class ScanPage:
 
         options_group = PreferencesGroup("")
         options_group.add_css_class("oyster-scan-options")
-        profile_row = Adw.ComboRow(title="Scan profile")
+        profile_row = combo_row(title="Scan profile")
         profile_labels = [PROFILE_LABELS[p] for p in SCAN_PROFILES]
         bind_string_combo_row(profile_row, profile_labels, compact=True)
         profile_row.connect(
@@ -134,7 +136,7 @@ class ScanPage:
         options_group.add(profile_row)
         self.profile_row = profile_row
 
-        self.path_row = Adw.ComboRow(title="Scan target")
+        self.path_row = combo_row(title="Scan target")
         bind_string_combo_row(
             self.path_row,
             [label for label, _ in PATH_PRESETS],
@@ -174,7 +176,7 @@ class ScanPage:
         self.progress = Gtk.ProgressBar()
         self.progress.set_visible(False)
         progress_section.append(self.progress)
-        self.result_banner = Adw.Banner(title="")
+        self.result_banner = banner(title="")
         self.result_banner.set_revealed(False)
         progress_section.append(self.result_banner)
         stack.append(progress_section)

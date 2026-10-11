@@ -92,9 +92,11 @@ def maldet_monitor_start(json_mode: bool) -> None:
 
 
 @maldet_monitor_group.command("stop")
+@click.option("--confirm", is_flag=True)
 @click.option("--json", "json_mode", is_flag=True)
-def maldet_monitor_stop(json_mode: bool) -> None:
+def maldet_monitor_stop(confirm: bool, json_mode: bool) -> None:
     """Stop maldet monitor."""
+    require_confirm(confirm, message="--confirm required to stop maldet monitor")
     ok, msg = MaldetPack().monitor_stop()
     emit({"ok": ok, "message": msg}, json_mode=json_mode)
     raise SystemExit(0 if ok else 2)

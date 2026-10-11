@@ -12,6 +12,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import escape_markup
 from oysterav.gui.finding_present import normalize_findings, summarize_findings_badge
 from oysterav.gui.widgets.common import apply_status_css, make_button, make_section_heading
 from oysterav.gui.widgets.finding_list import (
@@ -82,7 +83,7 @@ def present_pack_result_dialog(
     if not findings_norm and not error:
         empty = Adw.StatusPage(
             title="No threats detected",
-            description=f"{pack} completed without findings.",
+            description=f"{escape_markup(pack)} completed without findings.",
         )
         empty.set_icon_name("emblem-ok-symbolic")
         body.append(empty)

@@ -13,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
+from oysterav.gui.widgets.plain_rows import action_row, entry_row, switch_row
 from oysterav.gui.rpc_actions import (
     request_fail2ban_unban,
     request_firewall_status,
@@ -65,7 +66,7 @@ class ShieldPage:
         root.set_margin_end(12)
 
         self._posture = Adw.PreferencesGroup(title="Firewall")
-        self.fw_managed_row = Adw.SwitchRow(title="Managed firewall")
+        self.fw_managed_row = switch_row(title="Managed firewall")
         self.fw_managed_row.set_subtitle("Loading…")
         self.fw_managed_row.connect(
             "notify::active",
@@ -96,11 +97,11 @@ class ShieldPage:
         root.append(self._rules_box)
 
         self._f2b_group = Adw.PreferencesGroup(title="Intrusion prevention")
-        self.f2b_service_row = Adw.SwitchRow(title="fail2ban service")
+        self.f2b_service_row = switch_row(title="fail2ban service")
         self.f2b_service_row.set_subtitle("Start or stop the fail2ban system service")
         self.f2b_service_row.connect("notify::active", self._on_f2b_service_toggled)
         self._f2b_group.add(self.f2b_service_row)
-        reload_row = Adw.ActionRow(title="Reload fail2ban")
+        reload_row = action_row(title="Reload fail2ban")
         reload_btn = make_button("Reload", row_suffix=True)
         reload_btn.connect("clicked", lambda *_: self._on_f2b_reload(False))
         clear_btn = make_button("Reload and clear bans", row_suffix=True)
@@ -108,17 +109,17 @@ class ShieldPage:
         reload_row.add_suffix(reload_btn)
         reload_row.add_suffix(clear_btn)
         self._f2b_group.add(reload_row)
-        self._jails_header = Adw.ActionRow(title="Jails")
+        self._jails_header = action_row(title="Jails")
         self._jails_header.set_subtitle("Loading…")
         self._f2b_group.add(self._jails_header)
         root.append(self._f2b_group)
 
         self._bans_group = Adw.PreferencesGroup(title="Banned IPs")
-        unban_row = Adw.EntryRow(title="Unban IP")
+        unban_row = entry_row(title="Unban IP")
         unban_row.set_show_apply_button(True)
         unban_row.connect("apply", lambda *a: self._on_unban_entry(*a))
         self._bans_group.add(unban_row)
-        self._bans_status = Adw.ActionRow(title="Current bans")
+        self._bans_status = action_row(title="Current bans")
         self._bans_status.set_subtitle("Not loaded — authenticate to refresh")
         load_bans = make_button("Refresh bans", row_suffix=True)
         load_bans.connect("clicked", lambda *_: self._on_load_bans())

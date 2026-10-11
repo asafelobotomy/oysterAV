@@ -13,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
+from oysterav.gui.widgets.plain_rows import action_row, switch_row
 from oysterav.gui.widgets import (
     settings_general_ui,
     settings_host_audit_ui,
@@ -30,6 +31,7 @@ from oysterav.gui.widgets.clamonacc_ui import (
     refresh_onaccess_probe_row,
     remove_clamonacc_path_from_gui,
 )
+from oysterav.gui.widgets.confirm_dialog import confirm_destructive
 from oysterav.gui.widgets.common import (
     make_button,
     make_scrolled_page,
@@ -90,6 +92,8 @@ class SettingsPage:
     terminal_buffer: Gtk.TextBuffer
     _terminal_since_id: int
     _terminal_poll_id: int
+    _terminal_inflight: bool
+    _terminal_gen: int
     _terminal_entries: list[dict[str, Any]]
 
     def __init__(
@@ -114,6 +118,8 @@ class SettingsPage:
         self._section_pages: dict[str, Gtk.Widget] = {}
         self._terminal_since_id = 0
         self._terminal_poll_id = 0
+        self._terminal_inflight = False
+        self._terminal_gen = 0
         self._terminal_entries = []
 
         self.pack_list = PackListWidget(
@@ -205,7 +211,7 @@ class SettingsPage:
     def _build_realtime_section(self) -> None:
         page = Adw.PreferencesPage()
         self.realtime_group = Adw.PreferencesGroup(title="Real-time monitoring")
-        self.clamonacc_row = Adw.SwitchRow(title="Clamonacc monitoring")
+        self.clamonacc_row = switch_row(title="Clamonacc monitoring")
         self.clamonacc_row.set_subtitle(
             "Start/stop on-access scanning and persist clamonacc.enabled "
             "(paths below; Services shows status only)",
@@ -216,7 +222,7 @@ class SettingsPage:
         self._path_action_rows: list[Adw.ActionRow] = []
         add_path_btn = make_button("Add path…", row_suffix=True)
         add_path_btn.connect("clicked", self._on_add_clamonacc_path)
-        add_path_row = Adw.ActionRow(title="Add watched folder")
+        add_path_row = action_row(title="Add watched folder")
         add_path_row.set_subtitle("Folders for on-access scanning")
         add_path_row.add_suffix(add_path_btn)
         self.realtime_group.add(add_path_row)
@@ -295,11 +301,17 @@ class SettingsPage:
         )
 
     def _on_remove_clamonacc_path(self, path: str) -> None:
-        remove_clamonacc_path_from_gui(
-            self.client,
-            path,
-            on_status=self._set_status,
-            on_complete=self.refresh,
+        confirm_destructive(
+            self._window,
+            heading="Remove watch path?",
+            body=f"On-access scanning will stop watching:\n{path}",
+            confirm_label="Remove",
+            on_confirm=lambda: remove_clamonacc_path_from_gui(
+                self.client,
+                path,
+                on_status=self._set_status,
+                on_complete=self.refresh,
+            ),
         )
 
     def _save(self, key: str, value: str) -> None:

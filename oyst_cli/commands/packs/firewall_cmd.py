@@ -178,6 +178,19 @@ def firewall_ufw_limit(
     show_default=True,
     help="Original rule verb (ufw requires: delete allow 123/tcp)",
 )
+@click.option(
+    "--from",
+    "from_addr",
+    default=None,
+    help="Source IP/CIDR of the original rule (omit only for 'from Anywhere' rules)",
+)
+@click.option(
+    "--direction",
+    type=click.Choice(["in", "out"]),
+    default="in",
+    show_default=True,
+    help="Direction of the original rule (only inbound rules can be deleted exactly)",
+)
 @click.option("--confirm", is_flag=True)
 @click.option("--force-lockout-risk", is_flag=True)
 @click.option("--dry-run", is_flag=True)
@@ -186,17 +199,32 @@ def firewall_ufw_delete(
     port: str | None,
     proto: str,
     rule_action: str,
+    from_addr: str | None,
+    direction: str,
     confirm: bool,
     force_lockout_risk: bool,
     dry_run: bool,
     json_mode: bool,
 ) -> None:
-    """Delete UFW rule (emits ``ufw delete <rule-action> PORT/PROTO``)."""
+    """Delete UFW rule (``ufw delete <rule-action> [from SRC] PORT/PROTO``)."""
     require_confirm(confirm, dry_run=dry_run, message="--confirm required to mutate UFW rules")
+    if direction != "in":
+        # The privileged helper only emits inbound deletes; guessing would remove
+        # the inbound rule with the same port instead of the outbound one.
+        emit(
+            {
+                "ok": False,
+                "message": "deleting outbound UFW rules is not supported; "
+                "use 'sudo ufw status numbered' and 'sudo ufw delete N'",
+            },
+            json_mode=json_mode,
+        )
+        raise SystemExit(2)
     result = FirewallOps().ufw_rule(
         "delete",
         port=port,
         proto=proto,
+        from_addr=from_addr,
         rule_action=rule_action,
         dry_run=dry_run,
         force_lockout=force_lockout_risk,

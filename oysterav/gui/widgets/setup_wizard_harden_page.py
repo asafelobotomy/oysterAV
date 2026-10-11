@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import switch_row
 from oysterav.gui.widgets.bulk_checklist import (
     add_action_item,
     add_switch_item,
@@ -105,7 +106,7 @@ def build_harden_page(wizard: SetupWizard, harden_box: Gtk.Box) -> None:
     )
     note.add_css_class("dim-label")
     harden_box.append(note)
-    wizard.enable_firewall_row = Adw.SwitchRow(title="Include firewall in harden apply")
+    wizard.enable_firewall_row = switch_row(title="Include firewall in harden apply")
     wizard.enable_firewall_row.set_subtitle(
         "Uses the Firewall page selection in this harden concert (single auth)",
     )

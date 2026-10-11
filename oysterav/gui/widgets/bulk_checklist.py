@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import action_row, expander_row, switch_row
 from oysterav.gui.widgets.common import make_button
 
 
@@ -21,7 +22,7 @@ def make_bulk_expander(
     expanded: bool = True,
 ) -> Adw.ExpanderRow:
     """Collapsible list header for 'what this bulk action includes'."""
-    expander = Adw.ExpanderRow(title=title)
+    expander = expander_row(title=title)
     if subtitle:
         expander.set_subtitle(subtitle)
     expander.set_expanded(expanded)
@@ -38,7 +39,7 @@ def add_action_item(
     suggested: bool = False,
 ) -> Adw.ActionRow:
     """Add one checklist row; optional suffix button."""
-    row = Adw.ActionRow(title=title)
+    row = action_row(title=title)
     if subtitle:
         row.set_subtitle(subtitle)
     if button_label and on_clicked is not None:
@@ -57,7 +58,7 @@ def add_switch_item(
     active: bool = True,
 ) -> Adw.SwitchRow:
     """Add a toggleable checklist row (included in bulk when active)."""
-    row = Adw.SwitchRow(title=title)
+    row = switch_row(title=title)
     if subtitle:
         row.set_subtitle(subtitle)
     row.set_active(active)

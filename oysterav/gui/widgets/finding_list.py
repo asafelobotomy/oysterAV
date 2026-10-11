@@ -32,6 +32,7 @@ from oysterav.gui.finding_present import (
 )
 from oysterav.gui.widgets.common import (
     clear_list_box,
+    run_in_thread,
     make_button,
     make_section_heading,
     make_status_badge,
@@ -68,11 +69,75 @@ def populate_findings_list(
     on_need_show_all: Callable[[], None] | None = None,
     job_id: str | None = None,
     on_refresh: Callable[[], None] | None = None,
+    vault_paths: set[str] | None = None,
 ) -> int:
-    """Populate *list_box* with grouped findings. Returns total display row count before cap."""
+    """Populate *list_box* with grouped findings. Returns total display row count before cap.
+
+    The quarantine vault lookup is an RPC, so it never runs on the GTK loop: rows
+    render with the last known vault paths, a background refresh fetches the
+    current list, and the list re-renders once if the vault changed meanwhile.
+    """
+    key = id(list_box)
+    generation = _RENDER_GEN.get(key, 0) + 1
+    _RENDER_GEN[key] = generation
+    if vault_paths is None and client is not None:
+        used = set(_VAULT_CACHE)
+
+        def on_vault(paths: object) -> bool:
+            if not isinstance(paths, set):
+                return False
+            _VAULT_CACHE.clear()
+            _VAULT_CACHE.update(paths)
+            if _RENDER_GEN.get(key) == generation and paths != used:
+                populate_findings_list(
+                    list_box,
+                    findings_raw,
+                    window=window,
+                    client=client,
+                    on_status=on_status,
+                    show_all=show_all,
+                    on_need_show_all=on_need_show_all,
+                    job_id=job_id,
+                    on_refresh=on_refresh,
+                    vault_paths=paths,
+                )
+            return False
+
+        run_in_thread(lambda: _fetch_vault_paths(client), on_vault, lambda _m: False)
+        vault_paths = used
+    return _render_findings(
+        list_box,
+        findings_raw,
+        window=window,
+        client=client,
+        on_status=on_status,
+        show_all=show_all,
+        on_need_show_all=on_need_show_all,
+        job_id=job_id,
+        on_refresh=on_refresh,
+        vault_paths=vault_paths or set(),
+    )
+
+
+_VAULT_CACHE: set[str] = set()
+_RENDER_GEN: dict[int, int] = {}
+
+
+def _render_findings(
+    list_box: Gtk.ListBox,
+    findings_raw: object,
+    *,
+    window: Gtk.Window | None,
+    client: Any | None,
+    on_status: Callable[[str], None] | None,
+    show_all: bool,
+    on_need_show_all: Callable[[], None] | None,
+    job_id: str | None,
+    on_refresh: Callable[[], None] | None,
+    vault_paths: set[str],
+) -> int:
     clear_list_box(list_box)
     findings = normalize_findings(findings_raw)
-    vault_paths = _vault_original_paths(client)
     overlay_text = _overlay_text()
     collapsed = collapse_findings(findings)
     visible, hidden = apply_finding_cap(collapsed, show_all=show_all)
@@ -118,13 +183,9 @@ def populate_findings_list(
     return len(collapsed)
 
 
-def _vault_original_paths(client: Any | None) -> set[str]:
-    if client is None:
-        return set()
-    try:
-        entries = client.quarantine_list()
-    except Exception:
-        return set()
+def _fetch_vault_paths(client: Any) -> set[str]:
+    """Original paths currently in the vault (raises on RPC failure; worker thread)."""
+    entries = client.quarantine_list()
     paths: set[str] = set()
     if not isinstance(entries, list):
         return paths

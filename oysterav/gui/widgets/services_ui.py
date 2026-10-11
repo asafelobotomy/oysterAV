@@ -14,6 +14,7 @@ from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
 from oyst_core.services import SERVICE_NAMES
+from oysterav.gui.widgets.plain_rows import action_row, switch_row
 from oysterav.gui.rpc_actions import (
     request_auth_grant,
     request_auth_revoke,
@@ -45,7 +46,7 @@ def build_services_group(
         title="Services",
         description="Start/stop oysterAV-related system services (polkit may prompt).",
     )
-    helper_row = Adw.ActionRow(
+    helper_row = action_row(
         title="Privileged helper",
         subtitle="Checking…",
     )
@@ -55,7 +56,7 @@ def build_services_group(
     helper_row.add_suffix(install_btn)
     group.add(helper_row)
 
-    auth_switch = Adw.SwitchRow(
+    auth_switch = switch_row(
         title="Passwordless service control",
         subtitle="Checking…",
     )
@@ -67,12 +68,12 @@ def build_services_group(
         title = _SERVICE_TITLES.get(name, name)
         if name == "clamonacc":
             # Enable/disable lives under Real-time (single control plane).
-            row = Adw.ActionRow(title=title)
+            row = action_row(title=title)
             row.set_subtitle("—")
             status_rows[name] = row
             group.add(row)
             continue
-        row = Adw.SwitchRow(title=title)
+        row = switch_row(title=title)
         row.set_subtitle("—")
         switches[name] = row
         group.add(row)
@@ -150,7 +151,7 @@ def build_services_group(
             if grant.get("granted"):
                 expires = grant.get("expires") or "unknown"
                 auth_switch.set_subtitle(
-                    f"Start/enable ClamAV &amp; maldet without a password until {expires}. "
+                    f"Start/enable ClamAV & maldet without a password until {expires}. "
                     "Stop/disable and fail2ban still prompt. "
                     "Weakens defenses against same-user malware."
                 )
@@ -161,7 +162,7 @@ def build_services_group(
                 )
             else:
                 auth_switch.set_subtitle(
-                    "Off — opt-in allows passwordless start/enable of ClamAV &amp; maldet "
+                    "Off — opt-in allows passwordless start/enable of ClamAV & maldet "
                     "for 7 days (local session only). Stop/disable still prompt."
                 )
             state["loading"] = True

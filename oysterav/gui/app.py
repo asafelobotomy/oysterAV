@@ -15,6 +15,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 from oyst_core.client import OystClient
 from oyst_core.config import load_config
 from oyst_core.serve import ensure_rpc_server
+from oysterav.gui.app_quit import confirm_quit_if_busy, present_startup_error
 from oysterav.gui.rpc_actions import request_updates_check
 from oysterav.gui.tray import OysterTray, create_tray
 from oysterav.gui.theme import apply_theme
@@ -64,7 +65,9 @@ def install_default_app_icon() -> None:
 class OysterApp(Adw.Application):
     def __init__(self, *, start_minimized: bool = False) -> None:
         super().__init__(application_id="io.github.asafelobotomy.OysterAV")
-        self.client = OystClient()
+        # Never dispatch security work in the GTK process: talk to (and spawn) a
+        # separate `oyst-cli serve` backend instead (ADR-002).
+        self.client = OystClient(local_fallback=False, autostart=True)
         self._start_minimized_flag = start_minimized
         self._window: OysterWindow | None = None
         self._tray: OysterTray | None = None
@@ -73,7 +76,14 @@ class OysterApp(Adw.Application):
         cfg = load_config()
         apply_theme(cfg.ui.theme)
         install_default_app_icon()
-        self._ensure_serve()
+        try:
+            self._ensure_serve()
+        except (RuntimeError, OSError) as exc:
+            if self._window is not None:
+                self._window.set_status(f"Backend unavailable: {exc}")
+            else:
+                present_startup_error(self, str(exc))
+                return
         if self._window is not None:
             self._window.present_from_tray()
             return
@@ -94,9 +104,13 @@ class OysterApp(Adw.Application):
     def _setup_tray(self, win: OysterWindow) -> None:
         self._tray = create_tray(
             on_show=win.present_from_tray,
-            on_quit=self.quit_from_tray,
+            on_quit=self.request_quit,
         )
         win.bind_tray(self._tray)
+
+    def request_quit(self) -> None:
+        """Quit, telling the user first when a job is running (it continues in oyst-cli serve)."""
+        confirm_quit_if_busy(self._window, self.client, self.quit_from_tray)
 
     def quit_from_tray(self) -> None:
         if self._tray is not None:
@@ -152,7 +166,7 @@ class OysterWindow(Adw.ApplicationWindow):
             client,
             window=self,
             on_status=self._set_status,
-            on_setup_wizard=lambda: self.present_setup_wizard(reset=True),
+            on_setup_wizard=self.present_setup_wizard,
             on_security_news_changed=self._on_security_news_changed,
             on_updates_changed=self._on_updates_changed,
         )
@@ -239,11 +253,10 @@ class OysterWindow(Adw.ApplicationWindow):
         if cfg.ui.minimize_to_tray and self._tray is not None and self._tray.active:
             self.hide_to_tray()
             return True
-        if hasattr(self.get_application(), "quit_from_tray"):
-            app = self.get_application()
-            if isinstance(app, OysterApp):
-                app.quit_from_tray()
-                return True
+        app = self.get_application()
+        if isinstance(app, OysterApp):
+            app.request_quit()
+            return True
         return False
 
     def set_status(self, text: str) -> None:
@@ -294,19 +307,10 @@ class OysterWindow(Adw.ApplicationWindow):
             self.present_setup_wizard()
         return False
 
-    def present_setup_wizard(self, *, reset: bool = False) -> None:
-        if reset:
-            try:
-                self.client.setup_reset()
-            except RuntimeError as exc:
-                self._set_status(f"Could not reset setup: {exc}")
-                show_command_dialog(
-                    self,
-                    heading="Could not reset first-run setup",
-                    body=str(exc),
-                    copy_text="oyst-cli setup reset --confirm",
-                )
-                return
+    def present_setup_wizard(self) -> None:
+        # Re-running the wizard does not reset setup state up front: Finish marks
+        # setup complete again (setup.run mark_complete), Cancel leaves the prior
+        # state untouched so a completed install is not re-prompted every launch.
         try:
             wizard = SetupWizard(
                 self.client,
@@ -323,7 +327,7 @@ class OysterWindow(Adw.ApplicationWindow):
                 self,
                 heading="Could not open setup wizard",
                 body=str(exc),
-                copy_text="oyst-cli setup run",
+                copy_text="oyst-cli setup check --json",
             )
 
     def _refresh_shell(self) -> None:

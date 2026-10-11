@@ -14,6 +14,7 @@ from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 from oyst_core.config import data_dir
 from oyst_core.terminal_log import format_entry_txt
+from oysterav.gui.widgets.plain_rows import action_row, switch_row
 from oysterav.gui.rpc_actions import (
     request_terminal_clear,
     request_terminal_export,
@@ -38,7 +39,7 @@ def build_terminal_section(page: SettingsPage) -> None:
         title="Terminal",
         description="Verbose backend log for oysterAV and oyst-cli actions.",
     )
-    page.terminal_show_raw_row = Adw.SwitchRow(title="Show raw output")
+    page.terminal_show_raw_row = switch_row(title="Show raw output")
     page.terminal_show_raw_row.set_subtitle(
         "Advanced: include full stdout/stderr and RPC payloads (redacted).",
     )
@@ -48,7 +49,7 @@ def build_terminal_section(page: SettingsPage) -> None:
     )
     prefs.add(page.terminal_show_raw_row)
 
-    actions = Adw.ActionRow(title="Log actions")
+    actions = action_row(title="Log actions")
     clear_btn = make_button("Clear log", row_suffix=True)
     clear_btn.connect("clicked", lambda *_: on_clear_log(page))
     export_btn = make_button("Export…", row_suffix=True)
@@ -119,7 +120,20 @@ def stop_terminal_poll(page: SettingsPage) -> None:
         page._terminal_poll_id = 0
 
 
+def _entry_id(entry: dict[str, Any]) -> int:
+    try:
+        return int(entry.get("id") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def refresh_terminal(page: SettingsPage, *, incremental: bool) -> None:
+    """Fetch transcript rows off-loop; one poll in flight, no duplicate rows."""
+    if incremental and getattr(page, "_terminal_inflight", False):
+        return
+    page._terminal_inflight = True
+    gen = int(getattr(page, "_terminal_gen", 0) or 0) + (0 if incremental else 1)
+    page._terminal_gen = gen
     show_raw = bool(page.terminal_show_raw_row.get_active())
     since = int(getattr(page, "_terminal_since_id", 0) or 0) if incremental else 0
 
@@ -133,18 +147,25 @@ def refresh_terminal(page: SettingsPage, *, incremental: bool) -> None:
         )
 
     def done(entries: list[dict[str, Any]]) -> bool:
+        if gen != page._terminal_gen:
+            return False  # superseded by a full reload
+        page._terminal_inflight = False
         if not incremental:
             page._terminal_entries = list(entries)
-            page._terminal_since_id = int(entries[-1]["id"]) if entries else 0
+            page._terminal_since_id = max((_entry_id(e) for e in entries), default=0)
             render_transcript(page)
             return False
-        if entries:
-            page._terminal_entries.extend(entries)
-            page._terminal_since_id = int(entries[-1]["id"])
-            append_entries(page, entries)
+        current = int(getattr(page, "_terminal_since_id", 0) or 0)
+        fresh = [e for e in entries if _entry_id(e) > current]
+        if fresh:
+            page._terminal_entries.extend(fresh)
+            page._terminal_since_id = max(_entry_id(e) for e in fresh)
+            append_entries(page, fresh)
         return False
 
     def failed(_message: str) -> bool:
+        if gen == page._terminal_gen:
+            page._terminal_inflight = False
         return False
 
     run_in_thread(worker, done, failed)
