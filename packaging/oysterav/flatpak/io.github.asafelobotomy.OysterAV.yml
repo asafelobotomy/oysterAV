@@ -8,7 +8,8 @@ finish-args:
   - --share=network
   - --socket=wayland
   - --socket=fallback-x11
-  - --filesystem=home
+  # NOT a sandbox: host filesystem + flatpak-spawn --host (arbitrary host commands)
+  # are required to drive host scanners and Polkit. Disclosed in the metainfo.
   - --filesystem=host
   - --talk-name=org.freedesktop.Flatpak
   # Tray (StatusNotifierItem) + optional notification tips

@@ -90,10 +90,26 @@ uv run pytest -m security -q --no-cov
 echo "==> security module coverage (≥85%)"
 uv run python scripts/check_security_coverage.py
 
-echo "==> bandit (medium+)"
-uv tool run bandit -c bandit.yaml -r oyst_core oyst_cli -ll -ii
+# Pinned tool versions (keep in sync with .github/workflows/ci.yml).
+BANDIT_VERSION="1.9.4"
+PIP_AUDIT_VERSION="2.10.1"
+GATE_TMP="$(mktemp -d)"
+trap 'rm -rf "${GATE_TMP}"' EXIT
 
-echo "==> pip-audit"
-uv tool run pip-audit
+echo "==> bandit (medium+)"
+# Python 3.12+ is required to parse PEP 695 syntax; bandit silently skips files
+# it cannot parse, so fail unless it reports zero skipped files.
+uv tool run --python 3.12 "bandit==${BANDIT_VERSION}" -c bandit.yaml -r oyst_core oyst_cli -ll -ii \
+  | tee "${GATE_TMP}/bandit.txt"
+if ! grep -q '^Files skipped (0):' "${GATE_TMP}/bandit.txt"; then
+  echo "ERROR: bandit skipped files (see 'Files skipped' above)" >&2
+  exit 1
+fi
+
+echo "==> pip-audit (project lockfile)"
+# Audit the project's locked dependencies, not pip-audit's own tool venv.
+uv export --frozen --all-extras --no-emit-project --quiet -o "${GATE_TMP}/requirements.txt"
+uv tool run "pip-audit==${PIP_AUDIT_VERSION}" -r "${GATE_TMP}/requirements.txt" \
+  --require-hashes --disable-pip --progress-spinner off
 
 echo "OK: check.sh passed"

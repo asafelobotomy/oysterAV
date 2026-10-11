@@ -10,7 +10,8 @@ finish-args:
   - --share=network
   - --socket=wayland
   - --socket=fallback-x11
-  - --filesystem=home
+  # NOT a sandbox: host filesystem + flatpak-spawn --host (arbitrary host commands)
+  # are required to drive host scanners and Polkit. Disclosed in the metainfo.
   - --filesystem=host
   - --talk-name=org.freedesktop.Flatpak
   - --talk-name=org.kde.StatusNotifierWatcher
@@ -42,14 +43,15 @@ modules:
         url: https://files.pythonhosted.org/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl
         sha256: 4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7
       # pydantic-core is arch-specific; pin both Flathub builder arches (CPython 3.13 = GNOME 50).
+      # Must match pydantic's exact pydantic-core pin (see uv.lock).
       - type: file
-        url: https://files.pythonhosted.org/packages/05/9f/b24bb1b764fc360adace5df806a81fd62ef1662df2973891e487c3fd5a2c/pydantic_core-2.47.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-        sha256: 473b9a2b2a1f0dd55cbb32d2b902f93babe7f141a0bb48fb4d3d4d2b3e93e9a0
+        url: https://files.pythonhosted.org/packages/07/f8/41db9de19d7987d6b04715a02b3b40aea467000275d9d758ffaa31af7d50/pydantic_core-2.46.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+        sha256: 9551187363ffc0de2a00b2e47c25aeaeb1020b69b668762966df15fc5659dd5a
         only-arches:
           - x86_64
       - type: file
-        url: https://files.pythonhosted.org/packages/f5/09/c90dff5407c11e59023161c84df19dd5ed93966a23b2f08cd21d45812ab9/pydantic_core-2.47.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
-        sha256: b3e6c8ee5ce8c270bfae09763ae4bbbccfe81090c97d670a621fb86cb1ef6042
+        url: https://files.pythonhosted.org/packages/03/d5/fd02da45b659668b05923b17ba3a0100a0a3d5541e3bd8fcc4ecb711309e/pydantic_core-2.46.4-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+        sha256: f027324c56cd5406ca49c124b0db10e56c69064fec039acc571c29020cc87c76
         only-arches:
           - aarch64
       - type: file

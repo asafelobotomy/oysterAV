@@ -8,6 +8,10 @@ export PYBUILD_NAME = oysterav
 
 override_dh_auto_install:
 	dh_auto_install
-	# oyst-helper + desktop/polkit/icons come from debian/oysterav.install
+	# desktop/polkit/icons come from debian/oysterav.install
 	install -d debian/oysterav/usr/bin
 	ln -sf ../lib/oysterav/oyst-helper debian/oysterav/usr/bin/oyst-helper
+
+# dh_install cannot rename files, so install the helper under its final name.
+execute_after_dh_install:
+	install -Dm755 debian/oyst-helper.in debian/oysterav/usr/lib/oysterav/oyst-helper

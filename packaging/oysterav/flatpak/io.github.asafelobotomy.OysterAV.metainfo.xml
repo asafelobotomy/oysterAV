@@ -13,14 +13,18 @@
   <description>
     <p>
       oysterAV orchestrates mature Linux security tools (ClamAV, rkhunter, Lynis, and more)
-      via a CLI-first backend and a thin GTK4 GUI client. The GUI talks only to OystClient
-      over local JSON-RPC — it never runs security binaries directly.
+      via a CLI-first backend and a thin GTK4 GUI client.
     </p>
     <p>
-      Flatpak installs the GUI client with host filesystem access so oysterAV can reach
-      host scanners and elevate via flatpak-spawn. Privileged operations require a
-      host-installed package (AUR or GitHub .deb/.rpm) that provides the root-owned
-      oyst-helper and Polkit policy. A Flatpak-only install cannot complete helper setup alone.
+      Important: this Flatpak is not sandboxed. It is granted full host filesystem access
+      and permission to run commands on the host (via flatpak-spawn --host) so it can drive
+      host scanners and Polkit elevation. Treat it like a native install, not a confinement
+      boundary for untrusted files.
+    </p>
+    <p>
+      Privileged operations require a host-installed package (AUR or GitHub .deb/.rpm) that
+      provides the root-owned oyst-helper and Polkit policy. A Flatpak-only install cannot
+      complete helper setup alone.
     </p>
   </description>
   <launchable type="desktop-id">io.github.asafelobotomy.OysterAV.desktop</launchable>
@@ -63,10 +67,8 @@
     <control>pointing</control>
     <control>keyboard</control>
   </recommends>
-  <content_rating type="oars-1.1">
-    <content_attribute id="network-internet">intense</content_attribute>
-    <content_attribute id="system-access">intense</content_attribute>
-  </content_rating>
+  <!-- No OARS 1.1 attribute applies (no user content sharing, chat, ads or purchases). -->
+  <content_rating type="oars-1.1"/>
   <releases>
     <release version="0.2.2" date="2026-07-27"/>
   </releases>

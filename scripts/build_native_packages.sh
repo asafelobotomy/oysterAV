@@ -23,26 +23,42 @@ fi
 echo "==> Sync version"
 "$PYTHON_BIN" scripts/sync_version.py
 
-echo "==> Stage install under $STAGE/usr"
-# uv-managed interpreters often lack pip; prefer uv pip when available.
+echo "==> Build wheel"
+WHEEL_DIR="$(mktemp -d)"
+trap 'rm -rf "$WHEEL_DIR"' EXIT
 if command -v uv >/dev/null 2>&1; then
-  uv pip install --python "$PYTHON_BIN" --prefix="$STAGE/usr" .
+  uv build --wheel --out-dir "$WHEEL_DIR" .
 else
-  "$PYTHON_BIN" -m pip install --upgrade pip
-  "$PYTHON_BIN" -m pip install --prefix="$STAGE/usr" .
+  "$PYTHON_BIN" -m pip wheel --no-deps --wheel-dir "$WHEEL_DIR" .
 fi
+WHEEL="$(ls "$WHEEL_DIR"/oysterav-*.whl)"
 
-# Normalize lib path (Debian uses lib/python3.x, some use lib64).
-HELPER_DIR="$STAGE/usr/lib/oysterav"
-mkdir -p "$HELPER_DIR"
-cat >"$HELPER_DIR/oyst-helper" <<'EOF'
-#!/usr/bin/env python3
-from oyst_core.privileged.oyst_helper import main
-main()
-EOF
-chmod 755 "$HELPER_DIR/oyst-helper"
+# Pure-Python app: unpack into a private, version-independent, root-owned prefix
+# (no site-packages vs dist-packages mismatch, no build-host interpreter in
+# shebangs). Runtime deps come from distro packages (--depends), never bundled.
+APP_LIB=/usr/lib/oysterav/python
+echo "==> Stage $WHEEL into $STAGE$APP_LIB"
+mkdir -p "$STAGE$APP_LIB"
+"$PYTHON_BIN" -m zipfile -e "$WHEEL" "$STAGE$APP_LIB"
+# Root-owned, not group/world-writable: the helper trust check requires it.
+chmod -R u=rwX,go=rX "$STAGE$APP_LIB"
 
-mkdir -p "$STAGE/usr/bin"
+# Launchers: system python3 in isolated mode (-I ignores PYTHON* env, cwd and
+# user site), with the private prefix inserted explicitly.
+write_launcher() {
+  local dest="$1" module="$2"
+  mkdir -p "$(dirname "$dest")"
+  printf '%s\n' \
+    "#!/usr/bin/python3 -I" \
+    "import sys" \
+    "sys.path.insert(0, \"$APP_LIB\")" \
+    "from $module import main" \
+    "sys.exit(main())" >"$dest"
+  chmod 755 "$dest"
+}
+write_launcher "$STAGE/usr/bin/oyst-cli" oyst_cli.main
+write_launcher "$STAGE/usr/bin/oysterav" oysterav.main
+write_launcher "$STAGE/usr/lib/oysterav/oyst-helper" oyst_core.privileged.oyst_helper
 ln -sfn ../lib/oysterav/oyst-helper "$STAGE/usr/bin/oyst-helper"
 
 echo "==> Desktop, icons, polkit, metainfo"
@@ -61,14 +77,13 @@ install -Dm644 branding/hicolor/512x512/apps/oysterav.png \
   "$STAGE/usr/share/icons/hicolor/512x512/apps/oysterav.png"
 
 AFTER_INSTALL="$ROOT/packaging/fpm/after-install.sh"
+AFTER_REMOVE="$ROOT/packaging/fpm/after-remove.sh"
 mkdir -p "$ROOT/packaging/fpm"
 
-DEB_ARCH=amd64
-RPM_ARCH=x86_64
-if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
-  DEB_ARCH=arm64
-  RPM_ARCH=aarch64
-fi
+# Pure Python: architecture-independent packages ($ARCH kept for CLI compat).
+: "$ARCH"
+DEB_ARCH=all
+RPM_ARCH=noarch
 
 COMMON_ARGS=(
   -s dir
@@ -81,28 +96,33 @@ COMMON_ARGS=(
   --description "Linux security orchestrator: oyst-cli backend + oysterAV GTK4 GUI"
   --maintainer "oysterAV contributors"
   --after-install "$AFTER_INSTALL"
-  --depends python3
+  --after-remove "$AFTER_REMOVE"
+  --deb-user root --deb-group root
+  --rpm-user root --rpm-group root
 )
 
 echo "==> Build DEB"
 fpm -t deb -f "${COMMON_ARGS[@]}" \
   --architecture "$DEB_ARCH" \
   --package "$OUT_DIR/oysterav_${VERSION}_${DEB_ARCH}.deb" \
+  --depends "python3 (>= 3.12)" \
   --depends python3-click \
-  --depends python3-pydantic \
+  --depends "python3-pydantic (>= 2)" \
   --depends python3-defusedxml \
   --depends python3-gi \
   --depends gir1.2-gtk-4.0 \
   --depends gir1.2-adw-1 \
-  --depends policykit-1 \
+  --depends "pkexec | policykit-1" \
+  --depends "polkitd | policykit-1" \
   usr
 
 echo "==> Build RPM"
 fpm -t rpm -f "${COMMON_ARGS[@]}" \
   --architecture "$RPM_ARCH" \
   --package "$OUT_DIR/oysterav-${VERSION}-1.${RPM_ARCH}.rpm" \
+  --depends "python3 >= 3.12" \
   --depends python3-click \
-  --depends python3-pydantic \
+  --depends "python3-pydantic >= 2" \
   --depends python3-defusedxml \
   --depends python3-gobject \
   --depends gtk4 \

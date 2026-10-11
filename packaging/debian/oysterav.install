@@ -1,6 +1,6 @@
 # Paths relative to the upstream source root once debian/ lives at the top level
 # (symlink/copy packaging/debian → ./debian for dpkg-buildpackage).
-debian/oyst-helper.in usr/lib/oysterav/oyst-helper
+# oyst-helper is installed (renamed) by execute_after_dh_install in debian/rules.
 packaging/oysterav/io.github.asafelobotomy.OysterAV.desktop usr/share/applications/
 packaging/oysterav/flatpak/io.github.asafelobotomy.OysterAV.metainfo.xml usr/share/metainfo/
 packaging/polkit/io.github.asafelobotomy.policy usr/share/polkit-1/actions/
