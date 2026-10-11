@@ -24,13 +24,34 @@ def rpc_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr("oyst_core.serve.data_dir", lambda: tmp_path)
     monkeypatch.setattr("oyst_core.rpc_auth.data_dir", lambda: tmp_path)
     ensure_rpc_token()
-    # Reset module semaphore so prior tests cannot leak slots
-    while True:
-        try:
-            serve_mod._accept_semaphore.release()
-        except ValueError:
-            break
+    _wait_slots_free()
     return tmp_path
+
+
+def _wait_slots_free(timeout: float = 5.0) -> None:
+    """Wait for handler threads from earlier tests to release their slots (no refill)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if serve_mod._accept_semaphore._value == serve_mod._MAX_CONCURRENT_CONNS:  # noqa: SLF001
+            return
+        time.sleep(0.01)
+    raise AssertionError("RPC accept semaphore slots leaked by a previous test")
+
+
+def _start(server: RpcServer) -> threading.Thread:
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline and server._server is None:  # noqa: SLF001
+        time.sleep(0.01)
+    assert server._server is not None  # noqa: SLF001
+    return thread
+
+
+def _stop(server: RpcServer, thread: threading.Thread) -> None:
+    server.stop()
+    thread.join(timeout=5.0)
+    assert not thread.is_alive()
 
 
 def test_recv_framed_enforces_16mib_cap() -> None:
@@ -57,55 +78,20 @@ def test_serve_is_one_request_per_connection() -> None:
     assert "while True" not in src
 
 
-def test_accept_semaphore_rejects_ninth_connection(
-    rpc_tmp: Path,
-) -> None:
+def test_accept_semaphore_rejects_ninth_connection(rpc_tmp: Path) -> None:
     sock_path = rpc_tmp / "dos.sock"
-    last_err: Exception | None = None
-    for attempt in range(3):
-        try:
-            _run_ninth_connection_rejected(sock_path)
-            return
-        except Exception as exc:  # noqa: BLE001 — retry flake
-            last_err = exc
-            try:
-                sock_path.unlink(missing_ok=True)
-            except OSError:
-                pass
-            while True:
-                try:
-                    serve_mod._accept_semaphore.release()
-                except ValueError:
-                    break
-            time.sleep(0.05 * (attempt + 1))
-    assert last_err is not None
-    raise last_err
-
-
-def _run_ninth_connection_rejected(sock_path: Path) -> None:
     server = RpcServer(sock_path)
     hold = threading.Event()
     workers_ready = threading.Barrier(serve_mod._MAX_CONCURRENT_CONNS + 1)
 
     def _slow_handle(_self: RpcServer, conn: socket.socket) -> None:
-        try:
+        with conn:
             workers_ready.wait(timeout=5.0)
             hold.wait(timeout=5.0)
-        finally:
-            try:
-                conn.close()
-            except OSError:
-                pass
 
+    held: list[socket.socket] = []
     with patch.object(RpcServer, "_handle_conn", _slow_handle):
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline and not sock_path.exists():
-            time.sleep(0.02)
-        assert sock_path.exists()
-
-        held: list[socket.socket] = []
+        thread = _start(server)
         try:
             for _ in range(serve_mod._MAX_CONCURRENT_CONNS):
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -115,38 +101,121 @@ def _run_ninth_connection_rejected(sock_path: Path) -> None:
             workers_ready.wait(timeout=5.0)
             assert serve_mod._accept_semaphore._value == 0  # noqa: SLF001
 
-            ninth = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            ninth.settimeout(1.0)
-            ninth.connect(str(sock_path))
-            try:
-                data = ninth.recv(64)
-            except (ConnectionResetError, ConnectionAbortedError, OSError):
-                data = b""
-            finally:
-                ninth.close()
-            assert data == b""
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as ninth:
+                ninth.settimeout(2.0)
+                ninth.connect(str(sock_path))
+                data = recv_framed(ninth)
+            resp = json.loads(data)
+            assert resp["error"]["code"] == "busy"
         finally:
             hold.set()
             for s in held:
-                try:
-                    s.close()
-                except OSError:
-                    pass
-            server.stop()
+                s.close()
+            _stop(server, thread)
+    _wait_slots_free()
+    assert not sock_path.exists()
+
+
+def test_stop_unblocks_accept_and_cleans_socket(rpc_tmp: Path) -> None:
+    sock_path = rpc_tmp / "stop.sock"
+    server = RpcServer(sock_path)
+    thread = _start(server)
+    assert sock_path.exists()
+    _stop(server, thread)
+    assert not sock_path.exists()
+
+
+def test_serve_forever_refuses_live_socket(rpc_tmp: Path) -> None:
+    sock_path = rpc_tmp / "live.sock"
+    first = RpcServer(sock_path)
+    thread = _start(first)
+    try:
+        with pytest.raises(RuntimeError, match="already running"):
+            RpcServer(sock_path).serve_forever()
+        assert sock_path.exists()
+    finally:
+        _stop(first, thread)
+
+
+def test_accept_oserror_does_not_kill_server(rpc_tmp: Path) -> None:
+    sock_path = rpc_tmp / "emfile.sock"
+    server = RpcServer(sock_path)
+    real_accept = socket.socket.accept
+    calls = {"n": 0}
+
+    def _flaky_accept(self: socket.socket) -> tuple[socket.socket, object]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError(24, "Too many open files")
+        return real_accept(self)
+
+    with patch.object(socket.socket, "accept", _flaky_accept):
+        thread = _start(server)
+        try:
+            time.sleep(0.2)
+            assert thread.is_alive()
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(3.0)
+                s.connect(str(sock_path))
+                s.sendall(b"[1]\n")
+                assert b"validation_error" in recv_framed(s)
+        finally:
+            _stop(server, thread)
+
+
+def test_slowloris_frame_hits_total_deadline(
+    rpc_tmp: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(serve_mod, "_CONN_TIMEOUT_SEC", 0.6)
+    sock_path = rpc_tmp / "slow.sock"
+    server = RpcServer(sock_path)
+    thread = _start(server)
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(5.0)
+            s.connect(str(sock_path))
+            stop = threading.Event()
+
+            def _trickle() -> None:
+                # One byte every 0.2s: each recv is well under any per-recv timeout.
+                while not stop.wait(0.2):
+                    try:
+                        s.sendall(b"{")
+                    except OSError:
+                        return
+
+            trickler = threading.Thread(target=_trickle, daemon=True)
+            start = time.monotonic()
+            trickler.start()
             try:
-                sock_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+                got = s.recv(4096)
+            finally:
+                stop.set()
+                trickler.join(timeout=2.0)
+            assert b"malformed RPC frame" in got
+            assert time.monotonic() - start < 3.0
+    finally:
+        _stop(server, thread)
+
+
+def test_deeply_nested_frame_is_malformed_not_crash(rpc_tmp: Path) -> None:
+    sock_path = rpc_tmp / "deep.sock"
+    server = RpcServer(sock_path)
+    thread = _start(server)
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(5.0)
+            s.connect(str(sock_path))
+            s.sendall(b"[" * 200_000 + b"\n")
+            assert b"malformed RPC frame" in recv_framed(s)
+    finally:
+        _stop(server, thread)
 
 
 def test_semaphore_releases_after_bad_frames(rpc_tmp: Path) -> None:
     sock_path = rpc_tmp / "recycle.sock"
     server = RpcServer(sock_path)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline and not sock_path.exists():
-        time.sleep(0.02)
+    thread = _start(server)
 
     # Peercred will pass (same UID). Send garbage frames repeatedly.
     for _ in range(12):
@@ -174,29 +243,23 @@ def test_semaphore_releases_after_bad_frames(rpc_tmp: Path) -> None:
     s.sendall((req + "\n").encode())
     resp = s.recv(65536)
     s.close()
-    server.stop()
+    _stop(server, thread)
     assert b"result" in resp or b"error" in resp
-    sock_path.unlink(missing_ok=True)
 
 
 def test_non_object_json_root_rejected(rpc_tmp: Path) -> None:
     sock_path = rpc_tmp / "root.sock"
     server = RpcServer(sock_path)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline and not sock_path.exists():
-        time.sleep(0.02)
+    thread = _start(server)
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(2.0)
     s.connect(str(sock_path))
     s.sendall(b'["not","an","object"]\n')
     data = s.recv(4096)
     s.close()
-    server.stop()
+    _stop(server, thread)
     assert b"validation_error" in data
     assert b"JSON object" in data
-    sock_path.unlink(missing_ok=True)
 
 
 def test_handle_pathological_json_params_under_frame_cap(

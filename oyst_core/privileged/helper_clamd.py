@@ -51,6 +51,14 @@ DENIED_INCLUDE_PREFIXES = (
     "/mnt",
     "/media",
     "/srv",
+    "/bin",
+    "/sbin",
+    "/lib",
+    "/lib32",
+    "/lib64",
+    "/libx32",
+    "/snap",
+    "/nix",
 )
 
 
@@ -141,13 +149,15 @@ def _validate_include(raw: str) -> str:
     cleaned = raw.strip()
     if not _INCLUDE_RE.match(cleaned) or ".." in Path(cleaned).parts:
         raise ValueError(f"invalid include path: {raw}")
-    if cleaned == "/" or cleaned == "/home":
-        raise ValueError(f"include path denied: {raw}")
-    for prefix in DENIED_INCLUDE_PREFIXES:
-        if prefix == "/":
-            continue
-        if cleaned == prefix or cleaned.startswith(prefix + "/"):
+    # Check the literal path and its resolution (/home/u/link -> /etc is denied).
+    for candidate in (cleaned, os.path.realpath(cleaned)):
+        if candidate == "/" or candidate == "/home":
             raise ValueError(f"include path denied: {raw}")
+        for prefix in DENIED_INCLUDE_PREFIXES:
+            if prefix == "/":
+                continue
+            if candidate == prefix or candidate.startswith(prefix + "/"):
+                raise ValueError(f"include path denied: {raw}")
     return cleaned
 
 

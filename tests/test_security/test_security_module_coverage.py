@@ -538,13 +538,13 @@ def test_passwordless_accept() -> None:
         validate_passwordless_systemctl_action("stop")
 
 
-def test_monitor_mode_empty_part_and_relative() -> None:
+def test_monitor_mode_empty_part_and_relative(tmp_path: Path) -> None:
     from oyst_core.privileged.validators import validate_monitor_mode
 
     with pytest.raises(ValueError):
-        validate_monitor_mode("/tmp/ok,relative")
+        validate_monitor_mode(f"{tmp_path},relative")
     # trailing comma leaves empty part — still ok if others valid
-    assert validate_monitor_mode("/tmp/ok,") == "/tmp/ok,"
+    assert validate_monitor_mode(f"{tmp_path},") == f"{tmp_path},"
 
 
 def test_firewall_ops_active_backend_errors() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -174,9 +175,13 @@ def test_oyst_helper_allows_loginctl_linger() -> None:
     ]
 
 
-def test_oyst_helper_allows_clamonacc_fdpass(tmp_path: Path) -> None:
+def test_oyst_helper_allows_clamonacc_fdpass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from oyst_core.privileged.oyst_helper import _validate_scanner_argv
 
+    # Caller-owned data-dir lists are accepted (process-mode clamonacc).
+    monkeypatch.setenv("PKEXEC_UID", str(os.getuid()))
     include = tmp_path / "include.list"
     include.write_text("/home/alice/Downloads\n", encoding="utf-8")
     exclude = tmp_path / "exclude.list"
@@ -242,12 +247,16 @@ def test_oyst_helper_rejects_pacman_remove() -> None:
 def test_oyst_helper_allows_pacman_install() -> None:
     from oyst_core.privileged.oyst_helper import _validate_run_argv
 
-    assert _validate_run_argv(["pacman", "-Sy", "--noconfirm", "clamav"]) == [
+    assert _validate_run_argv(["pacman", "-S", "--needed", "--noconfirm", "clamav"]) == [
         "pacman",
-        "-Sy",
+        "-S",
+        "--needed",
         "--noconfirm",
         "clamav",
     ]
+    # Partial upgrades (-Sy without -u) are refused at the root boundary.
+    with pytest.raises(ValueError):
+        _validate_run_argv(["pacman", "-Sy", "--noconfirm", "clamav"])
 
 
 def test_oyst_helper_allows_rkhunter_propupd() -> None:

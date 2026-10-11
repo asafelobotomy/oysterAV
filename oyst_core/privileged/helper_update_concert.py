@@ -21,7 +21,9 @@ def _family_upgrade_argv(family: str, packages: list[str]) -> list[str]:
     if not pkgs:
         raise ValueError("no packages to upgrade")
     if family == "arch":
-        return _validate_run_argv(["pacman", "-Sy", "--noconfirm", *pkgs])
+        # -S of the named packages from the current sync db (no -y, which would be a
+        # partial upgrade). Refreshing the db is a full `pacman -Syu`: the user's job.
+        return _validate_run_argv(["pacman", "-S", "--needed", "--noconfirm", *pkgs])
     if family == "fedora":
         return _validate_run_argv(["dnf", "install", "-y", *pkgs])
     if family in ("debian", "ubuntu"):

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import patch
+
 import pytest
 
 from oyst_core.privileged.validators import (
@@ -65,7 +68,18 @@ def test_validate_rich_rule_rejects(rule: str) -> None:
 
 @pytest.mark.parametrize(
     "value",
-    ["1.2.3.4;id", "127.0.0.1/extra", "not-an-ip", "", "1.2.3.4|1.2.3.5"],
+    [
+        "1.2.3.4;id",
+        "127.0.0.1/extra",
+        "not-an-ip",
+        "",
+        "1.2.3.4|1.2.3.5",
+        # Audit P1: IPv6 scope IDs smuggle newlines into root-written configs.
+        "fe80::1%x\nignorecommand = id",
+        "fe80::1%eth0",
+        "fe80::1%x\r\nenabled = false",
+        "1.2.3.4\nmaxretry = 99999",
+    ],
 )
 def test_validate_ip_rejects(value: str) -> None:
     with pytest.raises(ValueError):
@@ -74,11 +88,20 @@ def test_validate_ip_rejects(value: str) -> None:
 
 def test_validate_ip_accepts() -> None:
     assert validate_ip("192.0.2.1") == "192.0.2.1"
+    assert validate_ip(" 2001:db8::1 ") == "2001:db8::1"
+    assert validate_ip("::ffff:192.0.2.1") == "::ffff:192.0.2.1"
 
 
 @pytest.mark.parametrize(
     "value",
-    ["10.0.0.0/8;id", "not-a-cidr", "10.0.0.0/99", ""],
+    [
+        "10.0.0.0/8;id",
+        "not-a-cidr",
+        "10.0.0.0/99",
+        "",
+        "fe80::%x\nid/64",
+        "10.0.0.0/8\nx",
+    ],
 )
 def test_validate_cidr_rejects(value: str) -> None:
     with pytest.raises(ValueError):
@@ -146,12 +169,38 @@ def test_validate_monitor_mode_rejects(mode: str) -> None:
         validate_monitor_mode(mode)
 
 
-def test_validate_monitor_mode_accepts() -> None:
+def test_validate_monitor_mode_accepts(tmp_path: Path) -> None:
     assert validate_monitor_mode("users") == "users"
-    assert validate_monitor_mode("/home/alice,/var/tmp/safe") == "/home/alice,/var/tmp/safe"
+    a, b = tmp_path / "alice", tmp_path / "safe"
+    a.mkdir()
+    b.mkdir()
+    assert validate_monitor_mode(f"{a},{b}") == f"{a},{b}"
 
 
 @pytest.mark.parametrize("ch", _META)
 def test_validate_service_name_rejects_each_metachar(ch: str) -> None:
     with pytest.raises(ValueError):
         validate_service_name(f"ssh{ch}x")
+
+
+def test_fail2ban_persist_writes_single_ignoreip_line(tmp_path: Path) -> None:
+    """Audit P1: persisted drop-in must contain exactly the validated IP."""
+    from oyst_core.privileged import helper_fail2ban
+
+    written: dict[str, str] = {}
+
+    def _fake_write(path: Path, text: str, *, mode: int) -> None:
+        written[str(path)] = text
+
+    with (
+        patch.object(helper_fail2ban, "write_text_nofollow", _fake_write),
+        patch.object(helper_fail2ban, "_run_fail2ban_client"),
+        patch.object(helper_fail2ban.Path, "mkdir"),
+    ):
+        helper_fail2ban._persist_fail2ban_ignoreip("sshd", validate_ip("192.0.2.7"))
+        with pytest.raises(ValueError):
+            helper_fail2ban._persist_fail2ban_ignoreip("DEFAULT", "192.0.2.7")
+        with pytest.raises(ValueError):
+            helper_fail2ban._persist_fail2ban_ignoreip("sshd", "1.2.3.4\nenabled = false")
+    (text,) = written.values()
+    assert text == "[sshd]\nignoreip = 192.0.2.7\n"

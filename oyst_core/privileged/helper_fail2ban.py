@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import stat
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
@@ -35,11 +36,54 @@ def _run_fail2ban_client(argv: list[str]) -> None:
         raise ValueError(detail)
 
 
+_JAIL_D = Path("/etc/fail2ban/jail.d")
+_DROPIN_MAX_BYTES = 64 * 1024
+
+
+def _read_dropin_nofollow(path: Path) -> str:
+    """Return a regular, non-symlink drop-in's text ('' when absent/unsafe)."""
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(str(path), flags)
+    except OSError:
+        return ""
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return ""
+        data = os.read(fd, _DROPIN_MAX_BYTES + 1)
+    finally:
+        os.close(fd)
+    if len(data) > _DROPIN_MAX_BYTES:
+        return ""
+    return data.decode("utf-8", errors="replace")
+
+
+def _existing_ignoreips(path: Path) -> list[str]:
+    """IPs already persisted in our drop-in; each re-validated, invalid ones dropped."""
+    found: list[str] = []
+    for line in _read_dropin_nofollow(path).splitlines():
+        key, sep, value = line.partition("=")
+        if not sep or key.strip().lower() != "ignoreip":
+            continue
+        for token in value.replace(",", " ").split():
+            try:
+                found.append(validate_ip(token))
+            except ValueError:
+                continue
+    return found
+
+
 def _persist_fail2ban_ignoreip(jail: str, ip: str) -> None:
-    dropin_dir = Path("/etc/fail2ban/jail.d")
+    if jail.upper() == "DEFAULT":
+        raise ValueError("refusing to override the DEFAULT jail ignoreip")
+    if any(ch in f"{jail}{ip}" for ch in "\r\n[]=#;"):
+        raise ValueError("invalid characters in fail2ban persist arguments")
+    ip = validate_ip(ip)
+    dropin_dir = _JAIL_D
     dropin_dir.mkdir(parents=True, exist_ok=True)
     dropin = dropin_dir / f"oysterav-{jail}-ignore.conf"
-    write_text_nofollow(dropin, f"[{jail}]\nignoreip = {ip}\n", mode=0o644)
+    merged = list(dict.fromkeys([*_existing_ignoreips(dropin), ip]))
+    write_text_nofollow(dropin, f"[{jail}]\nignoreip = {' '.join(merged)}\n", mode=0o644)
     _run_fail2ban_client(["fail2ban-client", "reload"])
 
 

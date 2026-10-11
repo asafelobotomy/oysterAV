@@ -105,10 +105,10 @@ def run_privileged_install_script(
 
 def _build_install_argv(packages: list[str], family: str, *, sync: bool = True) -> list[str] | None:
     if family == "arch":
-        argv = ["pacman", "-S", "--noconfirm", *packages]
-        if sync:
-            argv = ["pacman", "-Sy", "--noconfirm", *packages]
-        return argv
+        # Never -Sy: refreshing the sync db without -u is a partial upgrade, which
+        # Arch does not support. ``sync`` is kept for callers; it is a no-op here.
+        del sync
+        return ["pacman", "-S", "--needed", "--noconfirm", *packages]
     if family == "fedora":
         return ["dnf", "install", "-y", *packages]
     if which("apt-get"):

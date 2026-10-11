@@ -104,9 +104,9 @@ def test_validate_run_argv_rejects(argv: list[str]) -> None:
 
 
 def test_validate_run_argv_allows_pacman_shape() -> None:
-    assert _validate_run_argv(["pacman", "-Sy", "--noconfirm", "ufw"]) == [
+    assert _validate_run_argv(["pacman", "-S", "--noconfirm", "ufw"]) == [
         "pacman",
-        "-Sy",
+        "-S",
         "--noconfirm",
         "ufw",
     ]
