@@ -64,9 +64,21 @@ def test_escape_markup() -> None:
     assert plain_rows.escape_markup("a & <b>") == "a &amp; &lt;b&gt;"
 
 
-def test_plain_rows_display_markup_literally() -> None:
-    if not Gtk.init_check():
+def _require_display() -> None:
+    """Skip widget tests on headless runners.
+
+    Gtk.init_check() can return True with no display (e.g. CI); constructing
+    libadwaita widgets then segfaults, so require an actual default display.
+    """
+    from gi.repository import Adw, Gdk
+
+    if not Gtk.init_check() or Gdk.Display.get_default() is None:
         pytest.skip("no display for GTK widgets")
+    Adw.init()
+
+
+def test_plain_rows_display_markup_literally() -> None:
+    _require_display()
     text = "/home/u/R&D <b>x</b>"
     rows = [
         plain_rows.action_row(title=text, subtitle=text),

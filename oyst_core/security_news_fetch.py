@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 from urllib.error import URLError
 from urllib.request import Request
-from xml.etree.ElementTree import ParseError  # nosec B405 - exception type only
 
 from defusedxml import DefusedXmlException
+from defusedxml.ElementTree import ParseError
 
 from oyst_core.net_util import https_urlopen, read_limited, require_https
 from oyst_core.security_news_parse import parse_datetime, parse_feed_xml
