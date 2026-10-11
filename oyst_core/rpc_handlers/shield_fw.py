@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from oyst_core.rpc_errors import RpcValidationError
+from oyst_core.rpc_handlers.params import opt_bool, opt_str
 
 if TYPE_CHECKING:
     from oyst_core.packs.firewall_ops import FirewallResult
@@ -20,13 +21,25 @@ def _fw_dict(result: FirewallResult) -> dict[str, Any]:
     }
 
 
+def _jail_name(params: dict[str, Any]) -> str:
+    from oyst_core.privileged.validators import validate_jail
+
+    name = (opt_str(params, "name") or "").strip()
+    if not name:
+        raise RpcValidationError("name required")
+    try:
+        return validate_jail(name)
+    except ValueError as exc:
+        raise RpcValidationError(str(exc)) from exc
+
+
 def handle_firewall_ensure_enable(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.firewall_ops import FirewallOps
 
     return _fw_dict(
         FirewallOps().ensure_firewall_enabled(
-            force_lockout=bool(params.get("force_lockout_risk", False)),
-            dry_run=bool(params.get("dry_run", False)),
+            force_lockout=opt_bool(params, "force_lockout_risk"),
+            dry_run=opt_bool(params, "dry_run"),
         ),
     )
 
@@ -34,13 +47,13 @@ def handle_firewall_ensure_enable(params: dict[str, Any], _ctx: RpcContext) -> A
 def handle_firewall_set_enabled(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.firewall_ops import FirewallOps
 
-    if "enabled" not in params:
+    if params.get("enabled") is None:
         raise RpcValidationError("enabled required")
     return _fw_dict(
         FirewallOps().set_managed_enabled(
-            bool(params.get("enabled")),
-            force_lockout=bool(params.get("force_lockout_risk", False)),
-            dry_run=bool(params.get("dry_run", False)),
+            opt_bool(params, "enabled"),
+            force_lockout=opt_bool(params, "force_lockout_risk"),
+            dry_run=opt_bool(params, "dry_run"),
         ),
     )
 
@@ -48,14 +61,14 @@ def handle_firewall_set_enabled(params: dict[str, Any], _ctx: RpcContext) -> Any
 def handle_firewall_select(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.firewall_select import select_managed_backend
 
-    backend = str(params.get("backend") or "").strip()
+    backend = (opt_str(params, "backend") or "").strip()
     if backend not in {"ufw", "firewalld", "none"}:
         raise RpcValidationError("backend must be ufw|firewalld|none")
     return _fw_dict(
         select_managed_backend(
             backend,
-            force_lockout=bool(params.get("force_lockout_risk", False)),
-            dry_run=bool(params.get("dry_run", False)),
+            force_lockout=opt_bool(params, "force_lockout_risk"),
+            dry_run=opt_bool(params, "dry_run"),
         ),
     )
 
@@ -86,7 +99,7 @@ def handle_firewall_rules(params: dict[str, Any], _ctx: RpcContext) -> Any:
     return {
         "rules": text,
         "entries": entries,
-        "verbose": bool(params.get("verbose", True)),
+        "verbose": opt_bool(params, "verbose", True),
     }
 
 
@@ -99,20 +112,20 @@ def handle_firewall_export(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 def handle_firewall_ufw_rule(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.firewall_ops import FirewallOps
 
-    action = str(params.get("action") or "").strip()
+    action = (opt_str(params, "action") or "").strip()
     if action not in {"allow", "deny", "limit", "delete"}:
         raise RpcValidationError("action must be allow|deny|limit|delete")
-    port = params.get("port")
-    rule_action = params.get("rule_action")
+    port = opt_str(params, "port")
+    rule_action = opt_str(params, "rule_action")
     return _fw_dict(
         FirewallOps().ufw_rule(
             action,
-            port=str(port) if port is not None else None,
-            proto=str(params.get("proto") or "tcp"),
-            from_addr=(str(params["from_addr"]) if params.get("from_addr") else None),
-            rule_action=(str(rule_action) if rule_action is not None else None),
-            dry_run=bool(params.get("dry_run", False)),
-            force_lockout=bool(params.get("force_lockout_risk", False)),
+            port=port,
+            proto=opt_str(params, "proto") or "tcp",
+            from_addr=opt_str(params, "from_addr"),
+            rule_action=rule_action,
+            dry_run=opt_bool(params, "dry_run"),
+            force_lockout=opt_bool(params, "force_lockout_risk"),
         ),
     )
 
@@ -128,16 +141,16 @@ def handle_firewall_ufw_batch(params: dict[str, Any], _ctx: RpcContext) -> Any:
         raise RpcValidationError("each rule must be an object")
     return ufw_batch(
         rules,
-        force_lockout=bool(params.get("force_lockout_risk", False)),
-        dry_run=bool(params.get("dry_run", False)),
+        force_lockout=opt_bool(params, "force_lockout_risk"),
+        dry_run=opt_bool(params, "dry_run"),
     )
 
 
 def handle_firewall_ufw_default(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.firewall_ops import FirewallOps
 
-    direction = str(params.get("direction") or "").strip()
-    policy = str(params.get("policy") or "").strip()
+    direction = (opt_str(params, "direction") or "").strip()
+    policy = (opt_str(params, "policy") or "").strip()
     if direction not in {"incoming", "outgoing", "routed"}:
         raise RpcValidationError("direction must be incoming|outgoing|routed")
     if policy not in {"allow", "deny", "reject"}:
@@ -146,8 +159,8 @@ def handle_firewall_ufw_default(params: dict[str, Any], _ctx: RpcContext) -> Any
         FirewallOps().ufw_default(
             direction,
             policy,
-            dry_run=bool(params.get("dry_run", False)),
-            force_lockout=bool(params.get("force_lockout_risk", False)),
+            dry_run=opt_bool(params, "dry_run"),
+            force_lockout=opt_bool(params, "force_lockout_risk"),
         ),
     )
 
@@ -155,16 +168,16 @@ def handle_firewall_ufw_default(params: dict[str, Any], _ctx: RpcContext) -> Any
 def handle_firewall_firewalld_port(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.firewall_ops import FirewallOps
 
-    action = str(params.get("action") or "").strip()
+    action = (opt_str(params, "action") or "").strip()
     if action not in {"add-port", "remove-port"}:
         raise RpcValidationError("action must be add-port|remove-port")
     return _fw_dict(
         FirewallOps().firewalld_port(
             action,
-            str(params.get("port_spec") or ""),
-            zone=str(params.get("zone") or "public"),
-            dry_run=bool(params.get("dry_run", False)),
-            force_lockout=bool(params.get("force_lockout_risk", False)),
+            opt_str(params, "port_spec") or "",
+            zone=opt_str(params, "zone") or "public",
+            dry_run=opt_bool(params, "dry_run"),
+            force_lockout=opt_bool(params, "force_lockout_risk"),
         ),
     )
 
@@ -172,16 +185,16 @@ def handle_firewall_firewalld_port(params: dict[str, Any], _ctx: RpcContext) -> 
 def handle_firewall_firewalld_service(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.firewall_ops import FirewallOps
 
-    action = str(params.get("action") or "").strip()
+    action = (opt_str(params, "action") or "").strip()
     if action not in {"add-service", "remove-service"}:
         raise RpcValidationError("action must be add-service|remove-service")
     return _fw_dict(
         FirewallOps().firewalld_service(
             action,
-            str(params.get("service") or ""),
-            zone=str(params.get("zone") or "public"),
-            dry_run=bool(params.get("dry_run", False)),
-            force_lockout=bool(params.get("force_lockout_risk", False)),
+            opt_str(params, "service") or "",
+            zone=opt_str(params, "zone") or "public",
+            dry_run=opt_bool(params, "dry_run"),
+            force_lockout=opt_bool(params, "force_lockout_risk"),
         ),
     )
 
@@ -190,17 +203,17 @@ def handle_firewall_firewalld_reload(params: dict[str, Any], _ctx: RpcContext) -
     from oyst_core.packs.firewall_ops import FirewallOps
 
     return _fw_dict(
-        FirewallOps().firewalld_reload(dry_run=bool(params.get("dry_run", False))),
+        FirewallOps().firewalld_reload(dry_run=opt_bool(params, "dry_run")),
     )
 
 
 def handle_firewall_firewalld_rich_rule(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.firewall_ops import FirewallOps
 
-    action = str(params.get("action") or "").strip()
+    action = (opt_str(params, "action") or "").strip()
     if action not in {"add", "remove"}:
         raise RpcValidationError("action must be add|remove")
-    rule = str(params.get("rule") or "").strip()
+    rule = (opt_str(params, "rule") or "").strip()
     if not rule:
         raise RpcValidationError("rule required")
     fw_action = "add-rich-rule" if action == "add" else "remove-rich-rule"
@@ -208,9 +221,9 @@ def handle_firewall_firewalld_rich_rule(params: dict[str, Any], _ctx: RpcContext
         FirewallOps().firewalld_rich_rule(
             fw_action,
             rule,
-            zone=str(params.get("zone") or "public"),
-            dry_run=bool(params.get("dry_run", False)),
-            force_lockout=bool(params.get("force_lockout_risk", False)),
+            zone=opt_str(params, "zone") or "public",
+            dry_run=opt_bool(params, "dry_run"),
+            force_lockout=opt_bool(params, "force_lockout_risk"),
         ),
     )
 
@@ -230,18 +243,14 @@ def handle_fail2ban_banned(_params: dict[str, Any], _ctx: RpcContext) -> Any:
 def handle_fail2ban_jail(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.fail2ban import Fail2banPack
 
-    name = str(params.get("name") or "").strip()
-    if not name:
-        raise RpcValidationError("name required")
+    name = _jail_name(params)
     return Fail2banPack().jail_status(name)
 
 
 def handle_fail2ban_jail_enable(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.fail2ban import Fail2banPack
 
-    name = str(params.get("name") or "").strip()
-    if not name:
-        raise RpcValidationError("name required")
+    name = _jail_name(params)
     ok, msg = Fail2banPack().set_jail_enabled(name, enabled=True)
     return {"ok": ok, "message": msg, "name": name}
 
@@ -249,9 +258,7 @@ def handle_fail2ban_jail_enable(params: dict[str, Any], _ctx: RpcContext) -> Any
 def handle_fail2ban_jail_disable(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.fail2ban import Fail2banPack
 
-    name = str(params.get("name") or "").strip()
-    if not name:
-        raise RpcValidationError("name required")
+    name = _jail_name(params)
     ok, msg = Fail2banPack().set_jail_enabled(name, enabled=False)
     return {"ok": ok, "message": msg, "name": name}
 
@@ -259,5 +266,5 @@ def handle_fail2ban_jail_disable(params: dict[str, Any], _ctx: RpcContext) -> An
 def handle_fail2ban_reload(params: dict[str, Any], _ctx: RpcContext) -> Any:
     from oyst_core.packs.fail2ban import Fail2banPack
 
-    ok, msg = Fail2banPack().reload(unban=bool(params.get("unban", False)))
-    return {"ok": ok, "message": msg, "unban": bool(params.get("unban", False))}
+    ok, msg = Fail2banPack().reload(unban=opt_bool(params, "unban"))
+    return {"ok": ok, "message": msg, "unban": opt_bool(params, "unban")}

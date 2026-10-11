@@ -10,16 +10,18 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from oyst_core import __version__ as INSTALLED_VERSION
+from oyst_core.net_util import https_urlopen, read_limited, require_https
 
 _logger = logging.getLogger("oyst.app_release")
 
 REPO = "asafelobotomy/oysterAV"
 RELEASES_LATEST_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_PAGE_URL = f"https://github.com/{REPO}/releases"
+_HTML_URL_PREFIX = f"https://github.com/{REPO}/"
+_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 FETCH_TIMEOUT_S = 15
 CACHE_MAX_AGE = timedelta(hours=6)
 _VERSION_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)")
@@ -58,9 +60,7 @@ def normalize_tag(tag: str) -> str:
 
 
 def _fetch_url(url: str) -> str:
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.netloc:
-        raise ValueError(f"refusing non-https release URL: {url!r}")
+    require_https(url, "release")
     req = Request(
         url,
         headers={
@@ -69,11 +69,16 @@ def _fetch_url(url: str) -> str:
             "X-GitHub-Api-Version": "2022-11-28",
         },
     )
-    with urlopen(req, timeout=FETCH_TIMEOUT_S) as response:  # noqa: S310  # nosec B310
-        raw = response.read()
-        if isinstance(raw, bytes):
-            return raw.decode("utf-8", errors="replace")
-        return str(raw)
+    with https_urlopen(req, timeout=FETCH_TIMEOUT_S) as response:
+        return read_limited(response, _MAX_RESPONSE_BYTES).decode("utf-8", errors="replace")
+
+
+def safe_release_url(raw: object) -> str:
+    """Return ``raw`` only if it points into this repo on github.com."""
+    text = str(raw or "").strip()
+    if text.startswith(_HTML_URL_PREFIX) and not any(c.isspace() for c in text):
+        return text
+    return RELEASES_PAGE_URL
 
 
 def _load_cache() -> dict[str, Any] | None:
@@ -140,7 +145,7 @@ def fetch_latest_release(*, force: bool = False) -> dict[str, Any]:
             "html_url": RELEASES_PAGE_URL,
         }
 
-    html_url = str(data.get("html_url") or "").strip() or RELEASES_PAGE_URL
+    html_url = safe_release_url(data.get("html_url"))
     payload = {
         "ok": True,
         "tag": tag,
@@ -175,11 +180,11 @@ def check_app_update(
             "current": installed,
             "update": None,
             "message": str(latest.get("message") or "Release check failed"),
-            "html_url": str(latest.get("html_url") or RELEASES_PAGE_URL),
+            "html_url": safe_release_url(latest.get("html_url")),
         }
 
     remote = str(latest.get("version") or "")
-    html_url = str(latest.get("html_url") or RELEASES_PAGE_URL)
+    html_url = safe_release_url(latest.get("html_url"))
     update: dict[str, Any] | None = None
     if version_is_newer(remote, installed):
         update = {

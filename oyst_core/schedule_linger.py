@@ -67,13 +67,14 @@ def resolve_oyst_cli_path(*, for_elevation: bool = False) -> str | None:
 
 
 def escape_systemd_exec_arg(path: str) -> str:
-    """Quote a path for systemd ExecStart; reject % and control characters."""
-    if any(ch in path for ch in ("\n", "\r", "\0", "%")):
+    """Quote a path for systemd ExecStart (``%``→``%%``, ``$``→``$$``); reject controls."""
+    if any(ch in path for ch in ("\n", "\r", "\0")):
         raise ValueError("cli path contains disallowed characters for systemd ExecStart")
-    if any(ch in path for ch in ('"', "\\", " ", "\t")):
-        escaped = path.replace("\\", "\\\\").replace('"', '\\"')
+    escaped = path.replace("%", "%%").replace("$", "$$")
+    if not escaped or any(ch in escaped for ch in ('"', "'", "\\", " ", "\t", ";")):
+        escaped = escaped.replace("\\", "\\\\").replace('"', '\\"')
         return f'"{escaped}"'
-    return path
+    return escaped
 
 
 def get_linger_status() -> dict[str, object]:

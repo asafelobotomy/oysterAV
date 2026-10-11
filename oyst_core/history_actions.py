@@ -133,7 +133,7 @@ def handle_open_findings(
                     finding["quarantined"] = True
                 else:
                     errors.append(f"{path}: quarantine failed")
-            except (OSError, FileNotFoundError, ValueError) as exc:
+            except (OSError, ValueError, RuntimeError) as exc:
                 errors.append(f"{path}: {exc}")
 
         if resolve and pack == "rkhunter" and is_resolvable_threat(threat):

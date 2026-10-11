@@ -24,10 +24,20 @@ def autostart_path() -> Path:
     return autostart_dir() / AUTOSTART_FILENAME
 
 
-def resolve_oysterav_exec() -> str:
-    """Resolve command used in .desktop Exec= lines (system-first, not PATH-first)."""
+def resolve_oysterav_argv() -> list[str]:
+    """Resolve argv used in .desktop Exec= lines (one element per argument)."""
     if is_flatpak():
-        return f"flatpak run {APP_ID}"
+        return ["flatpak", "run", APP_ID]
+    return [_resolve_oysterav_program()]
+
+
+def resolve_oysterav_exec() -> str:
+    """Human-readable command line (display only; Exec= uses resolve_oysterav_argv)."""
+    return " ".join(resolve_oysterav_argv())
+
+
+def _resolve_oysterav_program() -> str:
+    """Resolve the oysterav executable (system-first, not PATH-first)."""
     for path in ("/usr/bin/oysterav", "/usr/local/bin/oysterav"):
         candidate = Path(path)
         if candidate.is_file():
@@ -101,18 +111,26 @@ def probe_tray_library() -> dict[str, object]:
     }
 
 
-def _quote_desktop_exec(command: str) -> str:
-    """Quote Exec= per Desktop Entry rules; escape % as %%."""
-    escaped = command.replace("%", "%%")
-    if any(ch in escaped for ch in (" ", "\t", '"', "\\")):
-        return '"' + escaped.replace("\\", "\\\\").replace('"', '\\"') + '"'
-    return escaped
+_EXEC_RESERVED = frozenset(" \t\n\"'\\><~|&;$*?#()`")
+
+
+def _quote_desktop_arg(arg: str) -> str:
+    """Quote one Exec= argument per the Desktop Entry spec; escape % as %%."""
+    escaped = arg.replace("%", "%%")
+    if any(ch in _EXEC_RESERVED for ch in escaped) or not escaped:
+        inner = "".join("\\" + ch if ch in '"`$\\' else ch for ch in escaped)
+        escaped = f'"{inner}"'
+    # The Exec value is also a desktop-entry string: backslashes double again.
+    return escaped.replace("\\", "\\\\")
+
+
+def _quote_desktop_exec(argv: list[str]) -> str:
+    return " ".join(_quote_desktop_arg(arg) for arg in argv)
 
 
 def build_desktop_entry(*, minimized: bool = False, for_autostart: bool = True) -> str:
-    exec_cmd = _quote_desktop_exec(resolve_oysterav_exec())
-    if minimized:
-        exec_cmd = f"{exec_cmd} --minimized"
+    argv = resolve_oysterav_argv() + (["--minimized"] if minimized else [])
+    exec_cmd = _quote_desktop_exec(argv)
     lines = [
         "[Desktop Entry]",
         "Type=Application",

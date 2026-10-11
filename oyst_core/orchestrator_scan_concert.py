@@ -18,15 +18,25 @@ from oyst_core.registry import PackRegistry
 def ingest_scan_concert_steps(
     steps: list[dict[str, Any]],
     registry: PackRegistry,
+    requested: list[str] | None = None,
 ) -> tuple[list[Finding], list[PackError]]:
-    """Parse concert step reports into findings / pack errors."""
+    """Parse concert step reports into findings / pack errors.
+
+    Every pack in ``requested`` that did not produce a readable report ends up in
+    the returned errors, so a denied polkit prompt or a crashed helper can never
+    be reported as a clean scan.
+    """
     findings: list[Finding] = []
     errors: list[PackError] = []
+    ingested: set[str] = set()
+    concert_failure = ""
     for step in steps:
         name = str(step.get("pack") or "")
         if not name and str(step.get("step", "")).startswith("scan-"):
             name = str(step.get("step", ""))[len("scan-") :]
         if name not in PRIVILEGED_SCAN_PACKS:
+            if step.get("ok") is False and not concert_failure:
+                concert_failure = str(step.get("message") or "privileged scan failed")
             continue
         if step.get("ok") is False:
             errors.append(
@@ -35,7 +45,9 @@ def ingest_scan_concert_steps(
             continue
         report = step.get("report_path")
         if not report:
+            errors.append(PackError(pack=name, error="privileged scan produced no report"))
             continue
+        ingested.add(name)
         path = Path(str(report))
         try:
             output = path.read_text(encoding="utf-8", errors="replace")
@@ -57,6 +69,12 @@ def ingest_scan_concert_steps(
                 findings.extend(parse(output))
         except Exception as exc:  # noqa: BLE001
             errors.append(PackError(pack=name, error=str(exc)))
+    errored = {e.pack for e in errors}
+    for name in requested or []:
+        if name in ingested or name in errored:
+            continue
+        reason = concert_failure or "privileged scan did not run"
+        errors.append(PackError(pack=name, error=reason))
     return findings, errors
 
 
@@ -92,7 +110,7 @@ def run_privileged_scan_concert(
         return [], [], []
     plan = build_scan_privileged_plan(privileged_packs, job_id=job_id)
     steps = run_privilege_concert(plan, timeout=7200)
-    findings, errors = ingest_scan_concert_steps(steps, registry)
+    findings, errors = ingest_scan_concert_steps(steps, registry, privileged_packs)
     return findings, errors, steps
 
 

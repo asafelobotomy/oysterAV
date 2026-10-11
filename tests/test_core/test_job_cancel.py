@@ -58,15 +58,31 @@ def test_cancel_job_with_active_flag(tmp_path) -> None:  # type: ignore[no-untyp
     assert events.cancel_requested()
 
 
+def test_second_cancel_keeps_live_job_lock(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    events = EventLog(db_path=tmp_path / "events.db")
+    orch = JobOrchestrator(events=events)
+    assert events.acquire_job_lock("job-live")
+    assert orch.cancel_job("job-live")["ok"] is True
+    again = orch.cancel_job("job-live")
+    assert again["ok"] is True
+    assert again.get("cleared") is False
+    # Live (heartbeating) job keeps its lock; a second cancel must not free it.
+    assert events.active_job() == "job-live"
+    assert events.cancel_requested()
+
+
 def test_second_cancel_clears_zombie_lock(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from datetime import datetime, timedelta
+
     events = EventLog(db_path=tmp_path / "events.db")
     orch = JobOrchestrator(events=events)
     assert events.acquire_job_lock("job-zombie")
     assert orch.cancel_job("job-zombie")["ok"] is True
-    assert events.active_job() == "job-zombie"
-    cleared = orch.cancel_job("job-zombie")
-    assert cleared["ok"] is True
-    assert cleared.get("cleared") is True
+    old = (datetime.now() - timedelta(minutes=11)).isoformat()
+    with events._connect() as conn:
+        conn.execute("UPDATE job_lock SET heartbeat_at = ? WHERE id = 1", (old,))
+    result = orch.cancel_job("job-zombie")
+    assert result["ok"] is False
     assert events.active_job() is None
 
 
@@ -89,7 +105,9 @@ def test_stale_lock_auto_clears_after_cancel_age(tmp_path) -> None:  # type: ign
     events.request_cancel("job-old")
     old = (datetime.now() - timedelta(minutes=11)).isoformat()
     with events._connect() as conn:
-        conn.execute("UPDATE job_lock SET started_at = ? WHERE id = 1", (old,))
+        conn.execute(
+            "UPDATE job_lock SET started_at = ?, heartbeat_at = ? WHERE id = 1", (old, old)
+        )
     assert events.active_job() is None
 
 

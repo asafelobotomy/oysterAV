@@ -10,9 +10,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request
+from xml.etree.ElementTree import ParseError  # nosec B405 - exception type only
 
+from defusedxml import DefusedXmlException
+
+from oyst_core.net_util import https_urlopen, read_limited, require_https
 from oyst_core.security_news_parse import parse_datetime, parse_feed_xml
 from oyst_core.security_news_sources import (
     ALLOWED_MAX_AGE_DAYS,
@@ -27,6 +30,7 @@ CACHE_MAX_AGE = timedelta(hours=24)
 MAX_ITEMS = 30
 MAX_CACHE_ITEMS = 120
 FETCH_TIMEOUT_S = 20
+MAX_FEED_BYTES = 8 * 1024 * 1024
 
 
 def cache_dir() -> Path:
@@ -54,20 +58,15 @@ def resolve_max_age_days_from_config() -> int:
 
 
 def _fetch_url(url: str) -> str:
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.netloc:
-        raise ValueError(f"refusing non-https news URL: {url!r}")
+    require_https(url, "news")
     req = Request(
         url,
         headers={
             "User-Agent": "oysterAV/security-news (+https://github.com/asafelobotomy/oysterAV)"
         },
     )
-    with urlopen(req, timeout=FETCH_TIMEOUT_S) as response:  # noqa: S310  # nosec B310
-        raw = response.read()
-        if isinstance(raw, bytes):
-            return raw.decode("utf-8", errors="replace")
-        return str(raw)
+    with https_urlopen(req, timeout=FETCH_TIMEOUT_S) as response:
+        return read_limited(response, MAX_FEED_BYTES).decode("utf-8", errors="replace")
 
 
 def _load_cache() -> dict[str, Any] | None:
@@ -223,7 +222,14 @@ def fetch_security_news(
         try:
             xml_text = _fetch_url(src.url)
             batches.append(parse_feed_xml(src.label, xml_text))
-        except (OSError, URLError, TimeoutError, ValueError) as exc:
+        except (
+            OSError,
+            URLError,
+            TimeoutError,
+            ValueError,
+            ParseError,  # SyntaxError subclass: one bad feed must not abort the rest
+            DefusedXmlException,
+        ) as exc:
             _logger.warning("security news fetch failed for %s: %s", src.label, exc)
             errors.append({"source": src.label, "error": str(exc)})
 

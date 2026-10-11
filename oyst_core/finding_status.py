@@ -23,8 +23,14 @@ def handled_findings_count(findings: list[Any]) -> int:
     return len(findings) - open_findings_count(findings)
 
 
-def scan_is_clean(findings: list[Any]) -> bool:
-    """True when there are no open (unhandled) findings."""
+def scan_is_clean(findings: list[Any], pack_errors: list[Any] | None = None) -> bool:
+    """True when there are no open (unhandled) findings and every pack ran.
+
+    A scan where a pack failed (denied polkit prompt, scanner error) is
+    incomplete, not clean: no findings from a pack that never ran proves nothing.
+    """
+    if pack_errors:
+        return False
     return open_findings_count(findings) == 0
 
 

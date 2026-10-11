@@ -17,6 +17,39 @@ from oyst_core.config import load_config
 from oyst_core.models import QuarantineEntry
 
 
+def _write_all(fd: int, data: bytes) -> None:
+    view = memoryview(data)
+    while view:
+        written = os.write(fd, view)
+        view = view[written:]
+
+
+def _open_dir_nofollow(path: Path) -> int:
+    """Open an absolute directory walking each component with O_NOFOLLOW.
+
+    Fails (ELOOP/ENOTDIR) if any component is, or is swapped for, a symlink.
+    """
+    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open("/", flags)
+    try:
+        for part in path.parts[1:]:
+            next_fd = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _fd_dir_path(dir_fd: int, fallback: Path) -> Path:
+    """Real path of an open directory fd (what was actually opened), else fallback."""
+    try:
+        return Path(os.readlink(f"/proc/self/fd/{dir_fd}"))
+    except OSError:
+        return fallback
+
+
 class QuarantineVault:
     def __init__(self, vault_dir: Path | None = None) -> None:
         cfg = load_config()
@@ -85,53 +118,61 @@ class QuarantineVault:
         src = Path(source).expanduser()
         if src.is_symlink():
             raise ValueError("refuse to quarantine through symlink")
-        flags = os.O_RDONLY
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
         try:
-            src_fd = os.open(str(src), flags)
+            resolved = src.resolve(strict=True)
         except FileNotFoundError as exc:
             raise FileNotFoundError(source) from exc
         except OSError as exc:
-            raise ValueError(f"cannot open quarantine source: {exc}") from exc
+            raise ValueError(f"cannot resolve quarantine source: {exc}") from exc
+        # Work relative to a parent directory fd and verify the inode before
+        # unlinking, so a parent swapped for a symlink mid-copy can never make us
+        # delete a different file than the one copied into the vault (TOCTOU).
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        try:
+            parent_fd = _open_dir_nofollow(resolved.parent)
+        except OSError as exc:
+            raise ValueError(f"cannot open quarantine source directory: {exc}") from exc
+        name = resolved.name
         dest: Path | None = None
         entry_id = 0
+        src_fd = -1
         try:
+            try:
+                src_fd = os.open(name, os.O_RDONLY | nofollow, dir_fd=parent_fd)
+            except FileNotFoundError as exc:
+                raise FileNotFoundError(source) from exc
+            except OSError as exc:
+                raise ValueError(f"cannot open quarantine source: {exc}") from exc
             st = os.fstat(src_fd)
             if not stat.S_ISREG(st.st_mode):
                 raise ValueError("quarantine add requires a regular file")
-            hasher = hashlib.sha256()
-            while True:
-                chunk = os.read(src_fd, 65536)
-                if not chunk:
-                    break
-                hasher.update(chunk)
-            sha = hasher.hexdigest()
-            os.lseek(src_fd, 0, os.SEEK_SET)
-            resolved = src.resolve(strict=False)
             ts = datetime.now().strftime("%Y%m%d%H%M%S")
-            dest = self.vault_dir / f"{ts}_{uuid.uuid4().hex[:8]}_{resolved.name}"
-            if dest.exists():
-                raise RuntimeError(f"quarantine destination collision: {dest}")
-            out_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-            if hasattr(os, "O_NOFOLLOW"):
-                out_flags |= os.O_NOFOLLOW
+            # Original name lives in the DB only; long names would exceed NAME_MAX.
+            dest = self.vault_dir / f"{ts}_{uuid.uuid4().hex}.bin"
+            out_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow
             out_fd = os.open(str(dest), out_flags, 0o600)
+            hasher = hashlib.sha256()
             try:
                 os.fchmod(out_fd, 0o600)
                 while True:
                     chunk = os.read(src_fd, 65536)
                     if not chunk:
                         break
-                    os.write(out_fd, chunk)
+                    hasher.update(chunk)
+                    _write_all(out_fd, chunk)
                 os.fsync(out_fd)
             finally:
                 os.close(out_fd)
-            dir_fd = os.open(str(self.vault_dir), os.O_RDONLY)
+            sha = hasher.hexdigest()
+            vault_dir_fd = os.open(str(self.vault_dir), os.O_RDONLY)
             try:
-                os.fsync(dir_fd)
+                os.fsync(vault_dir_fd)
             finally:
-                os.close(dir_fd)
+                os.close(vault_dir_fd)
+            current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if (current.st_dev, current.st_ino) != (st.st_dev, st.st_ino):
+                raise ValueError("quarantine source changed during copy; refusing to unlink")
+            original = _fd_dir_path(parent_fd, resolved.parent) / name
             with self._connect() as conn:
                 cur = conn.execute(
                     """
@@ -142,7 +183,7 @@ class QuarantineVault:
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        str(resolved),
+                        str(original),
                         str(dest),
                         sha,
                         threat_name,
@@ -154,17 +195,25 @@ class QuarantineVault:
                 if entry_id == 0:
                     raise RuntimeError("failed to insert quarantine entry")
                 conn.commit()
-            resolved.unlink()
-            src = resolved
+            try:
+                os.unlink(name, dir_fd=parent_fd)
+            except OSError:
+                with self._connect() as conn:
+                    conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+                    conn.commit()
+                raise
+            src = original
         except Exception:
             if dest is not None and dest.exists():
                 dest.unlink(missing_ok=True)
             raise
         finally:
-            try:
-                os.close(src_fd)
-            except OSError:
-                pass
+            for fd in (src_fd, parent_fd):
+                if fd >= 0:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
         return QuarantineEntry(
             id=entry_id,
             original_path=str(src),
@@ -214,40 +263,47 @@ class QuarantineVault:
         if current != entry.sha256:
             raise ValueError("vault file hash mismatch — possible tampering")
         dest = Path(entry.original_path).expanduser()
-        if dest.is_symlink():
-            raise ValueError("refuse restore through symlink")
-        dest_resolved = dest.expanduser()
-        # Do not follow dest symlink: create with O_EXCL|O_NOFOLLOW then copy.
-        parent = dest_resolved.parent
-        parent.mkdir(parents=True, exist_ok=True)
-        if parent.stat().st_uid != os.getuid():
-            raise ValueError("restore parent directory not owned by current user")
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
+        if not dest.is_absolute() or dest.name in ("", ".", ".."):
+            raise ValueError(f"invalid restore destination: {dest}")
+        # Nofollow walk of every ancestor; never mkdir from DB-sourced paths.
         try:
-            dest_fd = os.open(str(dest_resolved), flags, 0o600)
-        except FileExistsError as exc:
-            raise ValueError(f"refuse overwrite of existing path: {dest_resolved}") from exc
+            parent_fd = _open_dir_nofollow(dest.parent)
+        except FileNotFoundError as exc:
+            raise ValueError(f"restore parent directory missing: {dest.parent}") from exc
+        except OSError as exc:
+            raise ValueError(f"refuse restore through symlink or bad parent: {exc}") from exc
+        name = dest.name
         try:
-            with open(vault, "rb") as src_f:
-                while True:
-                    chunk = src_f.read(65536)
-                    if not chunk:
-                        break
-                    os.write(dest_fd, chunk)
+            if os.fstat(parent_fd).st_uid != os.getuid():
+                raise ValueError("restore parent directory not owned by current user")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            try:
+                dest_fd = os.open(name, flags, 0o600, dir_fd=parent_fd)
+            except FileExistsError as exc:
+                raise ValueError(f"refuse overwrite of existing path: {dest}") from exc
+            try:
+                with open(vault, "rb") as src_f:
+                    for chunk in iter(lambda: src_f.read(65536), b""):
+                        _write_all(dest_fd, chunk)
+                os.fsync(dest_fd)
+            except BaseException:
+                try:
+                    os.unlink(name, dir_fd=parent_fd)
+                except OSError:
+                    pass
+                raise
+            finally:
+                os.close(dest_fd)
+            os.fsync(parent_fd)
+            restored = _fd_dir_path(parent_fd, dest.parent) / name
         finally:
-            os.close(dest_fd)
+            os.close(parent_fd)
         vault.unlink()
         with self._connect() as conn:
             conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
-        SecurityAudit().log(
-            "quarantine.restore",
-            str(entry_id),
-            success=True,
-            data={"dest": str(dest_resolved.resolve())},
-        )
-        return dest_resolved.resolve()
+        audit_data = {"dest": str(restored)}
+        SecurityAudit().log("quarantine.restore", str(entry_id), success=True, data=audit_data)
+        return restored
 
     def delete(self, entry_id: int) -> None:
         entry = self.get(entry_id)

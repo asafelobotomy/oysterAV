@@ -184,15 +184,30 @@ def load_session_hit_findings(binary: str | None) -> list[Finding]:
     return parse_session_hits_text(text)
 
 
-def is_maldet_self_signature_path(path: str) -> bool:
-    """True when the hit is LMD's own signature pack under maldetect/sigs."""
-    expanded = str(Path(path).expanduser())
-    parts = Path(expanded).parts
+_SYSTEM_MALDET_PREFIXES = ("/usr/local/maldetect",)
+
+
+def _real(path: str | Path) -> Path:
     try:
-        idx = parts.index("maldetect")
-    except ValueError:
-        return False
-    return idx + 1 < len(parts) and parts[idx + 1] == "sigs"
+        return Path(path).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return Path(path).expanduser()
+
+
+def maldet_install_prefixes() -> list[Path]:
+    """Real LMD install roots (system + oysterAV runtime); never path components."""
+    roots = [_real(p) for p in _SYSTEM_MALDET_PREFIXES]
+    try:
+        roots.append(_real(runtime_maldet_prefix()))
+    except (OSError, RuntimeError, ValueError):
+        pass
+    return roots
+
+
+def is_maldet_self_signature_path(path: str) -> bool:
+    """True only for LMD's own sigs under a real install root (not any */maldetect/sigs/*)."""
+    resolved = _real(path)
+    return any(resolved.is_relative_to(root / "sigs") for root in maldet_install_prefixes())
 
 
 def filter_malware_findings(findings: list[Finding]) -> list[Finding]:

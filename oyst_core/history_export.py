@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Literal
 
@@ -32,6 +33,20 @@ def _validate_export_target(path: str | Path) -> Path:
     except ValueError as exc:
         raise ValueError(f"export path must be under {exports}") from exc
     return target
+
+
+def _write_new_private(target: Path, text: str) -> str | None:
+    """Create *target* exclusively (0600, no symlink follow); return error or None."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(target, flags, 0o600)
+    except FileExistsError:
+        return f"refusing to overwrite existing file: {target}"
+    except OSError as exc:
+        return f"cannot create export file: {exc}"
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    return None
 
 
 def format_scan_markdown(scan: dict[str, Any]) -> str:
@@ -133,12 +148,13 @@ def export_scan_to_path(
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
     target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        return {"ok": False, "error": f"refusing to overwrite existing file: {target}"}
     if export_fmt == "json":
-        target.write_text(json.dumps(scan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        text = json.dumps(scan, indent=2, sort_keys=True) + "\n"
     else:
-        target.write_text(format_scan_markdown(scan), encoding="utf-8")
+        text = format_scan_markdown(scan)
+    error = _write_new_private(target, text)
+    if error:
+        return {"ok": False, "error": error}
     return {
         "ok": True,
         "path": str(target),
@@ -161,12 +177,13 @@ def export_all_scans_to_path(
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}
     target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        return {"ok": False, "error": f"refusing to overwrite existing file: {target}"}
     if export_fmt == "json":
-        target.write_text(json.dumps(scans, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        text = json.dumps(scans, indent=2, sort_keys=True) + "\n"
     else:
-        target.write_text(format_scans_markdown(scans), encoding="utf-8")
+        text = format_scans_markdown(scans)
+    error = _write_new_private(target, text)
+    if error:
+        return {"ok": False, "error": error}
     return {
         "ok": True,
         "path": str(target),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+import time
 
 # Methods that may run for a long time (scans, installs, bootstrap).
 LONG_RPC_METHODS = frozenset(
@@ -75,11 +76,27 @@ def timeout_for_method(method: str) -> float:
     return DEFAULT_TIMEOUT_SEC
 
 
-def recv_framed(conn: socket.socket, *, max_bytes: int = 16 * 1024 * 1024) -> bytes:
-    """Read until newline (JSON-RPC frame delimiter) or connection close."""
+def recv_framed(
+    conn: socket.socket,
+    *,
+    max_bytes: int = 16 * 1024 * 1024,
+    deadline_sec: float | None = None,
+) -> bytes:
+    """Read until newline (JSON-RPC frame delimiter) or connection close.
+
+    ``deadline_sec`` bounds the *whole* frame read (not each recv), so a peer
+    trickling one byte per timeout window cannot hold the connection forever.
+    Raises ``TimeoutError`` (an ``OSError``) when the deadline passes.
+    """
     chunks: list[bytes] = []
     total = 0
+    deadline = None if deadline_sec is None else time.monotonic() + deadline_sec
     while True:
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("RPC frame read deadline exceeded")
+            conn.settimeout(remaining)
         chunk = conn.recv(_RECV_CHUNK)
         if not chunk:
             break

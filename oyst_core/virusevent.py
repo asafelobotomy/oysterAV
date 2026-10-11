@@ -200,7 +200,8 @@ def handle_virusevent(
 ) -> dict[str, object]:
     """Handle one ClamAV VirusEvent using environment variables only."""
     environ = env if env is not None else dict(os.environ)
-    filename = (environ.get(ENV_FILENAME) or "").strip()
+    # Exact value: filenames may legitimately start/end with whitespace.
+    filename = environ.get(ENV_FILENAME) or ""
     virus = (environ.get(ENV_VIRUSNAME) or "").strip() or "unknown"
     if not filename:
         return {

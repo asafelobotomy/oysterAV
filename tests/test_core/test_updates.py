@@ -227,7 +227,7 @@ def test_apply_all_updates_installs_packages() -> None:
         patch("oyst_core.updates.MaldetPack", return_value=maldet),
         patch("oyst_core.updates.EventLog"),
     ):
-        result = apply_all_updates()
+        result = apply_all_updates(confirm_aur=True)
 
     assert result["ok"] is True
     assert result["packages_upgraded"] == ["rkhunter", "chkrootkit"]

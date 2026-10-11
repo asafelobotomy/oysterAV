@@ -11,6 +11,7 @@ from oyst_core.orchestrator import JobOrchestrator
 from oyst_core.rpc_errors import RpcNotFoundError
 from oyst_core.rpc_handlers import config_schedule, data, jobs, status_pack, system
 from oyst_core.rpc_handlers import shield_fw as shield_fw
+from oyst_core.rpc_handlers.params import loggable_params, truncate_for_log
 
 Handler = Callable[[dict[str, Any], "RpcContext"], Any]
 
@@ -76,6 +77,7 @@ HANDLERS: dict[str, Handler] = {
     "runtime.remove": system.handle_runtime_remove,
     "runtime.update": system.handle_runtime_update,
     "runtime.bootstrap": system.handle_runtime_bootstrap,
+    "progress.get": system.handle_progress_get,
     "firewall.status": system.handle_firewall_status,
     "firewall.ensure_enable": shield_fw.handle_firewall_ensure_enable,
     "firewall.set_enabled": shield_fw.handle_firewall_set_enabled,
@@ -139,10 +141,11 @@ def dispatch_rpc(
     if handler is None:
         raise RpcNotFoundError(f"unknown method: {method}")
     ctx = RpcContext(orchestrator=orchestrator, event_log=event_log, audit=audit)
+    safe_params = loggable_params(method, params)
     try:
         result = handler(params, ctx)
     except Exception as exc:
-        log_rpc_call(method, params, ok=False, result={"message": str(exc)})
+        log_rpc_call(method, safe_params, ok=False, result={"message": truncate_for_log(str(exc))})
         raise
-    log_rpc_call(method, params, ok=True, result=result)
+    log_rpc_call(method, safe_params, ok=True, result=truncate_for_log(result))
     return result

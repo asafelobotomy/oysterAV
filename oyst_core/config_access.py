@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
 
 from oyst_core.config_io import load_config, save_config
@@ -100,6 +101,11 @@ def _parse_exclude_dirs_csv(value: str) -> list[str]:
         if any(ch in forbidden for ch in item):
             raise ValueError(
                 "scan.exclude_dirs entries must be literal path prefixes (no regex metacharacters)",
+            )
+        # Relative entries ('.', 'cache') would match any path component.
+        if not Path(item).expanduser().is_absolute():
+            raise ValueError(
+                "scan.exclude_dirs entries must be absolute paths (or start with ~/)",
             )
     return paths
 
@@ -258,6 +264,8 @@ def set_config_value(key: str, value: str) -> None:
         cfg.ui.start_minimized = _parse_bool(value)
     elif key == "ui.minimize_to_tray":
         cfg.ui.minimize_to_tray = _parse_bool(value)
+    elif key == "ui.terminal_show_raw":
+        cfg.ui.terminal_show_raw = _parse_bool(value)
     elif key == "ui.security_news":
         cfg.ui.security_news = _parse_bool(value)
     elif key == "ui.security_news_sources":

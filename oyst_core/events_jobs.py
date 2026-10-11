@@ -12,10 +12,17 @@ _JOB_CANCEL_DDL = (
     "requested INTEGER NOT NULL)"
 )
 
-# Worker died without release_job_lock (kill/crash/reboot).
-STALE_JOB_LOCK = timedelta(hours=2)
-# Cancel was requested but nobody released the lock.
-STALE_AFTER_CANCEL = timedelta(minutes=10)
+# Worker died without release_job_lock (kill/crash/reboot): no heartbeat for this long.
+# Live jobs refresh ``heartbeat_at`` via set_job_progress / touch_job_heartbeat, so
+# legitimately long scans (up to the 7200s RPC timeout) are never judged stale.
+STALE_JOB_HEARTBEAT = timedelta(minutes=10)
+
+_CLEAR_LOCK_SQL = """
+    UPDATE job_lock SET
+        job_id = NULL, started_at = NULL, heartbeat_at = NULL,
+        pack = NULL, message = NULL, percent = 0, state = NULL
+    WHERE id = 1
+"""
 
 
 class EventJobsMixin:
@@ -40,23 +47,47 @@ class EventJobsMixin:
             conn.execute("ALTER TABLE job_lock ADD COLUMN percent REAL DEFAULT 0")
         if "state" not in cols:
             conn.execute("ALTER TABLE job_lock ADD COLUMN state TEXT")
+        if "heartbeat_at" not in cols:
+            conn.execute("ALTER TABLE job_lock ADD COLUMN heartbeat_at TEXT")
+
+    def _release_owned(
+        self,
+        conn: sqlite3.Connection,
+        job_id: str,
+        *,
+        match_beat: bool = False,
+        beat: Any = None,
+    ) -> bool:
+        """Clear the lock only if ``job_id`` still owns it; reset cancel in the same txn."""
+        sql = _CLEAR_LOCK_SQL + " AND job_id = ?"
+        params: tuple[Any, ...] = (job_id,)
+        if match_beat:
+            sql += " AND heartbeat_at IS ?"
+            params = (job_id, beat)
+        if conn.execute(sql, params).rowcount != 1:
+            return False
+        self._ensure_cancel_schema(conn)
+        conn.execute("UPDATE job_cancel SET requested = 0 WHERE id = 1")
+        return True
 
     def acquire_job_lock(self, job_id: str) -> bool:
         self.clear_stale_job_lock()
+        now = datetime.now().isoformat()
         with self._connect() as conn:
             self._ensure_job_progress_schema(conn)
-            row = conn.execute("SELECT job_id FROM job_lock WHERE id = 1").fetchone()
-            if row and row["job_id"]:
-                return False
-            conn.execute(
+            # Single conditional UPDATE: SQLite serialises writers, so only one
+            # process can flip job_id from NULL (no SELECT-then-UPDATE race).
+            cur = conn.execute(
                 """
                 UPDATE job_lock SET
-                    job_id = ?, started_at = ?,
+                    job_id = ?, started_at = ?, heartbeat_at = ?,
                     pack = NULL, message = 'Starting', percent = 0, state = 'running'
-                WHERE id = 1
+                WHERE id = 1 AND job_id IS NULL
                 """,
-                (job_id, datetime.now().isoformat()),
+                (job_id, now, now),
             )
+            if cur.rowcount != 1:
+                return False
             self._ensure_cancel_schema(conn)
             conn.execute("UPDATE job_cancel SET requested = 0 WHERE id = 1")
             return True
@@ -75,11 +106,28 @@ class EventJobsMixin:
             conn.execute(
                 """
                 UPDATE job_lock SET
-                    pack = ?, message = ?, percent = ?, state = ?
+                    pack = ?, message = ?, percent = ?, state = ?, heartbeat_at = ?
                 WHERE id = 1 AND job_id = ?
                 """,
-                (pack or None, message or None, float(percent), state, job_id),
+                (
+                    pack or None,
+                    message or None,
+                    float(percent),
+                    state,
+                    datetime.now().isoformat(),
+                    job_id,
+                ),
             )
+
+    def touch_job_heartbeat(self, job_id: str) -> bool:
+        """Refresh the liveness timestamp. False once ``job_id`` no longer owns the lock."""
+        with self._connect() as conn:
+            self._ensure_job_progress_schema(conn)
+            cur = conn.execute(
+                "UPDATE job_lock SET heartbeat_at = ? WHERE id = 1 AND job_id = ?",
+                (datetime.now().isoformat(), job_id),
+            )
+            return cur.rowcount == 1
 
     def get_job_progress(self) -> dict[str, Any]:
         self.clear_stale_job_lock()
@@ -109,17 +157,7 @@ class EventJobsMixin:
     def release_job_lock(self, job_id: str) -> None:
         with self._connect() as conn:
             self._ensure_job_progress_schema(conn)
-            conn.execute(
-                """
-                UPDATE job_lock SET
-                    job_id = NULL, started_at = NULL,
-                    pack = NULL, message = NULL, percent = 0, state = NULL
-                WHERE id = 1 AND job_id = ?
-                """,
-                (job_id,),
-            )
-            self._ensure_cancel_schema(conn)
-            conn.execute("UPDATE job_cancel SET requested = 0 WHERE id = 1")
+            self._release_owned(conn, job_id)
 
     def request_cancel(self, job_id: str | None = None) -> bool:
         """Mark the active job for cooperative cancellation. Returns True if a job was active."""
@@ -141,45 +179,35 @@ class EventJobsMixin:
         return bool(row and int(row["requested"]) == 1)
 
     def force_release_job_lock(self) -> str | None:
-        """Clear the job lock (e.g. after cancel). Returns previous job_id if any."""
+        """Clear the job lock (explicit user recovery). Returns previous job_id if any."""
         with self._connect() as conn:
             self._ensure_job_progress_schema(conn)
             row = conn.execute("SELECT job_id FROM job_lock WHERE id = 1").fetchone()
             prev = str(row["job_id"]) if row and row["job_id"] else None
-            conn.execute(
-                """
-                UPDATE job_lock SET
-                    job_id = NULL, started_at = NULL,
-                    pack = NULL, message = NULL, percent = 0, state = NULL
-                WHERE id = 1
-                """
-            )
+            conn.execute(_CLEAR_LOCK_SQL)
             self._ensure_cancel_schema(conn)
             conn.execute("UPDATE job_cancel SET requested = 0 WHERE id = 1")
             return prev
 
     def clear_stale_job_lock(self) -> str | None:
-        """Drop zombie locks left when a scan worker died without releasing."""
+        """Drop zombie locks whose worker stopped heartbeating (kill/crash/reboot)."""
         with self._connect() as conn:
             self._ensure_job_progress_schema(conn)
-            self._ensure_cancel_schema(conn)
             row = conn.execute("SELECT * FROM job_lock WHERE id = 1").fetchone()
-            cancel_row = conn.execute("SELECT requested FROM job_cancel WHERE id = 1").fetchone()
-        if row is None or not row["job_id"]:
-            return None
-        started_raw = row["started_at"]
-        if not started_raw:
-            return self.force_release_job_lock()
-        try:
-            started = datetime.fromisoformat(str(started_raw))
-        except ValueError:
-            return self.force_release_job_lock()
-        age = datetime.now() - started
-        cancel_pending = bool(cancel_row and int(cancel_row["requested"]) == 1)
-        stale = age >= STALE_JOB_LOCK or (cancel_pending and age >= STALE_AFTER_CANCEL)
-        if not stale:
-            return None
-        return self.force_release_job_lock()
+            if row is None or not row["job_id"]:
+                return None
+            job_id = str(row["job_id"])
+            beat = row["heartbeat_at"]
+            last_raw = beat or row["started_at"]
+            try:
+                last = datetime.fromisoformat(str(last_raw)) if last_raw else None
+            except ValueError:
+                last = None
+            if last is not None and datetime.now() - last < STALE_JOB_HEARTBEAT:
+                return None
+            # Conditional on the exact row we judged stale: never clobber a lock that
+            # was refreshed or re-acquired by another job in the meantime.
+            return job_id if self._release_owned(conn, job_id, match_beat=True, beat=beat) else None
 
     def active_job(self) -> str | None:
         self.clear_stale_job_lock()

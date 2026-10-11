@@ -103,6 +103,18 @@ class PackError(BaseModel):
     error: str
 
 
+class PartialScanError(RuntimeError):
+    """A pack ran but reported an error; ``findings`` holds what it did detect.
+
+    Lets the orchestrator keep partial detections *and* record a pack error so
+    the scan is never reported clean (e.g. clamscan exit code 2).
+    """
+
+    def __init__(self, message: str, findings: list[Finding]) -> None:
+        super().__init__(message)
+        self.findings = findings
+
+
 class ScanResult(BaseModel):
     job_id: str
     profile: ScanProfile
@@ -116,7 +128,7 @@ class ScanResult(BaseModel):
 
     def finalize(self) -> None:
         self.finished_at = datetime.now()
-        self.clean = scan_is_clean(self.findings)
+        self.clean = scan_is_clean(self.findings, self.pack_errors)
         if self.state not in (JobState.CANCELLED, JobState.FAILED):
             self.state = JobState.COMPLETED
 

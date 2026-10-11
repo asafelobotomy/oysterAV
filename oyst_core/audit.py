@@ -47,6 +47,9 @@ _PATH_REDACT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"/home/[^/\s\"']+"), "/home/<redacted>"),
     (re.compile(r"/var/home/[^/\s\"']+"), "/var/home/<redacted>"),
     (re.compile(r"/run/user/\d+"), "/run/user/<redacted>"),
+    (re.compile(r"/run/media/[^/\s\"']+"), "/run/media/<redacted>"),
+    (re.compile(r"(?<![\w/.-])/media/[^/\s\"']+"), "/media/<redacted>"),
+    (re.compile(r"(?<![\w/.-])/root/[^/\s\"']+"), "/root/<redacted>"),
     # Redaction patterns only (not temp-file I/O).
     (re.compile(r"/tmp/oysterav-[^/\s\"']+"), "/tmp/oysterav-<redacted>"),  # nosec B108
     (re.compile(r"/var/tmp/oysterav-[^/\s\"']+"), "/var/tmp/oysterav-<redacted>"),  # nosec B108
@@ -54,7 +57,7 @@ _PATH_REDACT_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
 
 
 def redact_paths(value: Any) -> Any:
-    """Redact user path prefixes in nested data (home, XDG runtime, oysterAV tmp)."""
+    """Redact user path prefixes in nested data (home, root, media, XDG runtime, tmp)."""
     if isinstance(value, str):
         text = value
         for pattern, repl in _PATH_REDACT_RULES:

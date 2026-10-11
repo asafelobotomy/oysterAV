@@ -21,10 +21,11 @@ class EventHistoryMixin:
 
     def log(self, kind: str, message: str, data: dict[str, Any] | None = None) -> None:
         payload = redact_paths(data or {})
+        safe_message = str(redact_paths(message))
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO events (ts, kind, message, data) VALUES (?, ?, ?, ?)",
-                (datetime.now().isoformat(), kind, message, json.dumps(payload)),
+                (datetime.now().isoformat(), kind, safe_message, json.dumps(payload)),
             )
 
     def history(self, limit: int = 20) -> list[dict[str, Any]]:
@@ -149,27 +150,66 @@ class EventHistoryMixin:
             return [str(p) for p in parsed]
         return []
 
+    @staticmethod
+    def _scan_row(result: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            result["job_id"],
+            result["profile"],
+            json.dumps(result.get("paths", [])),
+            result["started_at"],
+            result.get("finished_at"),
+            1 if result.get("clean", True) else 0,
+            len(result.get("findings", [])),
+            json.dumps(result),
+        )
+
     def save_scan(self, result: dict[str, Any]) -> None:
+        """Persist a scan; re-saving is only allowed for the same run (same started_at).
+
+        A different scan reusing an existing job_id raises ValueError instead of
+        silently overwriting that scan's history.
+        """
         with self._connect() as conn:
-            conn.execute(
+            cur = conn.execute(
                 """
-                INSERT OR REPLACE INTO scan_history (
+                INSERT INTO scan_history (
                     job_id, profile, paths, started_at, finished_at,
                     clean, findings_count, result_json
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    profile = excluded.profile, paths = excluded.paths,
+                    finished_at = excluded.finished_at, clean = excluded.clean,
+                    findings_count = excluded.findings_count,
+                    result_json = excluded.result_json
+                WHERE scan_history.started_at = excluded.started_at
                 """,
-                (
-                    result["job_id"],
-                    result["profile"],
-                    json.dumps(result.get("paths", [])),
-                    result["started_at"],
-                    result.get("finished_at"),
-                    1 if result.get("clean", True) else 0,
-                    len(result.get("findings", [])),
-                    json.dumps(result),
-                ),
+                self._scan_row(result),
             )
+            if cur.rowcount == 0:
+                raise ValueError(f"scan history already exists for job_id: {result['job_id']}")
+
+    @staticmethod
+    def _apply_finding_patch(
+        findings: list[Any],
+        key: tuple[str, str, str, str],
+        *,
+        quarantined: bool | None,
+        resolved: bool | None,
+    ) -> bool:
+        fields = ("pack", "path", "threat_name", "message")
+        # Exact match first, then without message (parsers may differ slightly).
+        for width in (4, 3):
+            for finding in findings:
+                if not isinstance(finding, dict):
+                    continue
+                if all(str(finding.get(f) or "") == key[i] for i, f in enumerate(fields[:width])):
+                    if quarantined is not None:
+                        finding["quarantined"] = quarantined
+                    if resolved is not None:
+                        finding["resolved"] = resolved
+                    return True
+        return False
 
     def patch_finding(
         self,
@@ -182,48 +222,40 @@ class EventHistoryMixin:
         quarantined: bool | None = None,
         resolved: bool | None = None,
     ) -> dict[str, Any]:
-        """Update flags on one finding in a stored scan; recompute clean."""
-        result = self.get_scan(job_id)
-        if result is None:
-            return {"ok": False, "error": f"scan not found: {job_id}"}
-        findings = result.get("findings")
-        if not isinstance(findings, list):
-            return {"ok": False, "error": "scan has no findings list"}
-        matched = False
-        for finding in findings:
-            if not isinstance(finding, dict):
-                continue
-            if (
-                str(finding.get("pack") or "") == pack
-                and str(finding.get("path") or "") == path
-                and str(finding.get("threat_name") or "") == threat_name
-                and str(finding.get("message") or "") == message
+        """Update flags on one finding in a stored scan; recompute clean.
+
+        Read-modify-write runs in one BEGIN IMMEDIATE transaction so concurrent
+        patches on the same scan serialise instead of losing updates.
+        """
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT result_json FROM scan_history WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            result: Any = None
+            if row is not None and isinstance(row["result_json"], str):
+                try:
+                    result = json.loads(row["result_json"])
+                except json.JSONDecodeError:
+                    result = None
+            if not isinstance(result, dict):
+                return {"ok": False, "error": f"scan not found: {job_id}"}
+            findings = result.get("findings")
+            if not isinstance(findings, list):
+                return {"ok": False, "error": "scan has no findings list"}
+            key = (pack, path, threat_name, message)
+            if not self._apply_finding_patch(
+                findings, key, quarantined=quarantined, resolved=resolved
             ):
-                if quarantined is not None:
-                    finding["quarantined"] = quarantined
-                if resolved is not None:
-                    finding["resolved"] = resolved
-                matched = True
-                break
-        if not matched:
-            # Fallback: match without message (parsers may differ slightly).
-            for finding in findings:
-                if not isinstance(finding, dict):
-                    continue
-                if (
-                    str(finding.get("pack") or "") == pack
-                    and str(finding.get("path") or "") == path
-                    and str(finding.get("threat_name") or "") == threat_name
-                ):
-                    if quarantined is not None:
-                        finding["quarantined"] = quarantined
-                    if resolved is not None:
-                        finding["resolved"] = resolved
-                    matched = True
-                    break
-        if not matched:
-            return {"ok": False, "error": "finding not found in scan"}
-        result["findings"] = findings
-        result["clean"] = scan_is_clean(findings)
-        self.save_scan(result)
+                return {"ok": False, "error": "finding not found in scan"}
+            result["findings"] = findings
+            result["clean"] = scan_is_clean(findings, result.get("pack_errors"))
+            conn.execute(
+                """
+                UPDATE scan_history SET clean = ?, findings_count = ?, result_json = ?
+                WHERE job_id = ?
+                """,
+                (1 if result["clean"] else 0, len(findings), json.dumps(result), job_id),
+            )
         return {"ok": True, "clean": result["clean"], "job_id": job_id}

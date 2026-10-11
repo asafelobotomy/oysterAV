@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from oyst_core.config import get_config_value, load_config, set_config_value
-from oyst_core.rpc_errors import RpcNotFoundError
+from oyst_core.rpc_errors import RpcNotFoundError, RpcValidationError
+from oyst_core.rpc_handlers.params import opt_bool, opt_str, req_str
 from oyst_core.schedule_util import (
     apply_schedule,
     enable_linger,
@@ -20,9 +21,9 @@ if TYPE_CHECKING:
 
 
 def handle_config_get(params: dict[str, Any], _ctx: RpcContext) -> Any:
-    key = params.get("key")
+    key = opt_str(params, "key")
     if key:
-        val = get_config_value(str(key))
+        val = get_config_value(key)
         if val is None:
             raise RpcNotFoundError(f"unknown config key: {key}")
         return val
@@ -30,16 +31,26 @@ def handle_config_get(params: dict[str, Any], _ctx: RpcContext) -> Any:
 
 
 def handle_config_set(params: dict[str, Any], _ctx: RpcContext) -> Any:
-    set_config_value(str(params["key"]), str(params["value"]))
+    key = req_str(params, "key")
+    raw_value = params.get("value")
+    if isinstance(raw_value, bool):
+        value = "true" if raw_value else "false"
+    else:
+        value = req_str(params, "value", allow_empty=True)
+    try:
+        set_config_value(key, value)
+    except (KeyError, ValueError, TypeError) as exc:
+        detail = exc.args[0] if exc.args else exc
+        raise RpcValidationError(f"invalid config value for {key}: {detail}") from exc
     return True
 
 
 def handle_schedule_install(params: dict[str, Any], _ctx: RpcContext) -> Any:
-    return install_user_timer(str(params.get("profile", "quick")), smoke_test=True)
+    return install_user_timer(opt_str(params, "profile") or "quick", smoke_test=True)
 
 
 def handle_schedule_apply(params: dict[str, Any], _ctx: RpcContext) -> Any:
-    return apply_schedule(smoke_test=bool(params.get("smoke_test", False)))
+    return apply_schedule(smoke_test=opt_bool(params, "smoke_test"))
 
 
 def handle_schedule_status(_params: dict[str, Any], _ctx: RpcContext) -> Any:

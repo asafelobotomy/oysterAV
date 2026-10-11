@@ -128,7 +128,8 @@ def _query_dnf_upgrades() -> list[tuple[str, str, str]]:
         match = _DNF_LINE_RE.match(stripped)
         if not match:
             continue
-        name = match.group(1)
+        # dnf prints ``name.arch`` (clamav.x86_64, foo.noarch); tracked names are bare.
+        name = match.group(1).rpartition(".")[0] or match.group(1)
         available = match.group(2)
         current = _rpm_installed_version(name) or "?"
         out.append((name, current, available))

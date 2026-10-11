@@ -337,5 +337,5 @@ class OystClientApi(OystClientShieldApi):
     def updates_check(self) -> dict[str, Any]:
         return self._as_dict("updates.check")
 
-    def updates_apply(self) -> dict[str, Any]:
-        return self._as_dict("updates.apply")
+    def updates_apply(self, *, confirm_aur: bool = False) -> dict[str, Any]:
+        return self._as_dict("updates.apply", {"confirm_aur": confirm_aur})

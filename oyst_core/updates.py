@@ -96,11 +96,13 @@ def plan_update_all() -> PrivilegePlan:
     )
 
 
-def apply_all_updates() -> dict[str, Any]:
+def apply_all_updates(*, confirm_aur: bool = False) -> dict[str, Any]:
     """Check package upgrades, elevate once for packages+rkh, then refresh definitions.
 
     Steps: update-concert (official packages, rkhunter --update/--propupd) →
-    AUR (user-mode) → freshclam/runtime → fangfrisch → maldet sigs.
+    AUR (user-mode, only with ``confirm_aur``) → freshclam/runtime → fangfrisch →
+    maldet sigs. AUR upgrades build an unreviewed PKGBUILD with --noconfirm, so —
+    like the initial install — they need explicit consent; default is to skip.
     """
     events = EventLog()
     check = check_available_updates()
@@ -134,7 +136,7 @@ def apply_all_updates() -> dict[str, Any]:
         )
 
     if aur:
-        steps.append(_apply_aur_upgrades(aur))
+        steps.append(_apply_aur_upgrades(aur, confirm_aur=confirm_aur))
 
     steps.append(_step_freshclam_or_runtime())
     steps.append(_step_fangfrisch())
@@ -156,7 +158,7 @@ def apply_all_updates() -> dict[str, Any]:
     result = {
         "ok": ok,
         "updates": updates,
-        "packages_upgraded": list(official) + list(aur),
+        "packages_upgraded": list(official) + (list(aur) if confirm_aur else []),
         "steps": steps,
         "message": message,
     }
@@ -176,7 +178,7 @@ def _normalize_concert_steps(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def _apply_aur_upgrades(packages: list[str]) -> dict[str, Any]:
+def _apply_aur_upgrades(packages: list[str], *, confirm_aur: bool = False) -> dict[str, Any]:
     if not packages:
         return {
             "step": "packages-aur",
@@ -184,6 +186,18 @@ def _apply_aur_upgrades(packages: list[str]) -> dict[str, Any]:
             "skipped": True,
             "packages": [],
             "message": "No AUR upgrades",
+        }
+    if not confirm_aur:
+        names = " ".join(packages)
+        return {
+            "step": "packages-aur",
+            "ok": True,
+            "skipped": True,
+            "packages": packages,
+            "message": (
+                f"AUR upgrades skipped ({names}): review the PKGBUILD and upgrade with "
+                f"your AUR helper, e.g. `yay -S {names}`"
+            ),
         }
     res = run_privileged_aur_install(packages)
     return {
