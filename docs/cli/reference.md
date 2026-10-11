@@ -82,6 +82,7 @@ oyst-cli packs install lynis [--progress]   # full mode → private runtime; lit
 oyst-cli scan ~/Downloads --profile quick --json
 oyst-cli scan / --profile integrity --confirm --json
 oyst-cli scan / --profile integrity --dry-run --json   # privilege plan only
+oyst-cli scan ~/Downloads --quarantine --confirm      # --quarantine moves files: needs --confirm
 oyst-cli job status --json
 oyst-cli job cancel
 oyst-cli job clear                    # clear stuck lock (CLI)
@@ -148,6 +149,7 @@ oyst-cli firewall ufw allow --port 22 --proto tcp --confirm --json
 oyst-cli firewall ufw enable --confirm
 oyst-cli lynis audit --scope container-host --json
 oyst-cli maldet monitor status --json
+oyst-cli maldet monitor stop --confirm
 oyst-cli rkhunter propupd --confirm --json
 ```
 
@@ -173,6 +175,7 @@ oyst-cli schedule apply             # write/reload units from config
 oyst-cli schedule run --json        # one scan from schedule config (timer target)
 oyst-cli schedule enable            # set enabled + apply
 oyst-cli schedule disable --confirm # set disabled + stop timer
+oyst-cli schedule set --disabled --apply --confirm   # same; --confirm required with --disabled --apply
 oyst-cli schedule install --profile quick   # compat one-click (defaults + apply; smoke-test on)
 oyst-cli schedule template          # print timer unit text
 oyst-cli schedule linger --json
@@ -315,6 +318,7 @@ oyst-cli terminal clear --confirm
 
 ```bash
 oyst-cli serve --foreground   # --foreground kept for compatibility; always foreground
+oyst-cli serve --idle-exit 900   # exit when idle (no connections, no active job); 0 = never
 ```
 
 See [rpc-schema.md](rpc-schema.md) for JSON-RPC v2 methods and authentication.
@@ -344,7 +348,13 @@ eval "$(_OYST_CLI_COMPLETE=zsh_source uv run oyst-cli)"
 | 4 | Privilege / AUR / destructive-action confirmation required |
 | 5 | Required pack missing |
 
-Click usage errors (unknown options, missing required args) typically exit **1** via Click; that is separate from the threat-found code above. Prefer `--json` and documented flags for scripting.
+Click usage errors (unknown options, missing required args) exit **2**. Other
+CLI errors (`ClickException`, unexpected exceptions) also exit **2**, never 1, so
+code 1 always means threats were found. A missing `--confirm` on a destructive or
+privileged command exits **4**. Prefer `--json` and documented flags for scripting.
+
+`oyst-cli setup check` is an exception: it exits **1** when the first-run wizard
+should be shown (setup incomplete) and **0** when setup is complete.
 
 ## Runtime modes
 

@@ -10,8 +10,8 @@ automatable controls (not a Level 2 certification claim). Full requirement map:
 |------|--------------------|---------|
 | Security marker suite | `uv run pytest -m security -q --no-cov` | Validation, helper argv, firewall props, RPC auth/framing, audit redaction |
 | Security module coverage ≥85% | `uv run python scripts/check_security_coverage.py` | Regressions in privileged modules cannot drop below floor |
-| Bandit MEDIUM+ | `uv tool run bandit -c bandit.yaml -r oyst_core oyst_cli -ll -ii` | SAST (injection / unsafe subprocess patterns) |
-| pip-audit | `uv tool run pip-audit` | Known dependency CVEs |
+| Bandit MEDIUM+ | `uv tool run --python 3.12 bandit==1.9.4 -c bandit.yaml -r oyst_core oyst_cli -ll -ii`; fails unless output reports `Files skipped (0)` | SAST (injection / unsafe subprocess patterns) |
+| pip-audit | `uv export --frozen --all-extras --no-emit-project -o req.txt` then `uv tool run pip-audit==2.10.1 -r req.txt --require-hashes --disable-pip` | Known CVEs in the project's locked dependencies (`uv.lock`) |
 | Gitleaks | `.github/workflows/security-scan.yml` | Secrets in git history / working tree |
 | Semgrep | `.github/workflows/security-scan.yml` (`p/python`, `p/security-audit`) | Additional SAST on `oyst_core` / `oyst_cli` |
 | OpenSSF Scorecard | `.github/workflows/scorecard.yml` (blocking) | Supply-chain / repo hygiene score |
@@ -19,7 +19,17 @@ automatable controls (not a Level 2 certification claim). Full requirement map:
 | Global coverage | `fail_under = 65` in `pyproject.toml` | Broader quality (not a security floor) |
 
 `scripts/check.sh` and GitHub CI run the security marker suite, security coverage,
-Bandit, and pip-audit after the usual triad.
+Bandit, and pip-audit after the usual triad. Tool versions are pinned identically
+in both places; bump them together.
+
+- **Bandit** must run on Python ≥3.12: older interpreters cannot parse PEP 695
+  syntax and Bandit silently *skips* such files while still exiting 0. The gate
+  therefore also fails when any file is skipped.
+- **pip-audit** audits an export of `uv.lock` (with hashes, no resolver), not the
+  ambient environment. Running bare `uv tool run pip-audit` only audits
+  pip-audit's own tool venv and never sees oysterAV's dependencies.
+- **Semgrep** runs in `semgrep/semgrep` pinned by tag and image-index digest;
+  Dependabot does not track job containers, so bump it manually.
 
 ## ASVS-oriented mapping
 

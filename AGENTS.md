@@ -76,7 +76,7 @@ Living map: [docs/cli/gui-contract.md](docs/cli/gui-contract.md).
 
 ## Architecture notes
 
-- GUI talks to security tools only via `OystClient` (Unix JSON-RPC or in-process fallback). CI greps for forbidden GUI subprocesses.
+- GUI talks to security tools only via `OystClient` over Unix JSON-RPC to a separate `oyst-cli serve` process it auto-spawns (`local_fallback=False`; no in-process dispatch). The CLI keeps a same-UID in-process fallback. CI greps for forbidden GUI subprocesses.
 - Privileged ops go through polkit `oyst-helper` (`oyst-cli install-privileged-helper`). No raw `pkexec bash` fallback.
 - **Privilege Concert** ([ADR-009](docs/adr/009-privilege-concert.md)): userspace `oyst_core/privilege/` builds a `PrivilegePlan`; one `auth_admin` polkit prompt runs allowlisted recipes via helper argv1 `setup-concert` / `setup-harden` / `scan-concert` (plus Resolve façade on `rkhunter-whitelist`). Reinstall the helper after policy bumps.
 - Runtime modes: **full** (tools under `~/.local/share/oysterav/runtime/`) vs **lite** (host packages). Set with `oyst-cli config set runtime.mode full|lite`.

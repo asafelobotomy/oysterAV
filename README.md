@@ -144,8 +144,8 @@ assets on each [GitHub Release](https://github.com/asafelobotomy/oysterAV/releas
 
 | Channel | Status | Install |
 |---------|--------|---------|
-| **Debian/Ubuntu (.deb)** | Available | Download `oysterav_*_amd64.deb`, then `sudo apt install ./oysterav_*_amd64.deb` |
-| **Fedora/RHEL (.rpm)** | Available | Download `oysterav-*-1.x86_64.rpm`, then `sudo dnf install ./oysterav-*.rpm` |
+| **Debian/Ubuntu (.deb)** | Available | Download `oysterav_*_all.deb`, then `sudo apt install ./oysterav_*_all.deb` (Debian 13+, Ubuntu 25.04+; needs pydantic 2) |
+| **Fedora/RHEL (.rpm)** | Available | Download `oysterav-*-1.noarch.rpm`, then `sudo dnf install ./oysterav-*.rpm` |
 | **Flatpak (GitHub bundle)** | Available | `flatpak install --user ./oysterAV-*-x86_64.flatpak` — **also install a host `.deb`/`.rpm`** for Polkit helper elevation |
 | **Wheel / uv (dev)** | Available | Download the `.whl` or clone and `uv sync --extra all` |
 | **AUR** (Arch / CachyOS) | Available | `yay -S oysterav` or `paru -S oysterav` |

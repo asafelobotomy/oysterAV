@@ -80,7 +80,7 @@ Living gates: [`test-gates.md`](test-gates.md). Adversarial suites:
 | V6.2.x | Random for secrets | L1 | covered | `secrets` module for RPC token | |
 | V6.3.x | TLS for all remote APIs | L1 | partial | HTTPS scheme gate on downloads / news | Unix RPC is local AF_UNIX, not TLS |
 | V6.4.x | Key management HSM | L2 | n/a | — | |
-| V6.x | Integrity of sealed scanners / install | L1 | covered | SHA-256 verify; `test_helper_seal_install_adversarial` | |
+| V6.x | Integrity of privileged scanners / install | L1 | covered | Root runs system binaries only (`run-sealed` retired); maldet tarball must match helper-side pin (`oyst_core/privileged/pins.py`); `test_helper_seal_install_adversarial` | |
 
 ## V7 — Error handling and logging
 
@@ -109,7 +109,7 @@ Living gates: [`test-gates.md`](test-gates.md). Adversarial suites:
 
 | ASVS ID | Title | L1/L2 | Status | Evidence | Gap notes |
 |---------|-------|-------|--------|----------|-----------|
-| V10.2.x | Integrity of deployed components | L1 | partial | Runtime checksums; sealed helper | Distro packaging varies |
+| V10.2.x | Integrity of deployed components | L1 | partial | Runtime checksums; helper-side pins | Distro packaging varies |
 | V10.3.x | Subresource integrity (web) | L1 | n/a | — | |
 | V10.x | Detection-path smoke (EICAR) | L1 | covered | `test_eicar_detection_path` (mocked; `OYST_EICAR_LIVE=1` opt-in) | |
 

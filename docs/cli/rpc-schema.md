@@ -159,7 +159,23 @@ Error:
 
 ```bash
 oyst-cli serve --foreground
+oyst-cli serve --idle-exit 900   # exit after 15 min with no connections and no active job
 ```
+
+The GUI never hosts the backend: on launch it connects to the socket and, if no
+server is listening, spawns `oyst-cli serve --idle-exit 900` as a separate,
+detached process (log: `~/.local/share/oysterav/serve.log`, mode 0600). Jobs
+therefore keep running after the GUI quits. GUI clients use
+`OystClient(local_fallback=False, autostart=True)` and never dispatch in-process;
+the CLI keeps the same-UID in-process fallback when no server is running.
+
+### Progress for long methods
+
+`pack.install`, `runtime.install`, `runtime.remove` and `runtime.bootstrap`
+accept an optional `progress_token` (32 lowercase hex chars). While the call
+runs, poll `progress.get {"token": …}` on separate connections; it returns
+`{"seq", "stage", "percent", "done"}`. State is in-memory in the serving process,
+bounded (64 tokens) and expires after an hour.
 
 Systemd user unit template (packaged install with `oyst-cli` on PATH under
 `~/.local/bin`). After a uv-only checkout, point `ExecStart` at the venv binary
