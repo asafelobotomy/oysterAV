@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from oysterav.gui.widgets.bulk_checklist import format_capped_list
+import pytest
+
+pytest.importorskip("gi", reason="PyGObject (gi) not installed", exc_type=ImportError)
+
+from oysterav.gui.widgets.bulk_checklist import format_capped_list  # noqa: E402
 
 
 def test_format_capped_list_empty() -> None:

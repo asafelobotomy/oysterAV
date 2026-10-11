@@ -7,13 +7,31 @@ import click
 from oyst_cli.confirm import require_confirm
 from oyst_cli.options import json_option
 from oyst_cli.output import emit
+from oyst_core.models import ExitCode
 from oyst_core.quarantine import QuarantineVault
+
+# Vault errors surfaced as a clean failure (never exit 1, which means threats found).
+_VAULT_ERRORS = (KeyError, OSError, ValueError, RuntimeError)
 
 _DELETE_EPILOG = """
 Examples:
   oyst-cli quarantine delete 1 --dry-run --json
   oyst-cli quarantine delete 1 --confirm --json
 """
+
+
+def _fail(entry_id: int, exc: BaseException | str, *, json_mode: bool) -> None:
+    if isinstance(exc, KeyError):
+        message = f"entry {entry_id} not found"
+    elif isinstance(exc, FileNotFoundError):
+        message = f"vault file missing for entry {entry_id}: {exc}"
+    else:
+        message = str(exc) or type(exc).__name__
+    if json_mode:
+        emit({"ok": False, "entry_id": entry_id, "error": message}, json_mode=True)
+    else:
+        click.echo(f"Error: {message}", err=True)
+    raise SystemExit(int(ExitCode.ERROR))
 
 
 @click.group("quarantine")
@@ -59,7 +77,8 @@ def restore_cmd(entry_id: int, confirm: bool, dry_run: bool, json_mode: bool) ->
     if dry_run:
         entry = QuarantineVault().get(entry_id)
         if not entry:
-            raise click.ClickException(f"entry {entry_id} not found")
+            _fail(entry_id, f"entry {entry_id} not found", json_mode=json_mode)
+            return
         payload = {
             "ok": True,
             "dry_run": True,
@@ -71,7 +90,11 @@ def restore_cmd(entry_id: int, confirm: bool, dry_run: bool, json_mode: bool) ->
         else:
             click.echo(f"Would restore entry {entry_id} to {entry.original_path}")
         return
-    dest = QuarantineVault().restore(entry_id)
+    try:
+        dest = QuarantineVault().restore(entry_id)
+    except _VAULT_ERRORS as exc:
+        _fail(entry_id, exc, json_mode=json_mode)
+        return
     payload = {"ok": True, "entry_id": entry_id, "dest": str(dest)}
     if json_mode:
         emit(payload, json_mode=True)
@@ -93,14 +116,19 @@ def delete_cmd(entry_id: int, confirm: bool, dry_run: bool, json_mode: bool) -> 
     if dry_run:
         entry = QuarantineVault().get(entry_id)
         if not entry:
-            raise click.ClickException(f"entry {entry_id} not found")
+            _fail(entry_id, f"entry {entry_id} not found", json_mode=json_mode)
+            return
         payload = {"ok": True, "dry_run": True, "entry_id": entry_id}
         if json_mode:
             emit(payload, json_mode=True)
         else:
             click.echo(f"Would delete entry {entry_id}")
         return
-    QuarantineVault().delete(entry_id)
+    try:
+        QuarantineVault().delete(entry_id)
+    except _VAULT_ERRORS as exc:
+        _fail(entry_id, exc, json_mode=json_mode)
+        return
     payload = {"ok": True, "entry_id": entry_id}
     if json_mode:
         emit(payload, json_mode=True)

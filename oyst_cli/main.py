@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from oyst_cli.cli_group import OystGroup
 from oyst_cli.commands.audit_cmd import audit_group
 from oyst_cli.commands.auth_cmd import auth_group
 from oyst_cli.commands.config_cmd import config_group
@@ -44,32 +45,7 @@ from oyst_core.logging_util import setup_logging
 from oyst_core.serve import SCHEMA_VERSION, RpcServer
 
 
-def _is_terminal_mgmt(ctx: click.Context) -> bool:
-    if ctx.invoked_subcommand == "terminal":
-        return True
-    return "terminal" in (ctx.command_path or "").split()
-
-
-def _cli_label(ctx: click.Context) -> str:
-    """Best-effort command label (result callback runs on the root context)."""
-    parts: list[str] = [ctx.info_name or "cli"]
-    if ctx.invoked_subcommand:
-        parts.append(ctx.invoked_subcommand)
-    # Prefer click path; fall back to argv when nested (e.g. audit list).
-    import sys
-
-    argv_parts = [p for p in sys.argv[1:] if p not in {"-v", "--verbose"}]
-    if (
-        argv_parts
-        and not argv_parts[0].endswith(".py")
-        and not argv_parts[0].startswith("tests/")
-        and argv_parts[0] not in {"-c", "-m"}
-    ):
-        return "cli " + " ".join(argv_parts)
-    return " ".join(parts)
-
-
-@click.group()
+@click.group(cls=OystGroup)
 @click.option("-v", "--verbose", is_flag=True)
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool) -> None:
@@ -77,28 +53,6 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
     setup_logging(verbose)
-
-
-@cli.result_callback()
-@click.pass_context
-def _cli_finished(ctx: click.Context, result: object, **_kwargs: object) -> object:
-    if not _is_terminal_mgmt(ctx):
-        try:
-            from oyst_core.terminal_log import log_structured
-
-            code = getattr(ctx, "exit_code", None)
-            if code is None:
-                code = 0
-            label = _cli_label(ctx)
-            log_structured(
-                "cli",
-                "cli.finish",
-                f"{label} finished (exit {code})",
-                {"exit_code": code},
-            )
-        except Exception:  # noqa: BLE001
-            pass
-    return result
 
 
 _SERVE_EPILOG = """
@@ -122,7 +76,14 @@ Examples:
     is_flag=True,
     help="Kept for compatibility; serve always runs in the foreground",
 )
-def serve_cmd(socket: str | None, schema_version: int, foreground: bool) -> None:
+@click.option(
+    "--idle-exit",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    show_default=True,
+    help="Exit after this many seconds with no connections and no active job (0 = never)",
+)
+def serve_cmd(socket: str | None, schema_version: int, foreground: bool, idle_exit: float) -> None:
     """Start JSON-RPC backend for GUI clients (always foreground)."""
     del foreground  # accepted for GUI-contract / docs compatibility
     if schema_version != SCHEMA_VERSION:
@@ -134,7 +95,7 @@ def serve_cmd(socket: str | None, schema_version: int, foreground: bool) -> None
         raise SystemExit(2)
     path = Path(socket) if socket else None
     click.echo(f"oyst-cli serve on {path or 'default socket'} (schema v{SCHEMA_VERSION})")
-    RpcServer(path).serve_forever()
+    RpcServer(path, idle_exit=idle_exit).serve_forever()
 
 
 def _register_commands() -> None:

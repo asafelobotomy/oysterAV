@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import action_row
 from oysterav.gui.rpc_actions_shield import (
     request_firewall_ufw_batch,
     request_firewall_ufw_rule,
@@ -67,7 +68,7 @@ def rebuild_rule_rows(
         for entry in entries:
             title = str(entry.get("title") or "rule")
             subtitle = str(entry.get("subtitle") or "")
-            row = Adw.ActionRow(title=title, subtitle=subtitle)
+            row = action_row(title=title, subtitle=subtitle)
             if entry.get("removable"):
                 check = Gtk.CheckButton()
                 check.set_valign(Gtk.Align.CENTER)
@@ -90,7 +91,7 @@ def rebuild_rule_rows(
 
     if backend == "ufw":
         page._rules_fallback.set_visible(False)
-        empty = Adw.ActionRow(
+        empty = action_row(
             title="No rules yet",
             subtitle="Use Add rule… to allow or deny a port",
         )
@@ -102,7 +103,7 @@ def rebuild_rule_rows(
 
     page.rules_buffer.set_text(text or "(no rules)")
     page._rules_fallback.set_visible(True)
-    note = Adw.ActionRow(
+    note = action_row(
         title="Zone dump",
         subtitle="Use Add rule… for ports/services; rich rules above",
     )
@@ -113,16 +114,29 @@ def rebuild_rule_rows(
 
 
 def _entry_to_delete_rule(entry: dict[str, Any]) -> dict[str, Any] | None:
-    port = str(entry.get("port") or "")
-    if not port.isdigit():
+    """Exact delete target for *entry*, or ``None`` when it can't be expressed.
+
+    ``ufw delete VERB …`` only addresses inbound rules with any destination; a
+    guess (wrong verb/proto, dropped source or direction) would remove a
+    different, often broader, rule — so refuse instead.
+    """
+    if not entry.get("removable"):
         return None
-    rule_action = str(entry.get("action") or "allow").lower()
-    if rule_action not in {"allow", "deny", "limit", "reject"}:
-        rule_action = "allow"
+    port = str(entry.get("port") or "")
+    proto = str(entry.get("proto") or "")
+    rule_action = str(entry.get("action") or "").lower()
+    direction = str(entry.get("direction") or "in").lower()
+    if (
+        not port.isdigit()
+        or proto not in {"tcp", "udp"}
+        or rule_action not in {"allow", "deny", "limit", "reject"}
+        or direction != "in"
+    ):
+        return None
     rule: dict[str, Any] = {
         "action": "delete",
         "port": port,
-        "proto": str(entry.get("proto") or "tcp"),
+        "proto": proto,
         "rule_action": rule_action,
     }
     from_addr = entry.get("from_addr")
@@ -139,11 +153,12 @@ def present_remove_rule(page: ShieldPage, entry: dict[str, Any]) -> None:
     port = str(rule["port"])
     proto = str(rule["proto"])
     rule_action = str(rule["rule_action"])
+    from_addr = rule.get("from_addr") if isinstance(rule.get("from_addr"), str) else None
     force = port == "22"
-    label = f"{rule_action} {port}/{proto}"
+    label = f"{rule_action} in {port}/{proto}" + (f" from {from_addr}" if from_addr else "")
     confirm_and_run(
         page,
-        heading=f"Remove {port}/{proto}?",
+        heading=f"Remove {label}?",
         body=(
             "This can lock out SSH. Prefer keeping an allow rule for 22."
             if force
@@ -157,13 +172,14 @@ def present_remove_rule(page: ShieldPage, entry: dict[str, Any]) -> None:
             "delete",
             port=port,
             proto=proto,
-            from_addr=rule.get("from_addr") if isinstance(rule.get("from_addr"), str) else None,
+            from_addr=from_addr,
             rule_action=rule_action,
             force_lockout_risk=force,
         ),
         cli_hint=(
             f"oyst-cli firewall ufw delete --port {port} --proto {proto}"
-            f" --rule-action {rule_action}"
+            f" --rule-action {rule_action} --direction in"
+            + (f" --from {from_addr}" if from_addr else "")
             + (" --force-lockout-risk" if force else "")
             + " --confirm"
         ),
@@ -176,8 +192,10 @@ def present_delete_selected(page: ShieldPage) -> None:
         if not check.get_active() or not entry.get("removable"):
             continue
         rule = _entry_to_delete_rule(entry)
-        if rule is not None:
-            rules.append(rule)
+        if rule is None:
+            page._set_status("A selected rule cannot be removed exactly; nothing deleted")
+            return
+        rules.append(rule)
     if not rules:
         page._set_status("Select one or more rules to delete")
         return

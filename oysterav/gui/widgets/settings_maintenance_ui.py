@@ -12,6 +12,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import action_row
 from oysterav.gui.widgets.bulk_checklist import make_bulk_expander
 from oysterav.gui.widgets.clamonacc_ui import refresh_clamonacc_subtitle
 from oysterav.gui.widgets.common import make_button, run_in_thread, show_command_dialog
@@ -31,7 +32,7 @@ def build_maintenance_group(page: SettingsPage) -> None:
         "Maintenance only may refresh the rkhunter baseline without a separate confirm.",
     )
 
-    update_all_row = Adw.ActionRow(title="Update all")
+    update_all_row = action_row(title="Update all")
     update_all_row.set_subtitle(
         "Upgrade related packages when needed, refresh definitions, then baselines. "
         "New oysterAV releases appear in the status bar (GitHub).",
@@ -52,7 +53,7 @@ def build_maintenance_group(page: SettingsPage) -> None:
         "clicked",
         lambda *a: on_maintenance_only(page, *a),
     )
-    maint_row = Adw.ActionRow(title="Maintenance only")
+    maint_row = action_row(title="Maintenance only")
     maint_row.set_subtitle(
         "Signatures and baselines without reinstalling the runtime "
         "(may refresh the rkhunter file baseline)",
@@ -62,21 +63,21 @@ def build_maintenance_group(page: SettingsPage) -> None:
 
     page.post_update_btn = make_button("Run", row_suffix=True)
     page.post_update_btn.connect("clicked", lambda *a: on_post_update(page, *a))
-    post_row = Adw.ActionRow(title="Post-update maintenance")
+    post_row = action_row(title="Post-update maintenance")
     post_row.set_subtitle("After OS package updates (refresh rkhunter baseline, etc.)")
     post_row.add_suffix(page.post_update_btn)
     expander.add_row(post_row)
 
     page.rkh_update_btn = make_button("Update", row_suffix=True)
     page.rkh_update_btn.connect("clicked", lambda *a: on_rkh_update(page, *a))
-    rkh_u = Adw.ActionRow(title="Update rkhunter data")
+    rkh_u = action_row(title="Update rkhunter data")
     rkh_u.set_subtitle("Refresh rkhunter data files (not ClamAV signatures)")
     rkh_u.add_suffix(page.rkh_update_btn)
     expander.add_row(rkh_u)
 
     page.rkh_propupd_btn = make_button("Update baseline", row_suffix=True)
     page.rkh_propupd_btn.connect("clicked", lambda *a: on_rkh_propupd(page, *a))
-    rkh_p = Adw.ActionRow(title="Refresh rkhunter baseline")
+    rkh_p = action_row(title="Refresh rkhunter baseline")
     rkh_p.set_subtitle(
         "Updates the trusted file property baseline. "
         "Never run on a system you suspect is compromised.",
@@ -85,7 +86,7 @@ def build_maintenance_group(page: SettingsPage) -> None:
     expander.add_row(rkh_p)
     maintenance.add(expander)
 
-    bootstrap_row = Adw.ActionRow(title="Install runtime and update signatures")
+    bootstrap_row = action_row(title="Install runtime and update signatures")
     bootstrap_row.set_subtitle(
         "Private runtime, virus signatures, and pack maintenance (not part of Update all)",
     )
@@ -94,13 +95,13 @@ def build_maintenance_group(page: SettingsPage) -> None:
     bootstrap_row.add_suffix(page.bootstrap_btn)
     maintenance.add(bootstrap_row)
 
-    page.maintenance_status_row = Adw.ActionRow(title="Last run")
+    page.maintenance_status_row = action_row(title="Last run")
     page.maintenance_status_row.set_subtitle("No maintenance run yet")
     page.maintenance_status_row.set_sensitive(False)
     maintenance.add(page.maintenance_status_row)
 
     setup_group = Adw.PreferencesGroup(title="Setup")
-    setup_row = Adw.ActionRow(title="First-time setup")
+    setup_row = action_row(title="First-time setup")
     setup_row.set_subtitle("Re-run the guided setup wizard")
     setup_btn = make_button("Run setup wizard", row_suffix=True)
     setup_btn.connect("clicked", lambda *a: on_setup_wizard(page, *a))

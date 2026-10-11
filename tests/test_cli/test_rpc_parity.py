@@ -57,6 +57,8 @@ RPC_TO_CLI: dict[str, list[str]] = {
     "schedule.linger": ["schedule", "linger", "--json"],
     "schedule.enable_linger": ["schedule", "enable-linger", "--help"],
     "runtime.status": ["runtime", "status", "--json"],
+    # Transport-level progress poll for long methods; served by `oyst-cli serve`.
+    "progress.get": ["serve", "--help"],
     "runtime.install": ["runtime", "install", "--help"],
     "runtime.remove": ["runtime", "remove", "--help"],
     "runtime.update": ["runtime", "update", "--help"],

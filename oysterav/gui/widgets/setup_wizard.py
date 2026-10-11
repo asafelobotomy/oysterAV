@@ -93,7 +93,8 @@ class SetupWizard:
         self._doctor_running = False
         self._doctor_done = False
         self._install_skipped = False
-        self._full_mode = self._detect_full_mode(client)
+        # Refined off the main loop in _after_present (config_get is an RPC).
+        self._full_mode = True
         self._bootstrap_busy = False
         self._auto_install_busy = False
         self._bootstrap_ran = False
@@ -118,16 +119,11 @@ class SetupWizard:
         return self.dialog
 
     @staticmethod
-    def _detect_full_mode(client: OystClient) -> bool:
-        try:
-            config = client.config_get()
-            if isinstance(config, dict):
-                runtime = config.get("runtime", {})
-                if isinstance(runtime, dict):
-                    mode = runtime.get("mode", "full")
-                    return str(mode) == "full"
-        except RuntimeError:
-            pass
+    def _full_mode_from_config(config: object) -> bool:
+        if isinstance(config, dict):
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                return str(runtime.get("mode", "full")) == "full"
         return True
 
     def _set_status(self, text: str) -> None:
@@ -242,11 +238,21 @@ class SetupWizard:
         return False
 
     def _load_preferences(self) -> None:
-        try:
-            val = self.client.config_get("quarantine.auto")
-            self.auto_quarantine.set_active(str(val).lower() in ("true", "1", "yes"))
-        except RuntimeError as exc:
-            self._set_status(f"Could not load preferences: {exc}")
+        """Load runtime mode + auto-quarantine in one RPC, off the GTK main loop."""
+
+        def done(config: object) -> bool:
+            self._full_mode = self._full_mode_from_config(config)
+            quarantine = config.get("quarantine", {}) if isinstance(config, dict) else {}
+            auto = quarantine.get("auto") if isinstance(quarantine, dict) else None
+            self.auto_quarantine.set_active(str(auto).lower() in ("true", "1", "yes"))
+            self._refresh_ready_summary()
+            return False
+
+        def fail(message: str) -> bool:
+            self._set_status(f"Could not load preferences: {message}")
+            return False
+
+        run_in_thread(self.client.config_get, done, fail)
 
     def _on_recheck_clicked(self, *_args: object) -> None:
         actions.run_doctor(self)

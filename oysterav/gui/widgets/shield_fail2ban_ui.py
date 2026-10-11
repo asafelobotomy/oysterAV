@@ -5,13 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-import gi
-
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-
-from gi.repository import Adw  # noqa: E402
-
+from oysterav.gui.widgets.plain_rows import action_row
 from oysterav.gui.widgets.common import make_button
 
 if TYPE_CHECKING:
@@ -29,7 +23,7 @@ def rebuild_jail_rows(
         page._f2b_group.remove(row)
     page._jail_rows.clear()
     for name in jails:
-        row = Adw.ActionRow(title=name)
+        row = action_row(title=name)
         en = make_button("Enable", row_suffix=True)
         en.connect("clicked", lambda *_a, n=name: on_enable(n))
         dis = make_button("Disable", row_suffix=True)
@@ -56,7 +50,7 @@ def rebuild_ban_rows(
         for ip in ips:
             total += 1
             ip_s = str(ip)
-            row = Adw.ActionRow(title=ip_s, subtitle=f"Jail: {jail}")
+            row = action_row(title=ip_s, subtitle=f"Jail: {jail}")
             btn = make_button("Unban", row_suffix=True)
             btn.connect("clicked", lambda *_a, i=ip_s, j=str(jail): on_unban(i, j))
             row.add_suffix(btn)

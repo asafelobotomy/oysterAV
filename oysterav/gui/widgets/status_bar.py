@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 import gi
 
@@ -22,6 +23,20 @@ _OVERRIDE_RESTORE_MS = 12_000
 _UPDATE_ROTATE_MS = 8_000
 # Keep ticker / status / updates the same height so mode switches do not resize the window.
 _SLOT_HEIGHT = 22
+
+
+def safe_news_uri(link: object) -> str | None:
+    """Return ``link`` only when it is an absolute https URL (feed data is untrusted)."""
+    text = str(link or "").strip()
+    if not text or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text):
+        return None
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        return None
+    if parts.scheme.lower() != "https" or not parts.hostname:
+        return None
+    return text
 
 
 class StatusBar(Gtk.Box):
@@ -139,8 +154,8 @@ class StatusBar(Gtk.Box):
     def _on_news_clicked(self, *_args: object) -> None:
         if not self._news_items:
             return
-        link = str(self._news_items[0].get("link") or "").strip()
-        if not link:
+        link = safe_news_uri(self._news_items[0].get("link"))
+        if link is None:
             return
         try:
             Gio.AppInfo.launch_default_for_uri(link, None)

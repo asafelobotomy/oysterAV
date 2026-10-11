@@ -13,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.privileged.validators import rich_rule_ssh_lockout_risk
+from oysterav.gui.widgets.plain_rows import action_row, entry_row
 from oysterav.gui.rpc_actions_shield import (
     request_firewall_firewalld_rich_rule,
     request_firewall_set_enabled,
@@ -113,7 +114,7 @@ def build_rules_section(
             "Select rules to delete several at once; firewalld uses Add rule… or rich rules."
         ),
     )
-    actions = Adw.ActionRow(title="Actions")
+    actions = action_row(title="Actions")
     btns: dict[str, Gtk.Button] = {}
     for key, label, cb, destructive in (
         ("refresh", "Refresh", on_export, False),
@@ -134,10 +135,10 @@ def build_rules_section(
 
     rich = Adw.PreferencesGroup(title="firewalld rich rules")
     rich.set_visible(False)
-    entry = Adw.EntryRow(title="Rich rule")
+    entry = entry_row(title="Rich rule")
     entry.set_show_apply_button(False)
     rich.add(entry)
-    btn_row = Adw.ActionRow(title="Apply")
+    btn_row = action_row(title="Apply")
     add_btn = make_button("Add", row_suffix=True)
     rem_btn = make_button("Remove", row_suffix=True)
     btn_row.add_suffix(add_btn)

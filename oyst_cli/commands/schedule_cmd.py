@@ -23,6 +23,7 @@ _SCHEDULE_SET_EPILOG = """
 Examples:
   oyst-cli schedule set --profile quick --frequency daily --time 02:00 --enabled --apply
   oyst-cli schedule set --packs clamav,rkhunter --paths ~/Downloads --apply --json
+  oyst-cli schedule set --disabled --apply --confirm --json
 
 Structured API: set / apply / enable. Compat one-click: schedule install.
 """
@@ -154,6 +155,7 @@ def schedule_status(json_mode: bool) -> None:
     default=None,
 )
 @click.option("--apply", "do_apply", is_flag=True, help="Apply systemd units after saving")
+@click.option("--confirm", is_flag=True, help="Required with --disabled --apply (stops the timer)")
 @json_option
 def schedule_set(
     enabled: bool | None,
@@ -168,9 +170,12 @@ def schedule_set(
     quarantine: str | None,
     backend: str | None,
     do_apply: bool,
+    confirm: bool,
     json_mode: bool,
 ) -> None:
     """Update schedule.* settings (scan semantics; use --apply to refresh timer)."""
+    if enabled is False and do_apply:
+        require_confirm(confirm, message="--confirm required to disable the scan schedule")
     try:
         sched = update_schedule_settings(
             enabled=enabled,

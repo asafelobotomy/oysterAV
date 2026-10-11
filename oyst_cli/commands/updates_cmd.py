@@ -46,14 +46,19 @@ def updates_check_cmd(json_mode: bool) -> None:
 
 @updates_group.command("apply")
 @click.option("--confirm", is_flag=True)
+@click.option(
+    "--confirm-aur",
+    is_flag=True,
+    help="Also upgrade AUR packs (unreviewed PKGBUILDs; skipped by default)",
+)
 @json_option
-def updates_apply_cmd(confirm: bool, json_mode: bool) -> None:
+def updates_apply_cmd(confirm: bool, confirm_aur: bool, json_mode: bool) -> None:
     """Upgrade tracked packages, refresh definitions, and run post-update baseline."""
     require_confirm(
         confirm,
         message="--confirm required (includes rkhunter --propupd baseline refresh)",
     )
-    result = apply_all_updates()
+    result = apply_all_updates(confirm_aur=confirm_aur)
     if json_mode:
         emit(result, json_mode=True)
     else:

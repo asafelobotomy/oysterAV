@@ -23,6 +23,12 @@ from oysterav.gui.widgets.setup_wizard_text import format_check_summary
 if TYPE_CHECKING:
     from oysterav.gui.widgets.setup_wizard import SetupWizard
 
+# Same steps the Finish button runs: mark complete only (no packs, harden or firewall).
+FINISH_RETRY_HINT = (
+    "oyst-cli setup run --skip-packs --skip-schedule --skip-bootstrap "
+    "--skip-harden --no-enable-firewall"
+)
+
 
 def run_doctor(wizard: SetupWizard) -> None:
     wizard._doctor_running = True
@@ -76,30 +82,56 @@ def apply_doctor_error(wizard: SetupWizard, message: str) -> bool:
     return False
 
 
+def _store_setup(wizard: SetupWizard, setup: object) -> None:
+    if isinstance(setup, dict):
+        wizard._setup = dict(setup)
+
+
 def on_packs_changed(wizard: SetupWizard) -> None:
     wizard._packs = wizard.pack_list.get_packs()
-    try:
-        wizard._setup = wizard.client.setup_status()
-    except RuntimeError as exc:
-        wizard._set_status(f"Could not refresh setup status: {exc}")
-    wizard._refresh_install_gate()
-    wizard.check_label.set_text(format_check_summary(wizard._setup))
-    wizard.welcome_status.set_text(format_check_summary(wizard._setup))
-    wizard._refresh_ready_summary()
-    wizard._update_nav()
+
+    def refresh_ui() -> None:
+        wizard._refresh_install_gate()
+        wizard.check_label.set_text(format_check_summary(wizard._setup))
+        wizard.welcome_status.set_text(format_check_summary(wizard._setup))
+        wizard._refresh_ready_summary()
+        wizard._update_nav()
+
+    def done(setup: object) -> bool:
+        _store_setup(wizard, setup)
+        refresh_ui()
+        return False
+
+    def failed(message: str) -> bool:
+        wizard._set_status(f"Could not refresh setup status: {message}")
+        refresh_ui()
+        return False
+
+    # setup.status runs doctor_all (slow); keep it off the GTK main loop.
+    run_in_thread(wizard.client.setup_status, done, failed)
     wizard._emit_changed()
 
 
 def on_install_skip(wizard: SetupWizard, *_args: object) -> None:
     wizard._install_skipped = True
     wizard.install_warning.set_revealed(False)
-    try:
-        wizard.client.config_set("setup.skipped_steps", "required_packs")
-        wizard._setup = wizard.client.setup_status()
-    except RuntimeError as exc:
-        wizard._set_status(f"Could not record skipped packs: {exc}")
-    wizard._refresh_ready_summary()
     wizard._update_nav()
+
+    def worker() -> dict[str, Any]:
+        wizard.client.config_set("setup.skipped_steps", "required_packs")
+        return wizard.client.setup_status()
+
+    def done(setup: object) -> bool:
+        _store_setup(wizard, setup)
+        wizard._refresh_ready_summary()
+        wizard._update_nav()
+        return False
+
+    def failed(message: str) -> bool:
+        wizard._set_status(f"Could not record skipped packs: {message}")
+        return False
+
+    run_in_thread(worker, done, failed)
 
 
 def set_bootstrap_busy(wizard: SetupWizard, busy: bool) -> None:
@@ -289,27 +321,46 @@ def complete_finish(wizard: SetupWizard, *, mark_complete: bool = True) -> None:
     if wizard._dismissed:
         return
     wizard._dismissed = True
-    if mark_complete:
-        try:
-            wizard.client.setup_run(
-                skip_packs=True,
-                skip_schedule=True,
-                skip_bootstrap=True,
-                skip_harden=True,
-                enable_firewall=False,
-                auto_quarantine=wizard.auto_quarantine.get_active(),
-                mark_complete=True,
-            )
-        except RuntimeError as exc:
-            wizard._set_status(f"Could not mark setup complete: {exc}")
-            show_command_dialog(
-                wizard.dialog,
-                heading="Setup incomplete",
-                body=f"Could not mark setup complete:\n{exc}",
-                copy_text=("oyst-cli setup run --skip-packs --skip-schedule --skip-bootstrap"),
-            )
-            wizard._dismissed = False
-            return
+    if not mark_complete:
+        _close_wizard(wizard)
+        return
+    auto_quarantine = wizard.auto_quarantine.get_active()
+    wizard._finish_pending = True
+    wizard._update_nav()
+
+    def worker() -> dict[str, Any]:
+        return wizard.client.setup_run(
+            skip_packs=True,
+            skip_schedule=True,
+            skip_bootstrap=True,
+            skip_harden=True,
+            enable_firewall=False,
+            auto_quarantine=auto_quarantine,
+            mark_complete=True,
+        )
+
+    def done(_result: object) -> bool:
+        wizard._finish_pending = False
+        _close_wizard(wizard)
+        return False
+
+    def failed(message: str) -> bool:
+        wizard._finish_pending = False
+        wizard._dismissed = False
+        wizard._update_nav()
+        wizard._set_status(f"Could not mark setup complete: {message}")
+        show_command_dialog(
+            wizard.dialog,
+            heading="Setup incomplete",
+            body=f"Could not mark setup complete:\n{message}",
+            copy_text=FINISH_RETRY_HINT,
+        )
+        return False
+
+    run_in_thread(worker, done, failed)
+
+
+def _close_wizard(wizard: SetupWizard) -> None:
     wizard.dialog.destroy()
     if wizard._on_complete:
         wizard._on_complete()

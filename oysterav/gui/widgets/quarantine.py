@@ -270,10 +270,11 @@ class QuarantinePage:
         if not entry or self._selected_id is None:
             return
         path = str(entry.get("original_path", ""))
+        entry_id = self._selected_id
 
         def do_restore() -> None:
             run_in_thread(
-                lambda: self.client.quarantine_restore(self._selected_id),  # type: ignore[arg-type]
+                lambda: self.client.quarantine_restore(entry_id),
                 lambda dest: self._after_action(f"Restored to {dest}"),
                 lambda msg: self._after_action(f"Restore failed: {msg}", error=True),
             )

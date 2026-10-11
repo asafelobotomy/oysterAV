@@ -47,6 +47,7 @@ class _ScanJobHost(Protocol):
     _on_scan_complete: Callable[[], None] | None
     _scanning: bool
     _poll_id: int
+    _poll_inflight: bool
     _expected_packs: list[str]
     _card_states: dict[str, PackCardState]
     _pack_findings: dict[str, list[dict[str, Any]]]
@@ -218,14 +219,32 @@ def start_poll(page: _ScanJobHost) -> None:
     page.progress.set_visible(True)
     page.progress.set_fraction(0.0)
 
+    page._poll_inflight = False
+
+    def on_status(status: object) -> bool:
+        page._poll_inflight = False
+        if page._scanning and isinstance(status, dict):
+            try:
+                apply_job_status(page, status)
+            except Exception as exc:  # noqa: BLE001 — keep polling; report once per tick
+                page._set_status(f"Scan progress unavailable: {exc}")
+        return False
+
+    def on_error(message: str) -> bool:
+        page._poll_inflight = False
+        if page._scanning:
+            page._set_status(f"Scan progress unavailable: {message}")
+        return False
+
     def tick() -> bool:
         if not page._scanning:
             return False
-        try:
-            status = request_job_status(page.client)
-        except RuntimeError:
+        # job.status RPC can block (30 s timeout); never run it on the GTK loop and
+        # never stack a second request while one is still in flight.
+        if page._poll_inflight:
             return True
-        apply_job_status(page, status)
+        page._poll_inflight = True
+        run_in_thread(lambda: request_job_status(page.client), on_status, on_error)
         return True
 
     page._poll_id = GLib.timeout_add(POLL_MS, tick)

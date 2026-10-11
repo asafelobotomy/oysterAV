@@ -13,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
+from oysterav.gui.widgets.plain_rows import action_row
 from oysterav.gui.widgets.common import make_button, run_in_thread, show_command_dialog
 
 
@@ -212,13 +213,13 @@ def populate_clamonacc_paths(
         group.remove(row)
     path_rows.clear()
     if not paths:
-        empty = Adw.ActionRow(title="No watched paths configured")
+        empty = action_row(title="No watched paths configured")
         empty.set_subtitle("Add folders for on-access scanning")
         group.add(empty)
         path_rows.append(empty)
         return
     for path in paths:
-        action = Adw.ActionRow()
+        action = action_row()
         action.set_title(str(path))
         remove_btn = make_button("Remove", destructive=True, row_suffix=True)
         remove_btn.connect("clicked", lambda _btn, p=str(path): on_remove(p))
@@ -365,7 +366,7 @@ def build_host_cocontrol_group(
             "blocking large trees can hurt performance (see operator guide)."
         ),
     )
-    probe = Adw.ActionRow(title="On-access probe")
+    probe = action_row(title="On-access probe")
     probe.set_subtitle("Classification from host clamd.conf")
     group.add(probe)
     actions: list[tuple[str, str, Callable[..., None]]] = [
@@ -378,7 +379,7 @@ def build_host_cocontrol_group(
         ("Ensure VirusEvent", "oyst-cli virusevent ensure --confirm", ensure_virusevent_from_gui),
     ]
     for title, copy, fn in actions:
-        row = Adw.ActionRow(title=title)
+        row = action_row(title=title)
         row.set_subtitle(copy)
         btn = make_button("Ensure…", row_suffix=True)
         btn.connect(

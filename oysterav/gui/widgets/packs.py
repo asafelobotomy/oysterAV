@@ -15,6 +15,7 @@ from gi.repository import Adw, Gtk  # noqa: E402
 from oyst_core.client import OystClient
 from oyst_core.models import PackTier
 from oyst_core.runtime.bootstrap import RUNTIME_PACKS
+from oysterav.gui.widgets.plain_rows import action_row
 from oysterav.gui.widgets.bulk_checklist import add_switch_item, make_bulk_expander
 from oysterav.gui.widgets.common import make_button, make_status_badge
 from oysterav.gui.widgets.packs_display import (
@@ -142,7 +143,7 @@ class PackListWidget:
 
         if self._runtime and str(self._runtime.get("mode") or "") not in ("", "full"):
             note_group = Adw.PreferencesGroup(title="Private runtime")
-            note = Adw.ActionRow(title="Private runtime installs require full mode")
+            note = action_row(title="Private runtime installs require full mode")
             note.set_subtitle(
                 "System packages still count as installed. "
                 "Set runtime.mode=full to install missing packs into the private runtime.",
@@ -154,7 +155,7 @@ class PackListWidget:
         missing = missing_pack_names(display)
         bulk = Adw.PreferencesGroup(title="Install")
         bulk.set_description(_GROUP_DESCRIPTION)
-        install_row = Adw.ActionRow(title="Install All")
+        install_row = action_row(title="Install All")
         install_row.set_subtitle(
             "Install missing packs (required first, then recommended, then optional)",
         )
@@ -177,7 +178,7 @@ class PackListWidget:
             )
             self.install_all_switches[name] = switch
         if not missing:
-            empty = Adw.ActionRow(title="All listed packs are installed")
+            empty = action_row(title="All listed packs are installed")
             empty.set_sensitive(False)
             expander.add_row(empty)
             expander.set_expanded(False)
@@ -196,7 +197,7 @@ class PackListWidget:
         self._reattach_groups()
 
     def _pack_row(self, pack: dict[str, Any]) -> Adw.ActionRow:
-        row = Adw.ActionRow()
+        row = action_row()
         name = str(pack.get("name", "?"))
         row.set_title(name)
         rt = runtime_info(self._runtime, name) if name in RUNTIME_PACKS else None

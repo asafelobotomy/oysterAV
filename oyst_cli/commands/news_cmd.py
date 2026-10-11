@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import unicodedata
+
 import click
 
 from oyst_cli.options import json_option
 from oyst_cli.output import emit
 from oyst_core.security_news import NEWS_SOURCES, list_security_news, normalize_source_ids
+
+
+def _clean(value: object) -> str:
+    """Strip C0/C1 control and format chars (terminal escapes, bidi) from feed text."""
+    return "".join(
+        ch for ch in str(value) if ch in "\n\t" or unicodedata.category(ch) not in ("Cc", "Cf")
+    )
 
 
 def _parse_sources_option(raw: str | None) -> list[str] | None:
@@ -73,10 +82,10 @@ def news_list_cmd(
     for item in items:
         if not isinstance(item, dict):
             continue
-        source = item.get("source", "?")
-        title = item.get("title", "")
-        link = item.get("link", "")
-        label = str(item.get("severity_label") or "unknown")
+        source = _clean(item.get("source", "?"))
+        title = _clean(item.get("title", ""))
+        link = _clean(item.get("link", ""))
+        label = _clean(item.get("severity_label") or "unknown")
         if label != "unknown":
             click.echo(f"[{source}] ({label}) {title}")
         else:

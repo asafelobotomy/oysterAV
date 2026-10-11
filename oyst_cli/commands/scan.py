@@ -38,7 +38,11 @@ Examples:
     default=None,
     help="ClamAV backend auto|clamd|clamscan (default: scan.backend from config)",
 )
-@click.option("--confirm", is_flag=True, help="Confirm when privileged scanners need elevation")
+@click.option(
+    "--confirm",
+    is_flag=True,
+    help="Confirm elevation for privileged scanners and/or --quarantine file moves",
+)
 @click.option("--dry-run", is_flag=True, help="Print privilege plan only; do not scan")
 @json_option
 def scan_cmd(
@@ -63,6 +67,12 @@ def scan_cmd(
         selected.extend(PROFILE_AUDIT_PACKS.get(scan_profile, []))
     else:
         selected = pack_list
+    if quarantine:
+        require_confirm(
+            confirm,
+            dry_run=dry_run,
+            message="--confirm required with --quarantine (moves infected files)",
+        )
     job_id = str(uuid.uuid4())
     plan = build_scan_privileged_plan(selected, job_id=job_id)
     if plan.needs_elevation:

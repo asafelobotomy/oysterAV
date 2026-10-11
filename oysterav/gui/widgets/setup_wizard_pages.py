@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import banner, combo_row, entry_row, switch_row
 from oysterav.gui.widgets.bulk_checklist import add_switch_item, make_bulk_expander
 from oysterav.gui.widgets.common import (
     bind_string_combo_row,
@@ -109,7 +110,7 @@ def build_pages(wizard: SetupWizard) -> None:
 
     packs_heading = make_section_heading("Packs")
     packs_box.append(packs_heading)
-    wizard.install_warning = Adw.Banner(title="Required packs are still missing.")
+    wizard.install_warning = banner(title="Required packs are still missing.")
     wizard.install_warning.set_button_label("Continue anyway")
     wizard.install_warning.set_revealed(False)
     wizard.install_warning.connect("button-clicked", wizard._on_install_skip)
@@ -162,7 +163,7 @@ def build_pages(wizard: SetupWizard) -> None:
     prefs_desc.add_css_class("dim-label")
     prefs_box.append(prefs_desc)
     prefs_group = Adw.PreferencesGroup(title="Scan defaults")
-    wizard.auto_quarantine = Adw.SwitchRow(title="Auto-quarantine threats")
+    wizard.auto_quarantine = switch_row(title="Auto-quarantine threats")
     wizard.auto_quarantine.connect(
         "notify::active",
         lambda *_: wizard._refresh_ready_summary(),
@@ -185,7 +186,7 @@ def build_pages(wizard: SetupWizard) -> None:
     schedule_desc.add_css_class("dim-label")
     services_box.append(schedule_desc)
     sched_group = Adw.PreferencesGroup(title="Scheduled scan")
-    wizard.wizard_sched_profile = Adw.ComboRow(title="Profile")
+    wizard.wizard_sched_profile = combo_row(title="Profile")
     bind_string_combo_row(
         wizard.wizard_sched_profile,
         ["quick", "full", "integrity", "suite"],
@@ -195,7 +196,7 @@ def build_pages(wizard: SetupWizard) -> None:
         lambda *_: wizard._on_schedule_prefs_changed(),
     )
     sched_group.add(wizard.wizard_sched_profile)
-    wizard.wizard_sched_frequency = Adw.ComboRow(title="Frequency")
+    wizard.wizard_sched_frequency = combo_row(title="Frequency")
     bind_string_combo_row(
         wizard.wizard_sched_frequency,
         ["hourly", "daily", "weekly"],
@@ -206,7 +207,7 @@ def build_pages(wizard: SetupWizard) -> None:
         lambda *_: wizard._on_schedule_prefs_changed(),
     )
     sched_group.add(wizard.wizard_sched_frequency)
-    wizard.wizard_sched_time = Adw.EntryRow(title="Time (HH:MM)")
+    wizard.wizard_sched_time = entry_row(title="Time (HH:MM)")
     wizard.wizard_sched_time.set_text("02:00")
     wizard.wizard_sched_time.set_show_apply_button(False)
     sched_group.add(wizard.wizard_sched_time)

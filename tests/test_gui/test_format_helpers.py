@@ -4,14 +4,21 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from oysterav.gui.widgets.common import (
+import pytest
+
+pytest.importorskip("gi", reason="PyGObject (gi) not installed", exc_type=ImportError)
+
+from oysterav.gui.widgets.common import (  # noqa: E402
     default_paths_for_profile,
     format_relative_time,
     format_signature_age,
     parse_iso,
     severity_css_class,
 )
-from oysterav.gui.widgets.runtime_ui import bootstrap_steps, format_runtime_status_line
+from oysterav.gui.widgets.runtime_ui import (  # noqa: E402
+    bootstrap_steps,
+    format_runtime_status_line,
+)
 
 
 def test_parse_iso_and_relative_time() -> None:

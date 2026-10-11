@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from oysterav.gui.widgets.schedule_ui import format_timer_status
-from oysterav.gui.widgets.setup_wizard import (
+import pytest
+
+pytest.importorskip("gi", reason="PyGObject (gi) not installed", exc_type=ImportError)
+
+from oysterav.gui.widgets.schedule_ui import format_timer_status  # noqa: E402
+from oysterav.gui.widgets.setup_wizard import (  # noqa: E402
     PAGE_TITLES,
     format_check_summary,
     format_ready_checklist,

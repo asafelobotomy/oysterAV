@@ -13,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
+from oysterav.gui.widgets.plain_rows import action_row, banner
 from oysterav.gui.dashboard_helpers import DashboardCardModel, DashboardNav, build_dashboard_cards
 from oysterav.gui.rpc_actions import (
     request_auth_status,
@@ -60,7 +61,7 @@ class DashboardPage:
         root.set_margin_top(12)
         root.set_margin_bottom(12)
 
-        self.banner = Adw.Banner(title="")
+        self.banner = banner(title="")
         self.banner.set_revealed(False)
         self.banner.connect("button-clicked", self._on_banner_clicked)
         root.append(self.banner)
@@ -257,13 +258,13 @@ class DashboardPage:
     def _populate_history(self, history: list[dict[str, Any]]) -> None:
         self._clear_history_rows()
         if not history:
-            empty = Adw.ActionRow(title="No scans yet")
+            empty = action_row(title="No scans yet")
             empty.set_subtitle("Run a scan from the Scan tab.")
             self.history_group.add(empty)
             self._history_rows.append(empty)
             return
         for item in history:
-            row = Adw.ActionRow()
+            row = action_row()
             profile = item.get("profile", "?")
             started = format_relative_time(item.get("started_at"))
             state = str(item.get("state") or "completed")

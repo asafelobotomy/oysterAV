@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw  # noqa: E402
 
+from oysterav.gui.widgets.plain_rows import action_row
 from oysterav.gui.rpc_actions import request_audit_list
 from oysterav.gui.widgets.common import make_button, run_in_thread
 
@@ -26,7 +27,7 @@ def build_host_audit_section(page: SettingsPage) -> None:
             "Recent privileged and sensitive operations. Firewall and fail2ban live under Shield."
         ),
     )
-    page.audit_status_row = Adw.ActionRow(title="Recent entries")
+    page.audit_status_row = action_row(title="Recent entries")
     page.audit_status_row.set_subtitle("Loading…")
     refresh_btn = make_button("Refresh", row_suffix=True)
     refresh_btn.connect("clicked", lambda *_: refresh_audit(page))
@@ -51,7 +52,7 @@ def refresh_audit(page: SettingsPage) -> None:
             return False
         page.audit_status_row.set_subtitle(f"Showing {len(entries)} recent entries")
         for entry in entries[:5]:
-            row = Adw.ActionRow(
+            row = action_row(
                 title=str(entry.get("action") or entry.get("kind") or "event"),
                 subtitle=str(entry.get("message") or entry.get("target") or "")[:120],
             )

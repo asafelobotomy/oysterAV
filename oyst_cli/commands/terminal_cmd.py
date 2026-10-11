@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import click
 
+from oyst_cli.confirm import require_confirm
 from oyst_cli.output import emit
 from oyst_core import terminal_log
 
@@ -54,12 +55,11 @@ def terminal_list_cmd(
 
 
 @terminal_group.command("clear")
-@click.option("--confirm", is_flag=True, required=True, help="Required to clear the log.")
+@click.option("--confirm", is_flag=True, help="Required to clear the log.")
 @click.option("--json", "json_mode", is_flag=True)
 def terminal_clear_cmd(confirm: bool, json_mode: bool) -> None:
     """Clear the persistent session transcript."""
-    if not confirm:
-        raise click.UsageError("Refusing to clear without --confirm")
+    require_confirm(confirm, message="--confirm required to clear the terminal log")
     result = terminal_log.clear()
     if json_mode:
         emit(result, json_mode=True)
