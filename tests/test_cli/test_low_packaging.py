@@ -76,10 +76,26 @@ def test_check_fails_on_skip_sha_when_strict(
     with pytest.raises(SystemExit, match="SKIP"):
         sv.check("0.2.2", strict_sha256=True)
     monkeypatch.setattr(sv, "_tag_exists", lambda _v: True)
+    monkeypatch.setattr(sv, "_head_is_tag", lambda _v: False)
     with pytest.raises(SystemExit, match="SKIP"):
-        sv.check("0.2.2")
+        sv.check("0.2.2")  # commit after the tag: hash should be pinned
+    monkeypatch.setattr(sv, "_head_is_tag", lambda _v: True)
+    sv.check("0.2.2")  # release build of the tag commit itself: note only
+    with pytest.raises(SystemExit, match="SKIP"):
+        sv.check("0.2.2", strict_sha256=True)
     monkeypatch.setattr(sv, "_tag_exists", lambda _v: False)
+    monkeypatch.setattr(sv, "_head_is_tag", lambda _v: False)
     sv.check("0.2.2")  # pre-tag release prep: note only
+
+
+def test_head_is_tag_uses_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    revs = {"refs/tags/v9.9.9^{commit}": "abc", "HEAD": "abc"}
+    monkeypatch.setattr(sv, "_git_rev", revs.get)
+    assert sv._tag_exists("9.9.9") and sv._head_is_tag("9.9.9")
+    assert not sv._skip_is_stale("9.9.9")
+    revs["HEAD"] = "def"
+    assert sv._skip_is_stale("9.9.9")
+    assert not sv._tag_exists("1.0.0") and not sv._skip_is_stale("1.0.0")
 
 
 def test_metainfo_has_no_invalid_oars_ids() -> None:
