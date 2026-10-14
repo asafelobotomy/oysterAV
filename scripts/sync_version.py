@@ -197,17 +197,37 @@ def sync(version: str) -> list[Path]:
     return changed
 
 
-def _tag_exists(version: str) -> bool:
+def _git_rev(ref: str) -> str | None:
     try:
         proc = subprocess.run(
-            ["git", "rev-parse", "-q", "--verify", f"refs/tags/v{version}"],
+            ["git", "rev-parse", "-q", "--verify", ref],
             cwd=ROOT,
             capture_output=True,
+            text=True,
             check=False,
         )
     except OSError:
-        return False
-    return proc.returncode == 0
+        return None
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def _tag_exists(version: str) -> bool:
+    return _git_rev(f"refs/tags/v{version}^{{commit}}") is not None
+
+
+def _head_is_tag(version: str) -> bool:
+    """True when HEAD is the commit tagged v<version>.
+
+    A tagged tree can never contain the sha256 of its own GitHub archive (the
+    hash depends on the tree), so release builds that check out the tag must
+    tolerate SKIP. Commits *after* the tag must carry the pinned hash.
+    """
+    tag = _git_rev(f"refs/tags/v{version}^{{commit}}")
+    return tag is not None and tag == _git_rev("HEAD")
+
+
+def _skip_is_stale(version: str) -> bool:
+    return _tag_exists(version) and not _head_is_tag(version)
 
 
 def sha256_problems() -> tuple[list[str], bool]:
@@ -236,9 +256,17 @@ def check(version: str, *, strict_sha256: bool = False) -> None:
         raise SystemExit("\n".join(lines))
     problems, has_skip = sha256_problems()
     hard = [p for p in problems if "SKIP" not in p]
-    if has_skip and (strict_sha256 or _tag_exists(version)):
-        # Tag v<version> exists, so the archive is published: SKIP is stale.
+    if has_skip and (strict_sha256 or _skip_is_stale(version)):
+        # Tag v<version> exists and HEAD is past it, so the archive is published
+        # and this commit could have pinned its sha256: SKIP is stale.
         hard = problems
+    elif has_skip and _tag_exists(version):
+        print(
+            f"NOTE: sha256sums=SKIP allowed on the v{version} tag commit itself "
+            "(a tree cannot contain its own archive hash; the release arch job "
+            "renders the real one). Pin it on main after tagging.",
+            file=sys.stderr,
+        )
     elif has_skip:
         print(
             "NOTE: sha256sums=SKIP allowed until tag v"
