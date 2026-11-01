@@ -31,7 +31,7 @@ Issues = "https://github.com/asafelobotomy/oysterAV/issues"
 [project.optional-dependencies]
 gui = ["PyGObject>=3.56.3"]
 dev = [
-    "pytest>=9.1.1",
+    "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "mypy>=2.4.1",
     "ruff>=0.16.10",
