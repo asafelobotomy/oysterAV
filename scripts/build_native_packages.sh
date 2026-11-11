@@ -69,6 +69,11 @@ install -Dm644 packaging/oysterav/flatpak/io.github.asafelobotomy.OysterAV.metai
 install -Dm644 packaging/polkit/io.github.asafelobotomy.policy \
   "$STAGE/usr/share/polkit-1/actions/io.github.asafelobotomy.policy"
 
+echo "==> uQ integration (inert without uQ; see uq/README.md)"
+install -Dm644 -t "$STAGE/usr/share/uq/shell/widgets/oysterav" uq/widgets/oysterav/*
+install -Dm644 -t "$STAGE/usr/share/uq/settings/pages/oysterav-security" \
+  uq/pages/oysterav-security/*
+
 for size in 16 32 48 128 256; do
   install -Dm644 "branding/hicolor/${size}x${size}/apps/oysterav.png" \
     "$STAGE/usr/share/icons/hicolor/${size}x${size}/apps/oysterav.png"

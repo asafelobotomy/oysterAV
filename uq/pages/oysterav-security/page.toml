@@ -1,0 +1,122 @@
+# oysterAV's "Security" page in uQ Settings: status, scan a folder, the quarantine and the
+# scan schedule. Installed to /usr/share/uq/settings/pages/oysterav-security/ by the
+# oysterav package. Reference: docs/settings-pages.md in the uQ repository.
+#
+# Every command is oyst-cli as the user. The one that needs root (the rootkit check) goes
+# through oysterAV's own polkit helper (oyst-helper scan-concert); uQ never runs anything
+# as root.
+uq_api = 1
+id = "oysterav-security"
+name = "Security"
+icon = "security-high"
+category = "apps"
+qml = "Page.qml"
+keywords = ["oysterav", "antivirus", "virus", "malware", "clamav", "scan", "quarantine", "rootkit"]
+
+[[setting]]
+id = "status"
+label = "Security status"
+keywords = ["threat", "signatures", "definitions"]
+
+[[setting]]
+id = "scan"
+label = "Scan a folder"
+keywords = ["virus scan", "check folder"]
+
+[[setting]]
+id = "quarantine"
+label = "Quarantined files"
+keywords = ["restore", "delete", "infected"]
+
+[[setting]]
+id = "schedule"
+label = "Scheduled scans"
+keywords = ["timer", "daily", "weekly"]
+
+[requires]
+bins = ["oyst-cli"]
+
+# Local state only; never starts a scan.
+[[command]]
+id = "summary"
+argv = ["/usr/bin/oyst-cli", "status", "summary", "--json"]
+output = "json"
+timeout_ms = 5000
+
+# Quick profile (ClamAV) on one folder; runs as the user, quarantines nothing.
+# Exit 0 clean, 1 threats found, 2 error, 3 another scan is running.
+[[command]]
+id = "scan-folder"
+argv = ["/usr/bin/oyst-cli", "scan", "--profile", "quick", "--json"]
+output = "json"
+timeout_ms = 600000
+args = [{ name = "folder", pattern = '^/[^\x00-\x1f\x7f]*$' }]
+
+# Rootkit scanners need root: oyst-cli asks once through its polkit helper.
+[[command]]
+id = "rootkit-check"
+argv = ["/usr/bin/oyst-cli", "scan", "--profile", "integrity", "--confirm", "--json"]
+output = "json"
+timeout_ms = 600000
+confirm = "Check this computer for rootkits? oysterAV asks for your password once, through its own helper."
+
+[[command]]
+id = "update-signatures"
+argv = ["/usr/bin/oyst-cli", "freshclam", "update", "--json"]
+output = "json"
+timeout_ms = 600000
+
+[[command]]
+id = "quarantine-list"
+argv = ["/usr/bin/oyst-cli", "quarantine", "list", "--json"]
+output = "json"
+timeout_ms = 5000
+
+[[command]]
+id = "quarantine-restore"
+argv = ["/usr/bin/oyst-cli", "quarantine", "restore", "--confirm", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "entry", pattern = '^[1-9][0-9]{0,8}$' }]
+confirm = "Restore quarantined file #%s to where it was found? It may be harmful."
+
+[[command]]
+id = "quarantine-delete"
+argv = ["/usr/bin/oyst-cli", "quarantine", "delete", "--confirm", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "entry", pattern = '^[1-9][0-9]{0,8}$' }]
+confirm = "Delete quarantined file #%s for good? This can't be undone."
+
+[[command]]
+id = "schedule-status"
+argv = ["/usr/bin/oyst-cli", "schedule", "status", "--json"]
+output = "json"
+timeout_ms = 10000
+
+[[command]]
+id = "schedule-enable"
+argv = ["/usr/bin/oyst-cli", "schedule", "enable", "--json"]
+output = "json"
+timeout_ms = 30000
+
+[[command]]
+id = "schedule-disable"
+argv = ["/usr/bin/oyst-cli", "schedule", "disable", "--confirm", "--json"]
+output = "json"
+timeout_ms = 30000
+confirm = "Turn off scheduled scans?"
+
+[[command]]
+id = "schedule-frequency"
+argv = ["/usr/bin/oyst-cli", "schedule", "set", "--apply", "--json", "--frequency"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "frequency", pattern = '^(hourly|daily|weekly)$' }]
+
+[[command]]
+id = "schedule-time"
+argv = ["/usr/bin/oyst-cli", "schedule", "set", "--apply", "--json", "--time"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "time", pattern = '^([01][0-9]|2[0-3]):[0-5][0-9]$' }]
