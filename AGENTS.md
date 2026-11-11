@@ -69,6 +69,14 @@ Living map: [docs/cli/gui-contract.md](docs/cli/gui-contract.md).
 - Runtime modes: **full** (tools under `~/.local/share/oysterav/runtime/`) vs **lite** (host packages). Set with `oyst-cli config set runtime.mode full|lite`.
 - ClamAV on-access **blocking** is host co-control (never wholesale `clamd.conf` rewrite): [ADR-008](docs/adr/008-clamav-host-cocontrol.md), [operator guide](docs/user-guide/clamonacc-prevention.md).
 
+## uQ integration
+
+`uq/` holds oysterAV's quick-settings tile and "Security" Settings page for the uQ desktop,
+installed to `/usr/share/uq/` by every package (see `uq/README.md`). They run only declared
+`oyst-cli ... --json` commands; keep `oyst-cli status summary` cheap (no scans, pack probes or
+subprocesses). `tests/test_cli/test_uq_integration.py` checks each argv against the CLI; also
+run `uqctl integrations check uq/` when a uQ build is at hand.
+
 ## Health / debug
 
 ## More detail (read on demand, under `docs/agents/`)

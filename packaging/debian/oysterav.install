@@ -4,6 +4,9 @@
 packaging/oysterav/io.github.asafelobotomy.OysterAV.desktop usr/share/applications/
 packaging/oysterav/flatpak/io.github.asafelobotomy.OysterAV.metainfo.xml usr/share/metainfo/
 packaging/polkit/io.github.asafelobotomy.policy usr/share/polkit-1/actions/
+# uQ integration (inert without uQ): uq/README.md lists what each file adds.
+uq/widgets/oysterav/* usr/share/uq/shell/widgets/oysterav/
+uq/pages/oysterav-security/* usr/share/uq/settings/pages/oysterav-security/
 branding/hicolor/16x16/apps/oysterav.png usr/share/icons/hicolor/16x16/apps/
 branding/hicolor/32x32/apps/oysterav.png usr/share/icons/hicolor/32x32/apps/
 branding/hicolor/48x48/apps/oysterav.png usr/share/icons/hicolor/48x48/apps/
