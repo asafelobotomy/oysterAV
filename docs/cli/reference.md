@@ -53,8 +53,19 @@ Autostart file: `~/.config/autostart/io.github.asafelobotomy.OysterAV.desktop`.
 ```bash
 oyst-cli status --json          # raw aggregate status
 oyst-cli status assess --json   # severity, issues, recommended_actions
+oyst-cli status summary --json  # cheap ok/warning/threat for status bars (see below)
 oyst-cli doctor --json
 ```
+
+`status summary` reads only local state (the last scan in history, the signature
+database file times and the quarantine vault's row count). It never scans, probes
+packs, runs a subprocess or asks for a password, so a status bar can poll it. Fields:
+`schema` (1), `state` (`ok` | `warning` | `threat`), `reasons` (short sentences),
+`scanning`, `last_scan_at`, `last_scan_age_hours`, `last_scan_job_id`,
+`last_scan_profile`, `last_scan_state`, `open_findings`, `signature_age_hours`,
+`signatures_stale`, `quarantine_count`. `threat` means the last scan still has open
+findings; `warning` means no scan yet, a failed scan or scanner errors, or missing or
+stale (> 48 h) signatures. uQ's quick-settings tile uses it (`uq/README.md`).
 
 ## Bootstrap roles
 
