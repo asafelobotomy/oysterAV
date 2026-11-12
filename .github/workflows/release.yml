@@ -123,7 +123,10 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          enable-cache: true
+          # Published artifacts: never restore a shared cache (poisoning risk).
+          # setup-uv v10 disables "auto" caching for release events; an explicit
+          # true would override that, so opt out explicitly here.
+          enable-cache: false
       - name: Verify VERSION is synced
         env:
           EXPECTED: ${{ needs.detect.outputs.version }}
@@ -164,7 +167,10 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          enable-cache: true
+          # Published artifacts: never restore a shared cache (poisoning risk).
+          # setup-uv v10 disables "auto" caching for release events; an explicit
+          # true would override that, so opt out explicitly here.
+          enable-cache: false
       - name: Install GUI native build deps
         run: |
           sudo apt-get update
@@ -234,7 +240,10 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          enable-cache: true
+          # Published artifacts: never restore a shared cache (poisoning risk).
+          # setup-uv v10 disables "auto" caching for release events; an explicit
+          # true would override that, so opt out explicitly here.
+          enable-cache: false
       - name: Install fpm dependencies
         run: |
           sudo apt-get update
