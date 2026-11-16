@@ -27,13 +27,33 @@ PAGE = UQ / "pages" / "oysterav-security" / "page.toml"
 # A value each declared argument must accept, by argument name.
 SAMPLES = {
     "folder": "/home/user/Downloads/some folder",
+    "path": "/home/user/Downloads/bad.exe",
+    "profile": "quick",
+    "scheduled_profile": "integrity",
     "entry": "12",
     "frequency": "weekly",
+    "weekday": "fri",
     "time": "02:30",
+    "threat": "Win.Test.EICAR_HDB-1",
+    "service": "clamd",
+    "state": "on",
+    "quarantine": "off",
+    "key": "scan.max_files",
+    "value": "500",
 }
 
-# Commands that may change something must ask first in Settings.
-DESTRUCTIVE = {"quarantine-restore", "quarantine-delete", "schedule-disable", "rootkit-check"}
+# Commands that may change something must ask first in Settings; these also show a plan first.
+DESTRUCTIVE = {
+    "quarantine-add",
+    "quarantine-restore",
+    "quarantine-delete",
+    "quarantine-reconcile",
+    "schedule-disable",
+    "schedule-run",
+    "service-set",
+    "rootkit-check",
+}
+PLANNED = DESTRUCTIVE - {"schedule-disable", "schedule-run"}
 
 
 def _manifest(path: Path) -> dict[str, Any]:
@@ -59,6 +79,8 @@ def _resolve(argv: list[str]) -> click.Command:
     cmd: click.Command = cli
     args = list(argv)
     while isinstance(cmd, click.Group):
+        if cmd.invoke_without_command and (not args or args[0] not in cmd.commands):
+            break  # `history --limit 20`: the group itself runs, with its own options
         assert args, f"{argv}: stops at group {cmd.name}"
         sub = cmd.commands.get(args[0])
         assert sub is not None, f"{argv}: no command {args[0]}"
@@ -73,7 +95,8 @@ def test_manifests_parse_and_match_ids() -> None:
     page = _manifest(PAGE)
     assert widget["id"] == WIDGET.parent.name and widget["slot"] == "quick"
     assert page["id"] == PAGE.parent.name
-    assert widget["uq_api"] == 1 and page["uq_api"] == 1
+    assert widget["uq_api"] == 1
+    assert page["uq_api"] == 3, "streamed scans and previewed confirmations need uq_api 3"
     assert (WIDGET.parent / widget["qml"]).is_file()
     assert (PAGE.parent / page["qml"]).is_file()
     ids = [c["id"] for _, c in _commands() if _ == "page"]
@@ -86,8 +109,11 @@ def test_manifests_parse_and_match_ids() -> None:
 def test_command_is_a_real_oyst_cli_call(where: str, command: dict[str, Any]) -> None:
     argv = list(command["argv"])
     assert argv[0] == "/usr/bin/oyst-cli"
-    assert "--json" in argv, "uQ reads every command's output as JSON"
-    assert command["output"] == "json"
+    if command["output"] == "ndjson":
+        assert "--ndjson" in argv, "a streamed command prints one JSON object per line"
+    else:
+        assert "--json" in argv, "uQ reads every command's output as JSON"
+        assert command["output"] == "json"
     samples = [SAMPLES[a["name"]] for a in command.get("args", [])]
     for spec, sample in zip(command.get("args", []), samples, strict=True):
         assert _pattern(spec).fullmatch(sample), (spec, sample)
@@ -97,6 +123,8 @@ def test_command_is_a_real_oyst_cli_call(where: str, command: dict[str, Any]) ->
         assert "confirm" not in command
     if command["id"] in DESTRUCTIVE:
         assert command.get("confirm"), f"{command['id']} must ask first"
+    if command["id"] in PLANNED:
+        assert command.get("preview"), f"{command['id']} must show a plan first"
 
 
 @pytest.mark.parametrize(
@@ -107,6 +135,17 @@ def test_command_is_a_real_oyst_cli_call(where: str, command: dict[str, Any]) ->
         ("folder", "relative/path"),
         ("folder", "/tmp/a\nb"),
         ("folder", ""),
+        ("profile", "integrity"),
+        ("profile", "--packs"),
+        ("threat", "--confirm"),
+        ("threat", ""),
+        ("service", "sshd"),
+        ("service", "--confirm"),
+        ("state", "restart"),
+        ("key", "schedule.enabled"),
+        ("key", "setup.completed"),
+        ("key", "--json"),
+        ("weekday", "monday"),
         ("entry", "-1"),
         ("entry", "0"),
         ("entry", "1 2"),

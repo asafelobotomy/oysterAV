@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import sys
 import uuid
 
 import click
@@ -13,6 +15,7 @@ from oyst_core.config import load_config
 from oyst_core.models import PROFILE_AUDIT_PACKS, PROFILE_PACKS, ScanProfile
 from oyst_core.orchestrator import JobOrchestrator
 from oyst_core.privilege import build_scan_privileged_plan, preflight_body, preflight_dict
+from oyst_core.scan_plan import scan_plan
 
 _SCAN_EPILOG = """
 Examples:
@@ -20,7 +23,17 @@ Examples:
   oyst-cli scan / --profile integrity --confirm --json
   oyst-cli scan --profile custom --packs clamav,rkhunter ~/Downloads --confirm
   oyst-cli scan / --profile integrity --dry-run --json
+  oyst-cli scan ~/Downloads --ndjson      # progress as one JSON object per line
 """
+
+
+def _ndjson_line(value: dict[str, object]) -> None:
+    sys.stdout.write(json.dumps(value, separators=(",", ":"), default=str) + "\n")
+    sys.stdout.flush()
+
+
+def _ndjson_progress(stage: str, percent: float) -> None:
+    _ndjson_line({"event": "progress", "stage": stage, "percent": round(float(percent), 1)})
 
 
 @click.command("scan", epilog=_SCAN_EPILOG)
@@ -43,7 +56,17 @@ Examples:
     is_flag=True,
     help="Confirm elevation for privileged scanners and/or --quarantine file moves",
 )
-@click.option("--dry-run", is_flag=True, help="Print privilege plan only; do not scan")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print what would run (privilege plan, scanners, files to look at); do not scan",
+)
+@click.option(
+    "--ndjson",
+    is_flag=True,
+    help="Stream one JSON object per line: {event: progress, stage, percent}, then "
+    "{event: result, ...the scan result}. Implies --json.",
+)
 @json_option
 def scan_cmd(
     paths: tuple[str, ...],
@@ -53,6 +76,7 @@ def scan_cmd(
     backend: str | None,
     confirm: bool,
     dry_run: bool,
+    ndjson: bool,
     json_mode: bool,
 ) -> None:
     """Run profile-driven multi-pack scan. Exit 3 if another job is already running."""
@@ -73,8 +97,16 @@ def scan_cmd(
             dry_run=dry_run,
             message="--confirm required with --quarantine (moves infected files)",
         )
+    json_mode = json_mode or ndjson
     job_id = str(uuid.uuid4())
     plan = build_scan_privileged_plan(selected, job_id=job_id)
+    if dry_run and json_mode:
+        orch = JobOrchestrator()
+        emit(
+            scan_plan(preflight_dict(plan), selected, orch._resolve_paths(scan_profile, path_list)),
+            json_mode=True,
+        )
+        raise SystemExit(0)
     if plan.needs_elevation:
         if json_mode and (dry_run or not confirm):
             emit(preflight_dict(plan), json_mode=True)
@@ -95,6 +127,7 @@ def scan_cmd(
         raise SystemExit(0)
 
     orch = JobOrchestrator()
+    on_progress = _ndjson_progress if ndjson else None
     result, code = orch.run_scan(
         profile=scan_profile,
         paths=path_list,
@@ -102,8 +135,11 @@ def scan_cmd(
         backend=resolved_backend,
         quarantine=quarantine,
         job_id=job_id,
+        on_progress=on_progress,
     )
-    if json_mode:
+    if ndjson:
+        _ndjson_line({"event": "result", **result.model_dump(mode="json")})
+    elif json_mode:
         emit(result.model_dump(mode="json"), json_mode=True)
     else:
         click.echo(f"Scan {result.job_id}: {'clean' if result.clean else 'threats found'}")

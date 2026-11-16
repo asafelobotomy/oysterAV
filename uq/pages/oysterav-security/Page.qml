@@ -1,407 +1,351 @@
-// oysterAV's "Security" page in uQ Settings. Everything runs through the commands declared
-// in page.toml (oyst-cli as the user); the rootkit check asks for a password through
-// oysterAV's own polkit helper. All text goes through UqLabel (plain text only).
+// oysterAV's "Security" page in uQ Settings, laid out like Settings' own pages (uq_api = 3): seven tabs of
+// cards. Everything runs through the commands declared in page.toml (oyst-cli as the user); what needs
+// root (the rootkit check, a service on or off) asks for a password through oysterAV's own polkit helper.
+// All text goes through org.uq.settings components (plain text). Parsing and the rules for what may be
+// sent live in logic.js; the tabs are the *Tab.qml files beside this one.
 import QtQuick
 import QtQuick.Controls as QQC2
-import QtQuick.Dialogs
 import QtQuick.Layouts
 import org.uq.settings
+import "logic.js" as Logic
 
-Item {
+SettingsPage {
     id: page
 
     property var ctx
-    /// The [[setting]] id Settings search jumped to.
+    property var theme
+    /// The [[setting]] row Settings search jumped to; the rows flash, and their tab opens.
     property string highlight
 
+    // What oyst-cli last printed, parsed (Logic.parse*). null until the read has answered.
     property var summary: null
-    property string summaryProblem
-    property var quarantine: []
-    property string quarantineProblem
+    property var job: ({ active: false, percent: 0, pack: "", message: "", jobId: "" })
+    property var history: null
+    property var quarantine: null
+    property var verify: null
     property var schedule: null
-    property string scheduleProblem
-    /// The outcome of the last scan, update or quarantine action, as one line.
-    property string actionMessage
-    property bool actionFailed: false
-    property string running
+    property var services: null
+    property var signatures: null
+    property var doctor: null
+    property var helper: null
+    property var audit: null
+    property var prefs: null
+    /// Counts the times the preferences were read again after a write: a field then shows what is saved.
+    property int prefsRev: 0
 
-    readonly property color mutedColor: (ctx && ctx.theme.colors && ctx.theme.colors.text_muted) || "gray"
-    readonly property color errorColor: (ctx && ctx.theme.colors && ctx.theme.colors.error) || "red"
-    readonly property color warningColor: (ctx && ctx.theme.colors && ctx.theme.colors.warning) || "orange"
-    readonly property color successColor: (ctx && ctx.theme.colors && ctx.theme.colors.success) || "green"
+    /// What each write said, by row key: {message, failed}. Shown under the row.
+    property var notes: ({})
+    /// The key of the write that is running ("" = none). One write at a time.
+    property string workingKey: ""
+    readonly property bool busy: page.workingKey !== "" || page.streaming
 
-    function stamp(iso) {
-        return iso ? String(iso).replace("T", " ").slice(0, 16) : "never";
+    /// A scan this page started: its kind ("scan" or "rootkit"), its streamed state and what it found.
+    property string scanKind: ""
+    property var scanState: null
+    property var scanOutcome: null
+    property bool streaming: false
+    /// The plan line shown under the folder choice ("1,204 files, 1 scanner(s)").
+    property string folderPlan: ""
+    property bool alive: true
+    property var openedWith: null
+    property string openProblem: ""
+
+    pageId: "oysterav-security"
+
+    function colorOf(name, fallback) {
+        const c = page.ctx && page.ctx.theme ? page.ctx.theme.colors : null;
+        return (c && c[name]) || fallback;
     }
 
-    function stateTitle() {
-        if (page.summaryProblem !== "")
-            return "Status unavailable";
-        if (!page.summary)
-            return "Checking…";
-        if (page.summary.state === "ok")
-            return "Protected";
-        if (page.summary.state === "threat")
-            return "Threat found";
-        return "Needs attention";
+    function errorColor() {
+        return page.colorOf("error", "red");
     }
 
-    function stateColor() {
-        if (!page.summary || page.summaryProblem !== "")
-            return page.mutedColor;
-        if (page.summary.state === "ok")
-            return page.successColor;
-        if (page.summary.state === "threat")
-            return page.errorColor;
-        return page.warningColor;
+    function mutedColor() {
+        return page.colorOf("text_muted", "gray");
     }
 
-    function refreshSummary() {
-        page.ctx.command.run("summary", [], r => {
-            page.summaryProblem = r.error ? String(r.error) : "";
-            page.summary = r.error ? null : r.output;
-        });
+    function successColor() {
+        return page.colorOf("success", "green");
     }
 
-    function refreshQuarantine() {
-        page.ctx.command.run("quarantine-list", [], r => {
-            page.quarantineProblem = r.error ? String(r.error) : "";
-            page.quarantine = (!r.error && Array.isArray(r.output)) ? r.output : [];
-        });
+    function warningColor() {
+        return page.colorOf("warning", "orange");
     }
 
-    function refreshSchedule() {
-        page.ctx.command.run("schedule-status", [], r => {
-            page.scheduleProblem = r.error ? String(r.error) : "";
-            page.schedule = r.error ? null : r.output;
-            // The controls were changed by hand; show what is saved now.
-            var cfg = page.schedule && page.schedule.config;
-            enabledSwitch.checked = page.schedule !== null && page.schedule.enabled === true;
-            if (cfg) {
-                frequencyBox.currentIndex = Math.max(0, frequencyBox.model.indexOf(String(cfg.frequency)));
-                timeField.text = String(cfg.time);
-            }
-        });
+    function noteFor(key) {
+        return page.notes[key] || null;
     }
 
-    function refresh() {
+    function setNote(key, note) {
+        page.notes = Logic.withNote(page.notes, key, note);
+    }
+
+    /// Wraps a callback so an answer that arrives after the page is gone is ignored.
+    function guard(callback) {
+        return result => {
+            if (page.alive)
+                callback(result);
+        };
+    }
+
+    /// Reads `command` and keeps what Logic's `parse` makes of it in the property `name`.
+    function load(name, command, parse) {
         if (!page.ctx)
             return;
-        refreshSummary();
-        refreshQuarantine();
-        refreshSchedule();
+        page.ctx.command.run(command, [], page.guard(result => {
+            page[name] = parse(result);
+        }));
     }
 
-    // Runs one action command; `describe(output)` turns a success into one line.
-    function act(id, args, describe) {
-        page.running = id;
-        page.ctx.command.run(id, args, r => {
-            page.running = "";
-            if (r.cancelled) {
-                page.refreshSchedule();
+    function loadSummary() {
+        page.load("summary", "summary", Logic.parseSummary);
+    }
+
+    function loadHistory() {
+        page.load("history", "history", Logic.parseHistory);
+    }
+
+    function loadQuarantine() {
+        page.load("quarantine", "quarantine-list", Logic.parseQuarantine);
+    }
+
+    function loadVerify() {
+        page.load("verify", "quarantine-verify", Logic.parseVerify);
+    }
+
+    function loadSchedule() {
+        page.load("schedule", "schedule-status", Logic.parseSchedule);
+    }
+
+    function loadServices() {
+        page.load("services", "services", Logic.parseServices);
+    }
+
+    function loadSystem() {
+        page.load("doctor", "doctor", Logic.parseDoctor);
+        page.load("helper", "helper", Logic.parseHelper);
+        page.load("audit", "audit", Logic.parseAudit);
+    }
+
+    function loadSignatures() {
+        page.load("signatures", "signatures", r => Logic.envelope(r));
+    }
+
+    /// Everything a finished scan or a change may have moved.
+    function reloadAll() {
+        page.loadSummary();
+        page.loadHistory();
+        page.loadQuarantine();
+    }
+
+    /// Runs one write (a command that changes something) for the row `key`, then `done(result)` unless the
+    /// person cancelled. A cancel changes nothing and shows nothing. `doing` words a success (text, or a function of the result).
+    function write(key, command, args, done, doing) {
+        if (page.busy || !page.ctx)
+            return false;
+        const why = Logic.argsProblem(command, args);
+        if (why !== "") {
+            page.setNote(key, { message: why, failed: true });
+            return false;
+        }
+        page.setNote(key, null);
+        page.workingKey = key;
+        page.ctx.command.run(command, args, page.guard(result => {
+            page.workingKey = "";
+            if (Logic.isCancelled(result))
+                return;
+            page.setNote(key, typeof doing === "function" ? doing(result) : Logic.outcome(result, doing));
+            if (done)
+                done(result);
+        }));
+        return true;
+    }
+
+    /// Starts a scan that streams its progress. `kind` says which card shows it.
+    function startScan(kind, label, command, args) {
+        if (page.busy || !page.ctx)
+            return;
+        const why = Logic.argsProblem(command, args);
+        if (why !== "") {
+            page.scanKind = kind;
+            page.scanState = null;
+            page.scanOutcome = { message: why, failed: true, threats: [] };
+            return;
+        }
+        page.scanKind = kind;
+        page.scanOutcome = null;
+        page.scanState = Logic.startScan(kind, label);
+        page.streaming = true;
+        page.ctx.command.stream(command, args, page.guard(ev => {
+            page.scanState = Logic.reduceScan(page.scanState, ev);
+        }), page.guard(done => {
+            page.streaming = false;
+            const outcome = Logic.scanOutcome(page.scanState, done);
+            if (outcome === null) {
+                // Declined at the confirmation sheet: nothing ran.
+                page.scanState = null;
+                page.scanKind = "";
                 return;
             }
-            if (r.error && r.output && typeof r.output === "object" && r.code === 1
-                    && Array.isArray(r.output.findings)) {
-                // `scan` exits 1 when it found threats: a result, not a failure.
-                page.actionFailed = true;
-                page.actionMessage = describe(r.output);
-            } else if (r.error) {
-                page.actionFailed = true;
-                page.actionMessage = String(r.error);
-            } else {
-                page.actionFailed = false;
-                page.actionMessage = describe(r.output);
-            }
-            page.refresh();
-        });
+            page.scanOutcome = outcome;
+            page.reloadAll();
+        }));
     }
 
-    function scanText(out) {
-        if (!out || !Array.isArray(out.findings))
-            return "Scan finished.";
-        var n = out.findings.length;
-        var errs = Array.isArray(out.pack_errors) ? out.pack_errors.length : 0;
-        var text = n === 0 ? "No threats found." : n + (n === 1 ? " threat found" : " threats found")
-            + ": " + out.findings.slice(0, 3).map(f => String(f.path) + " (" + String(f.threat_name) + ")").join(", ")
-            + (n > 3 ? ", …" : "") + ". Quarantine them in oysterAV.";
-        return errs > 0 ? text + " " + errs + " scanner error(s)." : text;
+    function scanFolder(profile, folder) {
+        page.startScan("scan", "Scanning " + folder, "scan-folder", Logic.scanArgs(profile, folder));
     }
 
-    function folderPath(url) {
-        var s = String(url);
-        return s.startsWith("file://") ? decodeURIComponent(s.slice(7)) : "";
+    function checkRootkits() {
+        page.startScan("rootkit", "Rootkit check", "rootkit-check", []);
     }
 
-    onCtxChanged: refresh()
+    function cancelScan() {
+        page.write("cancel", "scan-cancel", [], () => page.loadJob(), "Asked the scan to stop. It stops between scanners.");
+    }
 
-    FolderDialog {
-        id: folderDialog
-        title: "Choose a folder to scan"
-        onAccepted: {
-            var p = page.folderPath(selectedFolder);
-            if (p !== "")
-                page.act("scan-folder", [p], page.scanText);
+    /// Moves a finding to the quarantine vault; the plan sheet shows what moves first.
+    function quarantineFinding(finding) {
+        page.write("q:" + finding.path, "quarantine-add", [finding.threat, finding.path], () => {
+            if (page.scanOutcome)
+                page.scanOutcome = Object.assign({}, page.scanOutcome, {
+                    threats: page.scanOutcome.threats.filter(t => t.path !== finding.path)
+                });
+            page.loadQuarantine();
+            page.loadSummary();
+        }, "Moved to quarantine.");
+    }
+
+    /// Counts what a scan of `folder` would look at (the `--dry-run` plan), for the line under the choice.
+    function previewFolder(profile, folder) {
+        page.folderPlan = "";
+        if (folder === "" || !page.ctx)
+            return;
+        const why = Logic.argsProblem("preview-scan", Logic.scanArgs(profile, folder));
+        if (why !== "") {
+            page.folderPlan = why;
+            return;
+        }
+        page.ctx.command.run("preview-scan", Logic.scanArgs(profile, folder), page.guard(result => {
+            page.folderPlan = Logic.planLine(result);
+        }));
+    }
+
+    function loadJob() {
+        if (!page.ctx)
+            return;
+        page.ctx.command.run("job", [], page.guard(result => {
+            const was = page.job.active;
+            page.job = Logic.parseJob(result);
+            // A scan that ended somewhere else (oysterAV, the timer): what it found is news here too.
+            if (was && !page.job.active && !page.streaming)
+                page.reloadAll();
+        }));
+    }
+
+    function change(key, command, args, doing, done) {
+        page.write(key, command, args, result => {
+            if (done)
+                done(result);
+        }, doing);
+    }
+
+    function pref(key) {
+        return page.prefs && page.prefs.ok ? (page.prefs.byKey[key] || null) : null;
+    }
+
+    /// Writes one preference; oysterAV checks the value and says why it refused. The file is followed, so
+    /// the row shows what was written once it is.
+    function setPref(key, value) {
+        return page.write("pref:" + key, "config-set", [key, value], () => page.ctx.command.run("config", [], page.guard(r => {
+            page.prefs = Logic.parseConfig(r);
+            page.prefsRev++;
+        })), "Saved.");
+    }
+
+    function showScans() {
+        page.show(scans);
+    }
+
+    function openApp() {
+        page.openProblem = "";
+        page.ctx.openApp(Logic.APP_ID, page.guard(result => {
+            if (result && result.error !== undefined)
+                page.openProblem = "Couldn't open oysterAV.";
+        }));
+    }
+
+    onCtxChanged: {
+        if (page.ctx && page.ctx !== page.openedWith) {
+            page.openedWith = page.ctx;
+            page.loadSummary();
+            page.loadJob();
+            page.ctx.command.watch("config", page.guard(r => {
+                page.prefs = Logic.parseConfig(r);
+            }));
         }
     }
+    Component.onDestruction: page.alive = false
 
-    QQC2.ScrollView {
-        id: scroll
-        anchors.fill: parent
-        contentWidth: availableWidth
+    // A scan started from anywhere shows its progress here, and ends by itself.
+    Timer {
+        interval: 3000
+        repeat: true
+        running: page.ctx !== null && page.ctx !== undefined && page.visible && !page.streaming
+        onTriggered: page.loadJob()
+    }
 
-        ColumnLayout {
-            width: scroll.availableWidth
-            spacing: 18
-
-            // ---- Status -------------------------------------------------------------------
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.margins: 16
-                Layout.bottomMargin: 0
-                spacing: 6
-
-                UqLabel {
-                    text: "Status"
-                    font.bold: true
-                    font.pixelSize: 15
-                    font.underline: page.highlight === "status"
-                }
-                RowLayout {
-                    spacing: 8
-                    Rectangle {
-                        width: 12
-                        height: 12
-                        radius: 6
-                        color: page.stateColor()
-                    }
-                    UqLabel {
-                        text: page.stateTitle()
-                        font.bold: true
-                    }
-                    UqLabel {
-                        visible: page.summary !== null && page.summary.scanning === true
-                        text: "(a scan is running)"
-                        color: page.mutedColor
-                    }
-                }
-                Repeater {
-                    model: page.summary ? page.summary.reasons : []
-                    delegate: UqLabel {
-                        required property var modelData
-                        text: "• " + String(modelData)
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                    }
-                }
-                UqLabel {
-                    visible: page.summaryProblem !== ""
-                    text: page.summaryProblem
-                    color: page.errorColor
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-                UqLabel {
-                    visible: page.summary !== null
-                    text: page.summary ? "Last scan: " + page.stamp(page.summary.last_scan_at)
-                        + "    Signatures: " + (page.summary.signature_age_hours === null ? "missing"
-                        : Math.round(page.summary.signature_age_hours) + " hours old")
-                        + "    Quarantined files: " + Number(page.summary.quarantine_count || 0) : ""
-                    color: page.mutedColor
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-                RowLayout {
-                    spacing: 8
-                    QQC2.Button {
-                        text: "Refresh"
-                        onClicked: page.refresh()
-                    }
-                    QQC2.Button {
-                        text: page.running === "update-signatures" ? "Updating…" : "Update signatures"
-                        enabled: page.running === ""
-                        onClicked: page.act("update-signatures", [],
-                                            out => out && out.ok ? "Signatures updated." : "Signature update finished.")
-                    }
-                    QQC2.Button {
-                        text: page.running === "rootkit-check" ? "Checking…" : "Check for rootkits…"
-                        enabled: page.running === ""
-                        onClicked: page.act("rootkit-check", [], page.scanText)
-                    }
-                }
-            }
-
-            // ---- Scan a folder ------------------------------------------------------------
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.leftMargin: 16
-                Layout.rightMargin: 16
-                spacing: 6
-
-                UqLabel {
-                    text: "Scan a folder"
-                    font.bold: true
-                    font.pixelSize: 15
-                    font.underline: page.highlight === "scan"
-                }
-                UqLabel {
-                    text: "A quick ClamAV scan as you. Nothing is moved; quarantine what it finds in oysterAV."
-                    color: page.mutedColor
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-                QQC2.Button {
-                    text: page.running === "scan-folder" ? "Scanning…" : "Choose a folder…"
-                    enabled: page.running === ""
-                    onClicked: folderDialog.open()
-                }
-                UqLabel {
-                    visible: page.actionMessage !== ""
-                    text: page.actionMessage
-                    color: page.actionFailed ? page.errorColor : page.successColor
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-            }
-
-            // ---- Quarantine ---------------------------------------------------------------
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.leftMargin: 16
-                Layout.rightMargin: 16
-                spacing: 6
-
-                UqLabel {
-                    text: "Quarantine"
-                    font.bold: true
-                    font.pixelSize: 15
-                    font.underline: page.highlight === "quarantine"
-                }
-                UqLabel {
-                    visible: page.quarantineProblem === "" && page.quarantine.length === 0
-                    text: "No quarantined files."
-                    color: page.mutedColor
-                }
-                UqLabel {
-                    visible: page.quarantineProblem !== ""
-                    text: page.quarantineProblem
-                    color: page.errorColor
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-                Repeater {
-                    model: page.quarantine
-                    delegate: RowLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spacing: 8
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 0
-                            UqLabel {
-                                text: String(modelData.original_path)
-                                elide: Text.ElideMiddle
-                                Layout.fillWidth: true
-                            }
-                            UqLabel {
-                                text: "#" + Number(modelData.id) + "  " + String(modelData.threat_name || "unknown")
-                                    + "  " + page.stamp(modelData.quarantined_at)
-                                color: page.mutedColor
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                        }
-                        QQC2.Button {
-                            text: "Restore"
-                            enabled: page.running === ""
-                            onClicked: page.act("quarantine-restore", [String(Number(modelData.id))],
-                                                out => "Restored to " + String(out && out.dest ? out.dest : "its folder") + ".")
-                        }
-                        QQC2.Button {
-                            text: "Delete"
-                            enabled: page.running === ""
-                            onClicked: page.act("quarantine-delete", [String(Number(modelData.id))],
-                                                () => "Deleted.")
-                        }
-                    }
-                }
-            }
-
-            // ---- Schedule -----------------------------------------------------------------
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.leftMargin: 16
-                Layout.rightMargin: 16
-                Layout.bottomMargin: 16
-                spacing: 6
-
-                readonly property var cfg: page.schedule && page.schedule.config ? page.schedule.config : null
-
-                UqLabel {
-                    text: "Scheduled scans"
-                    font.bold: true
-                    font.pixelSize: 15
-                    font.underline: page.highlight === "schedule"
-                }
-                UqLabel {
-                    visible: page.scheduleProblem !== ""
-                    text: page.scheduleProblem
-                    color: page.errorColor
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-                RowLayout {
-                    visible: parent.cfg !== null
-                    spacing: 8
-                    QQC2.Switch {
-                        id: enabledSwitch
-                        enabled: page.running === ""
-                        onToggled: {
-                            if (checked)
-                                page.act("schedule-enable", [], () => "Scheduled scans are on.");
-                            else
-                                page.act("schedule-disable", [], () => "Scheduled scans are off.");
-                        }
-                    }
-                    UqLabel {
-                        text: "Run a scan on a timer"
-                    }
-                }
-                RowLayout {
-                    visible: parent.cfg !== null
-                    spacing: 8
-                    UqLabel {
-                        text: "How often"
-                    }
-                    QQC2.ComboBox {
-                        id: frequencyBox
-                        model: ["hourly", "daily", "weekly"]
-                        enabled: page.running === ""
-                        onActivated: page.act("schedule-frequency", [currentText], () => "Schedule updated.")
-                    }
-                    UqLabel {
-                        text: "at"
-                    }
-                    QQC2.TextField {
-                        id: timeField
-                        implicitWidth: 72
-                        inputMask: "99:99"
-                        validator: RegularExpressionValidator {
-                            regularExpression: /^([01][0-9]|2[0-3]):[0-5][0-9]$/
-                        }
-                    }
-                    QQC2.Button {
-                        text: "Set time"
-                        enabled: page.running === "" && timeField.acceptableInput
-                        onClicked: page.act("schedule-time", [timeField.text], () => "Schedule updated.")
-                    }
-                }
-                UqLabel {
-                    visible: page.schedule !== null && String(page.schedule.next || "") !== ""
-                    text: page.schedule ? "Next run: " + String(page.schedule.next || "") : ""
-                    color: page.mutedColor
-                }
-            }
+    headerItems: [
+        QQC2.Button {
+            text: "Open oysterAV"
+            icon.name: "security-high"
+            onClicked: page.openApp()
         }
+    ]
+
+    banners: [
+        ErrorCard {
+            visible: page.summary !== null && !page.summary.ok
+            title: "Couldn't read oysterAV's status"
+            detail: page.summary ? page.summary.problem : ""
+            Layout.fillWidth: true
+        },
+        ErrorCard {
+            visible: page.openProblem !== ""
+            title: page.openProblem
+            detail: "Start oysterAV from your app launcher."
+            Layout.fillWidth: true
+        }
+    ]
+
+    OverviewTab {
+        id: overview
+        host: page
+    }
+
+    ScansTab {
+        id: scans
+        host: page
+    }
+
+    QuarantineTab {
+        host: page
+    }
+
+    ScheduleTab {
+        host: page
+    }
+
+    ProtectionTab {
+        host: page
+    }
+
+    PreferencesTab {
+        host: page
+    }
+
+    SystemTab {
+        host: page
     }
 }

@@ -1,0 +1,193 @@
+[
+  {
+    "name": "clamav",
+    "tier": "required",
+    "installed": false,
+    "version": null,
+    "min_version": "1.4.0",
+    "version_ok": false,
+    "message": "",
+    "install_hint": "sudo apt install clamav clamav-daemon",
+    "details": {}
+  },
+  {
+    "name": "freshclam",
+    "tier": "required",
+    "installed": false,
+    "version": null,
+    "min_version": null,
+    "version_ok": false,
+    "message": "",
+    "install_hint": "sudo apt install clamav-freshclam",
+    "details": {}
+  },
+  {
+    "name": "clamonacc",
+    "tier": "recommended",
+    "installed": false,
+    "version": null,
+    "min_version": "1.4.0",
+    "version_ok": false,
+    "message": "On-access uses the host ClamAV database; on-demand scans may use the private runtime database.",
+    "install_hint": "sudo apt install clamav-daemon",
+    "details": {
+      "clamd_running": false,
+      "running": false,
+      "tool_source": "missing",
+      "binary": null,
+      "systemd_unit": null,
+      "configured_paths": [
+        "~/Downloads",
+        "~/Desktop"
+      ],
+      "exclude_paths": [
+        "~/.cache",
+        "~/.local/share/Trash"
+      ],
+      "prevention_requested": false,
+      "uses_distro_unit": false,
+      "onaccess": {
+        "classification": "handoff_required",
+        "prevention_enforced": false,
+        "conf_path": null,
+        "kernel_access_permissions": true,
+        "prevention": null,
+        "include_paths": [],
+        "mount_paths": [],
+        "exclude_unames": [],
+        "user": null,
+        "disable_cache": null,
+        "local_socket": null,
+        "conflict_sidecars": [],
+        "error": "no readable clamd conf among candidates"
+      }
+    }
+  },
+  {
+    "name": "fangfrisch",
+    "tier": "optional",
+    "installed": false,
+    "version": null,
+    "min_version": null,
+    "version_ok": false,
+    "message": "",
+    "install_hint": "sudo apt install fangfrisch",
+    "details": {
+      "binary": "",
+      "source": "missing",
+      "conf": "",
+      "local_directory": "/root/.local/share/oysterav/runtime/x86_64/clamav/db",
+      "yara_rules_in_db": 0,
+      "providers": [
+        "sanesecurity",
+        "urlhaus"
+      ]
+    }
+  },
+  {
+    "name": "rkhunter",
+    "tier": "recommended",
+    "installed": false,
+    "version": null,
+    "min_version": "1.4.6",
+    "version_ok": false,
+    "message": "",
+    "install_hint": "sudo apt install rkhunter",
+    "details": {}
+  },
+  {
+    "name": "chkrootkit",
+    "tier": "recommended",
+    "installed": false,
+    "version": null,
+    "min_version": "0.58",
+    "version_ok": false,
+    "message": "",
+    "install_hint": "sudo apt install chkrootkit",
+    "details": {}
+  },
+  {
+    "name": "lynis",
+    "tier": "recommended",
+    "installed": false,
+    "version": null,
+    "min_version": "3.1.0",
+    "version_ok": false,
+    "message": "",
+    "install_hint": "sudo apt install lynis",
+    "details": {}
+  },
+  {
+    "name": "maldet",
+    "tier": "optional",
+    "installed": false,
+    "version": null,
+    "min_version": "2.0.0",
+    "version_ok": false,
+    "message": "",
+    "install_hint": "Install LMD from https://rfxn.com/projects/linux-malware-detect",
+    "details": {
+      "binary": null,
+      "install_root": "/home/user/.local/share/oysterav/runtime/x86_64/maldetect",
+      "tool_source": "missing",
+      "monitor": {
+        "enabled": false,
+        "mode": "users",
+        "paths": [],
+        "running": false,
+        "inotify_tools": false,
+        "max_user_watches": 128384,
+        "clamonacc_overlaps": []
+      },
+      "clamav_integration": false,
+      "quarantine_note": "Use oysterAV quarantine for findings; maldet's local quarantine is secondary"
+    }
+  },
+  {
+    "name": "firewall",
+    "tier": "recommended",
+    "installed": false,
+    "version": null,
+    "min_version": null,
+    "version_ok": false,
+    "message": "No active firewall; recommended on hosts with exposed network services",
+    "install_hint": "sudo apt install ufw",
+    "details": {
+      "active": "none",
+      "binary": "",
+      "path": "",
+      "version": "",
+      "ufw": false,
+      "firewalld": false,
+      "nft": true,
+      "ufw_path": "",
+      "firewalld_path": "",
+      "nft_path": "/usr/sbin/nft",
+      "ufw_active": false,
+      "firewalld_active": false,
+      "conflict": false
+    }
+  },
+  {
+    "name": "fail2ban",
+    "tier": "optional",
+    "installed": false,
+    "version": null,
+    "min_version": null,
+    "version_ok": false,
+    "message": "",
+    "install_hint": "sudo apt install fail2ban",
+    "details": {}
+  },
+  {
+    "name": "unhide",
+    "tier": "optional",
+    "installed": false,
+    "version": null,
+    "min_version": null,
+    "version_ok": false,
+    "message": "",
+    "install_hint": "sudo apt install unhide unhide.rb",
+    "details": {}
+  }
+]

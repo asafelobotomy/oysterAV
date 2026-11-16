@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "dry_run": true,
+  "path": "/home/user/Downloads/bad.exe",
+  "summary": "/home/user/Downloads/bad.exe is not there any more.",
+  "changes": [],
+  "would_refuse": true,
+  "reason": "/home/user/Downloads/bad.exe is not there any more."
+}

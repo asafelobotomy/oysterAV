@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "dry_run": true,
+  "orphans": [],
+  "deleted": [],
+  "summary": "The vault has no stray files.",
+  "changes": [],
+  "would_refuse": true,
+  "reason": "The vault has no stray files."
+}

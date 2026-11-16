@@ -1,70 +1,87 @@
-# oysterAV's "Security" page in uQ Settings: status, scan a folder, the quarantine and the
-# scan schedule. Installed to /usr/share/uq/settings/pages/oysterav-security/ by the
-# oysterav package. Reference: docs/settings-pages.md in the uQ repository.
+# oysterAV's "Security" page in uQ Settings: status, scans, the quarantine, the schedule,
+# real-time protection, every preference and the system's state. Installed to
+# /usr/share/uq/settings/pages/oysterav-security/ by the oysterav package. Reference:
+# docs/settings-pages.md in the uQ repository.
 #
-# Every command is oyst-cli as the user. The one that needs root (the rootkit check) goes
-# through oysterAV's own polkit helper (oyst-helper scan-concert); uQ never runs anything
-# as root.
-uq_api = 1
+# Every command is oyst-cli as the user. What needs root (the rootkit check, turning a
+# service on or off) goes through oysterAV's own polkit helper; uQ never runs anything as
+# root. Each command that changes or reads a lot has a `--dry-run --json` twin (`preview-*`)
+# that prints one plan document, so the confirmation sheet shows what would happen first.
+# uq_api 3: streamed scan progress (`output = "ndjson"`) and previewed confirmations.
+uq_api = 3
 id = "oysterav-security"
 name = "Security"
 icon = "security-high"
 category = "apps"
 qml = "Page.qml"
-keywords = ["oysterav", "antivirus", "virus", "malware", "clamav", "scan", "quarantine", "rootkit"]
+keywords = ["oysterav", "antivirus", "virus", "malware", "clamav", "scan", "quarantine", "rootkit", "firewall", "signatures"]
 
 [[setting]]
 id = "status"
 label = "Security status"
-keywords = ["threat", "signatures", "definitions"]
+keywords = ["threat", "signatures", "definitions", "protected"]
 
 [[setting]]
 id = "scan"
 label = "Scan a folder"
-keywords = ["virus scan", "check folder"]
+keywords = ["virus scan", "check folder", "profile"]
+
+[[setting]]
+id = "rootkit"
+label = "Check for rootkits"
+keywords = ["integrity", "rkhunter", "chkrootkit", "password"]
+
+[[setting]]
+id = "history"
+label = "Recent scans"
+keywords = ["past scans", "results", "log"]
 
 [[setting]]
 id = "quarantine"
 label = "Quarantined files"
-keywords = ["restore", "delete", "infected"]
+keywords = ["restore", "delete", "infected", "vault"]
 
 [[setting]]
 id = "schedule"
 label = "Scheduled scans"
-keywords = ["timer", "daily", "weekly"]
+keywords = ["timer", "daily", "weekly", "hourly", "run now"]
+
+[[setting]]
+id = "protection"
+label = "Real-time protection"
+keywords = ["on-access", "clamd", "daemon", "monitor", "services", "fail2ban"]
+
+[[setting]]
+id = "preferences"
+label = "Scan preferences"
+keywords = ["settings", "limits", "exclude", "backend", "news", "theme"]
+
+[[setting]]
+id = "system"
+label = "Scanners and helper"
+keywords = ["packs", "doctor", "polkit", "helper", "audit"]
 
 [requires]
 bins = ["oyst-cli"]
 
-# Local state only; never starts a scan.
+# ---- Reads: local state, no scans, no passwords -----------------------------------------
 [[command]]
 id = "summary"
 argv = ["/usr/bin/oyst-cli", "status", "summary", "--json"]
 output = "json"
 timeout_ms = 5000
 
-# Quick profile (ClamAV) on one folder; runs as the user, quarantines nothing.
-# Exit 0 clean, 1 threats found, 2 error, 3 another scan is running.
 [[command]]
-id = "scan-folder"
-argv = ["/usr/bin/oyst-cli", "scan", "--profile", "quick", "--json"]
+id = "job"
+argv = ["/usr/bin/oyst-cli", "job", "status", "--json"]
 output = "json"
-timeout_ms = 600000
-args = [{ name = "folder", pattern = '^/[^\x00-\x1f\x7f]*$' }]
-
-# Rootkit scanners need root: oyst-cli asks once through its polkit helper.
-[[command]]
-id = "rootkit-check"
-argv = ["/usr/bin/oyst-cli", "scan", "--profile", "integrity", "--confirm", "--json"]
-output = "json"
-timeout_ms = 600000
-confirm = "Check this computer for rootkits? oysterAV asks for your password once, through its own helper."
+timeout_ms = 5000
 
 [[command]]
-id = "update-signatures"
-argv = ["/usr/bin/oyst-cli", "freshclam", "update", "--json"]
+id = "history"
+argv = ["/usr/bin/oyst-cli", "history", "--limit", "20", "--json"]
 output = "json"
-timeout_ms = 600000
+timeout_ms = 10000
 
 [[command]]
 id = "quarantine-list"
@@ -73,12 +90,155 @@ output = "json"
 timeout_ms = 5000
 
 [[command]]
+id = "quarantine-verify"
+argv = ["/usr/bin/oyst-cli", "quarantine", "verify", "--json"]
+output = "json"
+timeout_ms = 60000
+
+[[command]]
+id = "schedule-status"
+argv = ["/usr/bin/oyst-cli", "schedule", "status", "--json"]
+output = "json"
+timeout_ms = 10000
+
+[[command]]
+id = "services"
+argv = ["/usr/bin/oyst-cli", "services", "status", "--json"]
+output = "json"
+timeout_ms = 20000
+
+[[command]]
+id = "signatures"
+argv = ["/usr/bin/oyst-cli", "freshclam", "status", "--json"]
+output = "json"
+timeout_ms = 10000
+
+[[command]]
+id = "doctor"
+argv = ["/usr/bin/oyst-cli", "doctor", "--json"]
+output = "json"
+timeout_ms = 60000
+
+[[command]]
+id = "helper"
+argv = ["/usr/bin/oyst-cli", "helper-status", "--json"]
+output = "json"
+timeout_ms = 10000
+
+[[command]]
+id = "audit"
+argv = ["/usr/bin/oyst-cli", "audit", "list", "--limit", "30", "--json"]
+output = "json"
+timeout_ms = 10000
+
+# Every preference with its value and what it accepts; followed live, so a change made in
+# oysterAV or by hand shows here.
+[[command]]
+id = "config"
+argv = ["/usr/bin/oyst-cli", "config", "show", "--json"]
+output = "json"
+timeout_ms = 10000
+watch = { files = ["~/.config/oysterav/config.toml"] }
+
+# ---- Previews: what a change would do, one plan document each (reads, so they don't ask) --
+[[command]]
+id = "preview-scan"
+argv = ["/usr/bin/oyst-cli", "scan", "--dry-run", "--json", "--profile"]
+output = "json"
+timeout_ms = 20000
+args = [{ name = "profile", pattern = '^(quick|full)$' }, { name = "folder", pattern = '^/[^\x00-\x1f\x7f]*$' }]
+
+[[command]]
+id = "preview-rootkit"
+argv = ["/usr/bin/oyst-cli", "scan", "--profile", "integrity", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 20000
+
+[[command]]
+id = "preview-restore"
+argv = ["/usr/bin/oyst-cli", "quarantine", "restore", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 10000
+args = [{ name = "entry", pattern = '^[1-9][0-9]{0,8}$' }]
+
+[[command]]
+id = "preview-delete"
+argv = ["/usr/bin/oyst-cli", "quarantine", "delete", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 10000
+args = [{ name = "entry", pattern = '^[1-9][0-9]{0,8}$' }]
+
+[[command]]
+id = "preview-reconcile"
+argv = ["/usr/bin/oyst-cli", "quarantine", "reconcile", "--delete-orphans", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+
+[[command]]
+id = "preview-quarantine-add"
+argv = ["/usr/bin/oyst-cli", "quarantine", "add", "--dry-run", "--json", "--threat"]
+output = "json"
+timeout_ms = 10000
+args = [{ name = "threat", pattern = '^[A-Za-z0-9][A-Za-z0-9._:/+() -]{0,199}$' }, { name = "path", pattern = '^/[^\x00-\x1f\x7f]*$' }]
+
+[[command]]
+id = "preview-service"
+argv = ["/usr/bin/oyst-cli", "services", "set", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 20000
+args = [{ name = "service", pattern = '^(clamd|clamonacc|freshclam-timer|fail2ban|maldet-monitor|schedule-linger)$' }, { name = "state", pattern = '^(on|off)$' }]
+
+# ---- Scans ----------------------------------------------------------------------------------
+# Quick (ClamAV) or full (ClamAV and maldet) on one folder, as you; quarantines nothing.
+# One JSON object per line: {event: progress, stage, percent}, then {event: result, ...}.
+# Exit 0 clean, 1 threats found, 2 error, 3 another scan is running, 5 a scanner is missing.
+# Settings kills a command after 10 minutes; scan very large trees from oysterAV itself.
+[[command]]
+id = "scan-folder"
+argv = ["/usr/bin/oyst-cli", "scan", "--ndjson", "--profile"]
+output = "ndjson"
+timeout_ms = 600000
+args = [{ name = "profile", pattern = '^(quick|full)$' }, { name = "folder", pattern = '^/[^\x00-\x1f\x7f]*$' }]
+
+# Rootkit scanners need root: oyst-cli asks once through its polkit helper.
+[[command]]
+id = "rootkit-check"
+argv = ["/usr/bin/oyst-cli", "scan", "--profile", "integrity", "--confirm", "--ndjson"]
+output = "ndjson"
+timeout_ms = 600000
+confirm = "Check this computer for rootkits? oysterAV asks for your password once, through its own helper."
+preview = "preview-rootkit"
+
+[[command]]
+id = "scan-cancel"
+argv = ["/usr/bin/oyst-cli", "job", "cancel", "--json"]
+output = "json"
+timeout_ms = 10000
+
+[[command]]
+id = "update-signatures"
+argv = ["/usr/bin/oyst-cli", "freshclam", "update", "--json"]
+output = "json"
+timeout_ms = 600000
+
+# ---- Quarantine -------------------------------------------------------------------------------
+[[command]]
+id = "quarantine-add"
+argv = ["/usr/bin/oyst-cli", "quarantine", "add", "--confirm", "--json", "--threat"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "threat", pattern = '^[A-Za-z0-9][A-Za-z0-9._:/+() -]{0,199}$' }, { name = "path", pattern = '^/[^\x00-\x1f\x7f]*$' }]
+confirm = "Move this file to the quarantine vault? It was flagged as %s."
+preview = "preview-quarantine-add"
+
+[[command]]
 id = "quarantine-restore"
 argv = ["/usr/bin/oyst-cli", "quarantine", "restore", "--confirm", "--json"]
 output = "json"
 timeout_ms = 30000
 args = [{ name = "entry", pattern = '^[1-9][0-9]{0,8}$' }]
 confirm = "Restore quarantined file #%s to where it was found? It may be harmful."
+preview = "preview-restore"
 
 [[command]]
 id = "quarantine-delete"
@@ -87,13 +247,17 @@ output = "json"
 timeout_ms = 30000
 args = [{ name = "entry", pattern = '^[1-9][0-9]{0,8}$' }]
 confirm = "Delete quarantined file #%s for good? This can't be undone."
+preview = "preview-delete"
 
 [[command]]
-id = "schedule-status"
-argv = ["/usr/bin/oyst-cli", "schedule", "status", "--json"]
+id = "quarantine-reconcile"
+argv = ["/usr/bin/oyst-cli", "quarantine", "reconcile", "--delete-orphans", "--confirm", "--json"]
 output = "json"
-timeout_ms = 10000
+timeout_ms = 60000
+confirm = "Delete the stray files in the quarantine vault? They belong to no entry."
+preview = "preview-reconcile"
 
+# ---- Schedule -----------------------------------------------------------------------------------
 [[command]]
 id = "schedule-enable"
 argv = ["/usr/bin/oyst-cli", "schedule", "enable", "--json"]
@@ -120,3 +284,51 @@ argv = ["/usr/bin/oyst-cli", "schedule", "set", "--apply", "--json", "--time"]
 output = "json"
 timeout_ms = 30000
 args = [{ name = "time", pattern = '^([01][0-9]|2[0-3]):[0-5][0-9]$' }]
+
+[[command]]
+id = "schedule-weekday"
+argv = ["/usr/bin/oyst-cli", "schedule", "set", "--apply", "--json", "--weekday"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "weekday", pattern = '^(mon|tue|wed|thu|fri|sat|sun)$' }]
+
+[[command]]
+id = "schedule-profile"
+argv = ["/usr/bin/oyst-cli", "schedule", "set", "--apply", "--json", "--profile"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "scheduled_profile", pattern = '^(quick|full|integrity|suite)$' }]
+
+[[command]]
+id = "schedule-quarantine"
+argv = ["/usr/bin/oyst-cli", "schedule", "set", "--apply", "--json", "--quarantine"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "quarantine", pattern = '^(auto|on|off)$' }]
+
+# Starts one scan with the schedule's settings, now. Settings stops it after 10 minutes.
+[[command]]
+id = "schedule-run"
+argv = ["/usr/bin/oyst-cli", "schedule", "run", "--json"]
+output = "json"
+timeout_ms = 600000
+confirm = "Run the scheduled scan now? It uses the profile and folders you set for the schedule."
+
+# ---- Real-time protection and preferences ------------------------------------------------------
+# Turning a service on or off asks for your password through oysterAV's helper.
+[[command]]
+id = "service-set"
+argv = ["/usr/bin/oyst-cli", "services", "set", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "service", pattern = '^(clamd|clamonacc|freshclam-timer|fail2ban|maldet-monitor|schedule-linger)$' }, { name = "state", pattern = '^(on|off)$' }]
+confirm = "Change the %s service? oysterAV may ask for your password."
+preview = "preview-service"
+
+# `config set` checks every value before it writes and refuses what it wouldn't load.
+[[command]]
+id = "config-set"
+argv = ["/usr/bin/oyst-cli", "config", "set", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "key", pattern = '^(scan|clamav|quarantine|clamonacc|maldet_monitor|runtime|fangfrisch|rkhunter|lynis|ui)\.[a-z_]{1,40}$' }, { name = "value", pattern = '^[^\x00-\x1f\x7f]{0,600}$' }]

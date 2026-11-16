@@ -2,13 +2,32 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 
 from oyst_cli.confirm import require_confirm
 from oyst_cli.options import json_option
 from oyst_cli.output import emit
 from oyst_core.models import ExitCode
+from oyst_core.plan import change, plan_doc, refused
 from oyst_core.quarantine import QuarantineVault
+
+
+def _vault_size(entry: object) -> int | None:
+    """Bytes of the vaulted copy, or None when it is missing."""
+    try:
+        return Path(str(getattr(entry, "vault_path", ""))).stat().st_size
+    except OSError:
+        return None
+
+
+def _where(entry: object) -> tuple[str, str]:
+    """(file name, "path (threat)") of an entry, for a plan."""
+    path = str(getattr(entry, "original_path", ""))
+    threat = str(getattr(entry, "threat_name", "") or "unknown threat")
+    return Path(path).name or path, f"{path} ({threat})"
+
 
 # Vault errors surfaced as a clean failure (never exit 1, which means threats found).
 _VAULT_ERRORS = (KeyError, OSError, ValueError, RuntimeError)
@@ -79,11 +98,23 @@ def restore_cmd(entry_id: int, confirm: bool, dry_run: bool, json_mode: bool) ->
         if not entry:
             _fail(entry_id, f"entry {entry_id} not found", json_mode=json_mode)
             return
+        name, where = _where(entry)
         payload = {
             "ok": True,
             "dry_run": True,
             "entry_id": entry_id,
             "dest": entry.original_path,
+            **plan_doc(
+                f"Restore {name}",
+                [
+                    change(
+                        name,
+                        group="Back to where it was found",
+                        detail=where,
+                        size=_vault_size(entry),
+                    )
+                ],
+            ),
         }
         if json_mode:
             emit(payload, json_mode=True)
@@ -118,7 +149,24 @@ def delete_cmd(entry_id: int, confirm: bool, dry_run: bool, json_mode: bool) -> 
         if not entry:
             _fail(entry_id, f"entry {entry_id} not found", json_mode=json_mode)
             return
-        payload = {"ok": True, "dry_run": True, "entry_id": entry_id}
+        name, where = _where(entry)
+        payload = {
+            "ok": True,
+            "dry_run": True,
+            "entry_id": entry_id,
+            **plan_doc(
+                f"Delete {name} for good",
+                [
+                    change(
+                        name,
+                        group="Deleted for good",
+                        detail=where,
+                        size=_vault_size(entry),
+                        reversible=False,
+                    )
+                ],
+            ),
+        }
         if json_mode:
             emit(payload, json_mode=True)
         else:
@@ -143,6 +191,7 @@ def delete_cmd(entry_id: int, confirm: bool, dry_run: bool, json_mode: bool) -> 
 @click.option("--pack", default="", help="Finding pack when patching history")
 @click.option("--message", default="", help="Finding message when patching history")
 @click.option("--confirm", is_flag=True)
+@click.option("--dry-run", is_flag=True, help="Print what would be moved; move nothing")
 @json_option
 def add_cmd(
     path: str,
@@ -151,11 +200,39 @@ def add_cmd(
     pack: str,
     message: str,
     confirm: bool,
+    dry_run: bool,
     json_mode: bool,
 ) -> None:
     from oyst_core.history_actions import quarantine_and_patch
 
-    require_confirm(confirm, message="--confirm required to quarantine a file")
+    require_confirm(confirm, dry_run=dry_run, message="--confirm required to quarantine a file")
+    if dry_run:
+        target = Path(path).expanduser()
+        try:
+            size: int | None = target.stat().st_size
+        except OSError:
+            size = None
+        doc = (
+            plan_doc(
+                f"Quarantine {target.name or path}",
+                [
+                    change(
+                        target.name or path,
+                        group="Moved to the quarantine vault",
+                        detail=f"{target} ({threat})",
+                        size=size,
+                        reversible=True,
+                    )
+                ],
+            )
+            if size is not None
+            else refused(f"{path} is not there any more.")
+        )
+        if json_mode:
+            emit({"ok": True, "dry_run": True, "path": path, **doc}, json_mode=True)
+        else:
+            click.echo(f"Would quarantine {path}" if size is not None else doc["reason"])
+        return
     payload = quarantine_and_patch(
         path,
         threat,
@@ -220,6 +297,22 @@ def reconcile_cmd(
                 "dry_run": True,
                 "orphans": orphans,
                 "deleted": [],
+                **(
+                    plan_doc(
+                        f"Delete {len(orphans)} stray vault file(s)",
+                        [
+                            change(
+                                Path(str(o)).name or str(o),
+                                group="Stray vault files",
+                                detail=str(o),
+                                reversible=False,
+                            )
+                            for o in orphans
+                        ],
+                    )
+                    if orphans
+                    else refused("The vault has no stray files.")
+                ),
             }
             emit(payload, json_mode=json_mode)
             if not json_mode:

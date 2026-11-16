@@ -1,0 +1,30 @@
+{
+  "config": {
+    "enabled": false,
+    "profile": "quick",
+    "packs": [],
+    "paths": [],
+    "frequency": "daily",
+    "time": "02:00",
+    "weekday": "mon",
+    "on_calendar": "",
+    "persistent": true,
+    "quarantine": "auto",
+    "backend": "inherit"
+  },
+  "on_calendar": "*-*-* 02:00:00",
+  "calendar_error": "",
+  "installed": false,
+  "enabled": false,
+  "active": false,
+  "next": "",
+  "service": "/home/user/.config/systemd/user/oyst-scan.service",
+  "timer": "/home/user/.config/systemd/user/oyst-scan.timer",
+  "cli_path": "/home/user/oysterAV/.venv/bin/oyst-cli",
+  "linger": {
+    "user": "root",
+    "linger": false,
+    "available": true,
+    "enable_hint": "loginctl enable-linger root"
+  }
+}

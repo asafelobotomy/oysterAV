@@ -48,6 +48,40 @@ oysterav --minimized                         # start GUI hidden (tray)
 
 Autostart file: `~/.config/autostart/io.github.asafelobotomy.OysterAV.desktop`.
 
+## Config
+
+```bash
+oyst-cli config show --json                  # {path, values, schema}: every setting a UI may edit
+oyst-cli config set scan.max_files 500 --json
+oyst-cli config set scan.max_files 500 --dry-run --json   # check the value, change nothing
+oyst-cli config get [key] --json
+oyst-cli config path
+```
+
+`config show --json` prints the value of each setting next to its schema (`key`, `group`, `label`,
+`kind` = `bool|choice|int|text|list`, `choices`, `min`, `help`), so a settings page draws a row per
+entry and needs no knowledge of the config model. Lists are comma-separated on `config set`.
+With `--json` a refused value prints `{"ok": false, "key": ..., "error": ...}` and exits 2; the
+file is never half-written. The uQ Settings page follows `~/.config/oysterav/config.toml`.
+
+## Plans (`--dry-run --json`)
+
+Every command that changes something offers `--dry-run`, and with `--json` it prints one
+document that uQ Settings shows as its confirmation sheet:
+
+```json
+{"summary": "Delete bad.exe for good",
+ "changes": [{"label": "bad.exe", "group": "Deleted for good", "detail": "/home/u/bad.exe (Win.Test)",
+              "bytes": 8, "reversible": false}],
+ "would_refuse": false, "reason": ""}
+```
+
+`label` is required; `group`, `detail`, `bytes` and `reversible` are optional. A plan with
+`would_refuse: true` says why in `reason`. Commands that already printed a dry-run document
+(`scan`, `quarantine restore|delete`) keep their own keys and add these. Covered:
+`config set`, `scan` (scanners, folders with a file count, what asks for a password),
+`quarantine add|restore|delete|reconcile --delete-orphans`, `services set`.
+
 ## Health
 
 ```bash
@@ -92,7 +126,8 @@ oyst-cli packs install lynis [--progress]   # full mode → private runtime; lit
 ```bash
 oyst-cli scan ~/Downloads --profile quick --json
 oyst-cli scan / --profile integrity --confirm --json
-oyst-cli scan / --profile integrity --dry-run --json   # privilege plan only
+oyst-cli scan / --profile integrity --dry-run --json   # plan: scanners, file count, who asks for a password
+oyst-cli scan ~/Downloads --ndjson                    # streamed: {"event":"progress",...} lines, then {"event":"result",...}
 oyst-cli scan ~/Downloads --quarantine --confirm      # --quarantine moves files: needs --confirm
 oyst-cli job status --json
 oyst-cli job cancel
@@ -127,9 +162,10 @@ oyst-cli quarantine verify --json
 oyst-cli quarantine reconcile --json
 oyst-cli quarantine reconcile --delete-orphans --confirm --json
 oyst-cli quarantine add <path> --confirm
+oyst-cli quarantine add <path> --dry-run --json
 ```
 
-Restore/delete/add require `--confirm` (or `--dry-run` to preview for restore/delete).
+Restore/delete/add require `--confirm` (or `--dry-run` to preview them).
 `verify` reports hash-invalid DB rows and vault orphans (files with no DB row);
 `reconcile --delete-orphans --confirm` removes those orphans.
 
@@ -278,6 +314,7 @@ From Flatpak GUI, elevation uses `flatpak-spawn --host pkexec` against the host
 
 ```bash
 oyst-cli services status --json
+oyst-cli services set clamd on --dry-run --json   # the plan, without asking for a password
 oyst-cli services set clamd on --boot
 oyst-cli services set clamonacc off
 oyst-cli services set freshclam-timer on

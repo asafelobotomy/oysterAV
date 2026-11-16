@@ -1,0 +1,10 @@
+[
+  {
+    "id": 1,
+    "original_path": "/home/user/Downloads/bad.exe",
+    "vault_path": "/home/user/.local/share/oysterav/quarantine/20261116144932_921e845f97454eb099da978727c382d9.bin",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "threat_name": "Win.Test.EICAR_HDB-1",
+    "quarantined_at": "2026-11-16T09:30:00"
+  }
+]

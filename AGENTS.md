@@ -75,7 +75,9 @@ Living map: [docs/cli/gui-contract.md](docs/cli/gui-contract.md).
 installed to `/usr/share/uq/` by every package (see `uq/README.md`). They run only declared
 `oyst-cli ... --json` commands; keep `oyst-cli status summary` cheap (no scans, pack probes or
 subprocesses). `tests/test_cli/test_uq_integration.py` checks each argv against the CLI; also
-run `uqctl integrations check uq/` when a uQ build is at hand.
+run `uqctl integrations check uq/` when a uQ build is at hand. The page is `uq_api = 3`: tabs, streamed
+`scan --ndjson`, and a `--dry-run --json` plan (`oyst_core/plan.py`) behind every confirmation. Page tests:
+`tests/uq/README.md`; after changing a command's JSON, `UPDATE_FIXTURES=1 uv run pytest tests/test_cli/test_uq_fixtures.py`.
 
 ## Health / debug
 

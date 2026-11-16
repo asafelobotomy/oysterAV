@@ -110,7 +110,8 @@ def _parse_exclude_dirs_csv(value: str) -> list[str]:
     return paths
 
 
-def set_config_value(key: str, value: str) -> None:
+def set_config_value(key: str, value: str, *, dry_run: bool = False) -> str | None:
+    """Validate and store one setting; returns the old value. A dry run stores nothing."""
     cfg = load_config()
     old: str | None = None
     try:
@@ -309,6 +310,8 @@ def set_config_value(key: str, value: str) -> None:
             raise KeyError("firewall.managed_backend must be ufw|firewalld|none")
     else:
         raise KeyError(f"Unknown config key: {key}")
+    if dry_run:
+        return old
     save_config(cfg)
 
     # Side-effects for desktop integration (after persist).
@@ -342,6 +345,7 @@ def set_config_value(key: str, value: str) -> None:
     from oyst_core.audit import SecurityAudit
 
     SecurityAudit().log("config.set", key, success=True, data={"old": old, "new": value})
+    return old
 
 
 def setup_status() -> dict[str, object]:

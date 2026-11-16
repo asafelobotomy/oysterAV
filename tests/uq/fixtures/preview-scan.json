@@ -1,0 +1,29 @@
+{
+  "recipe": "scan-privileged",
+  "title": "Start scan",
+  "summary": "1 files, 1 scanner(s)",
+  "needs_elevation": false,
+  "privileged": [],
+  "local": [
+    {
+      "id": "clamav",
+      "label": "ClamAV malware scan",
+      "priority": 10
+    }
+  ],
+  "body": "No administrator authentication is required for this scan.\n\nThen continues without further password prompts for:\n  \u2022 ClamAV malware scan\n\nYou will not be asked again until this action finishes.",
+  "changes": [
+    {
+      "label": "clamav",
+      "group": "Scanners",
+      "detail": "Runs as you"
+    },
+    {
+      "label": "/home/user/scan",
+      "group": "Looks at",
+      "detail": "1 files"
+    }
+  ],
+  "would_refuse": false,
+  "reason": ""
+}
