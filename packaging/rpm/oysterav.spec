@@ -58,6 +58,10 @@ install -Dm644 packaging/oysterav/flatpak/io.github.asafelobotomy.OysterAV.metai
   %{buildroot}%{_metainfodir}/io.github.asafelobotomy.OysterAV.metainfo.xml
 install -Dm644 packaging/polkit/io.github.asafelobotomy.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/io.github.asafelobotomy.policy
+# uQ integration (inert without uQ): uq/README.md lists what each file adds.
+install -Dm644 -t %{buildroot}%{_datadir}/uq/shell/widgets/oysterav uq/widgets/oysterav/*
+install -Dm644 -t %{buildroot}%{_datadir}/uq/settings/pages/oysterav-security \
+  uq/pages/oysterav-security/*
 
 for size in 16 32 48 128 256 512; do
   install -Dm644 branding/hicolor/${size}x${size}/apps/oysterav.png \
@@ -77,6 +81,8 @@ done
 %{_datadir}/applications/io.github.asafelobotomy.OysterAV.desktop
 %{_metainfodir}/io.github.asafelobotomy.OysterAV.metainfo.xml
 %{_datadir}/polkit-1/actions/io.github.asafelobotomy.policy
+%{_datadir}/uq/shell/widgets/oysterav/
+%{_datadir}/uq/settings/pages/oysterav-security/
 %{_datadir}/icons/hicolor/*/apps/oysterav.png
 
 %changelog

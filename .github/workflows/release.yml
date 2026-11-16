@@ -121,7 +121,7 @@ jobs:
           fetch-depth: 0
           # Token is only exposed to the push step (not to uv/PyPI code).
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # Published artifacts: never restore a shared cache (poisoning risk).
           # setup-uv v10 disables "auto" caching for release events; an explicit
@@ -165,7 +165,7 @@ jobs:
         with:
           ref: ${{ needs.detect.outputs.build_ref }}
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # Published artifacts: never restore a shared cache (poisoning risk).
           # setup-uv v10 disables "auto" caching for release events; an explicit
@@ -184,7 +184,7 @@ jobs:
       - run: uv sync --extra all
       - run: uv run python scripts/sync_version.py --check
       - run: uv build
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-dist
           path: |
@@ -203,7 +203,7 @@ jobs:
       - name: Install zstd
         run: sudo apt-get update && sudo apt-get install -y zstd curl
       - run: bash scripts/build_runtime.sh x86_64
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: runtime-x86_64
           path: dist/runtime-x86_64.tar.zst
@@ -224,7 +224,7 @@ jobs:
           sudo apt-get install -y flatpak flatpak-builder
       - name: Build Flatpak bundle
         run: bash scripts/build_flatpak.sh x86_64
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flatpak
           path: dist/*.flatpak
@@ -238,7 +238,7 @@ jobs:
         with:
           ref: ${{ needs.detect.outputs.build_ref }}
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           # Published artifacts: never restore a shared cache (poisoning risk).
           # setup-uv v10 disables "auto" caching for release events; an explicit
@@ -271,7 +271,7 @@ jobs:
           done
       - name: Install-test native packages in distro containers
         run: bash scripts/smoke_native_packages.sh dist
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-pkgs
           path: |
@@ -298,7 +298,7 @@ jobs:
             exit 1
           fi
           grep -E "python-defusedxml|sha256sums" dist/PKGBUILD dist/.SRCINFO
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: arch-pkgbuild
           include-hidden-files: true
@@ -323,7 +323,7 @@ jobs:
           ref: ${{ needs.detect.outputs.build_ref }}
           persist-credentials: false
       - name: Generate release notes (latest section)
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         id: cliff
         with:
           config: cliff.toml
@@ -331,13 +331,13 @@ jobs:
         env:
           OUTPUT: CHANGELOG_RELEASE.md
       - name: Generate full CHANGELOG.md
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         with:
           config: cliff.toml
         env:
           OUTPUT: CHANGELOG_FULL.md
       - name: Download artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: release-assets
           merge-multiple: true
@@ -363,7 +363,7 @@ jobs:
         with:
           subject-path: staged/*
       - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ needs.detect.outputs.tag }}
           name: oysterAV ${{ needs.detect.outputs.version }}

@@ -53,6 +53,34 @@ def status_assess_cmd(json_mode: bool) -> None:
             click.echo(f"    → {issue['recommended_action']}")
 
 
+@status_group.command(
+    "summary",
+    epilog="""
+Examples:
+  oyst-cli status summary --json
+  oyst-cli status summary
+""",
+)
+@json_option
+def status_summary_cmd(json_mode: bool) -> None:
+    """Cheap ok/warning/threat summary; never scans or probes packs."""
+    from oyst_core.status_summary import build_summary
+
+    data = build_summary()
+    if json_mode:
+        emit(data, json_mode=True)
+        return
+    click.echo(f"State: {data['state']}")
+    for reason in data["reasons"]:
+        click.echo(f"  - {reason}")
+    click.echo(f"Last scan: {data['last_scan_at'] or 'never'}")
+    sig = data["signature_age_hours"]
+    click.echo(f"Signatures: {'missing' if sig is None else f'{sig:.0f} hours old'}")
+    click.echo(f"Quarantined files: {data['quarantine_count']}")
+    if data["scanning"]:
+        click.echo("A scan is running.")
+
+
 @click.group("history", invoke_without_command=True)
 @click.option("--limit", default=20, type=int)
 @json_option

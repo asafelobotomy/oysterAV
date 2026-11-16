@@ -23,6 +23,7 @@ optdepends=(
   'rkhunter: rootkit checks'
   'chkrootkit: rootkit checks'
   'lynis: hardening audits'
+  'uq: security tile and Settings page in the uQ desktop'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('72f28e0c1a219831ff5bc587c3a267c62c1ad82f79d0414262037b1bec20a443')
@@ -50,6 +51,11 @@ EOF
     "$pkgdir/usr/share/metainfo/io.github.asafelobotomy.OysterAV.metainfo.xml"
   install -Dm644 packaging/polkit/io.github.asafelobotomy.policy \
     "$pkgdir/usr/share/polkit-1/actions/io.github.asafelobotomy.policy"
+
+  # uQ integration (inert without uQ): uq/README.md lists what each file adds.
+  install -Dm644 -t "$pkgdir/usr/share/uq/shell/widgets/oysterav" uq/widgets/oysterav/*
+  install -Dm644 -t "$pkgdir/usr/share/uq/settings/pages/oysterav-security" \
+    uq/pages/oysterav-security/*
 
   for size in 16 32 48 128 256; do
     install -Dm644 "branding/hicolor/${size}x${size}/apps/oysterav.png" \

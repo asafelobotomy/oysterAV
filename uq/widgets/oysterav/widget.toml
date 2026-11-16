@@ -1,0 +1,20 @@
+# oysterAV in uQ's quick settings: security status and the last scan time.
+# Installed to /usr/share/uq/shell/widgets/oysterav/ by the oysterav package.
+# Reference: docs/integrating.md in the uQ repository.
+uq_api = 1
+id = "oysterav"
+name = "Security"
+slot = "quick"
+qml = "Widget.qml"
+order = 60
+
+[requires]
+bins = ["oyst-cli"]
+
+# Reads local state only (last scan row, signature file times, quarantine count):
+# it never starts a scan, probes scanners or asks for a password.
+[[command]]
+id = "summary"
+argv = ["/usr/bin/oyst-cli", "status", "summary", "--json"]
+output = "json"
+timeout_ms = 5000
