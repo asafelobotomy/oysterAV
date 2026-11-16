@@ -1,0 +1,143 @@
+{
+  "services": {
+    "clamd": {
+      "name": "clamd",
+      "kind": "systemctl",
+      "running": false,
+      "enabled": false,
+      "unit": "clamav-daemon",
+      "details": {
+        "unit": "clamav-daemon",
+        "active": false,
+        "enabled": false,
+        "running": false,
+        "socket": null
+      }
+    },
+    "clamonacc": {
+      "name": "clamonacc",
+      "kind": "process",
+      "running": false,
+      "enabled": false,
+      "unit": null,
+      "details": {
+        "name": "clamonacc",
+        "tier": "recommended",
+        "installed": false,
+        "version": null,
+        "min_version": "1.4.0",
+        "version_ok": false,
+        "message": "On-access uses the host ClamAV database; on-demand scans may use the private runtime database.",
+        "install_hint": "sudo apt install clamav-daemon",
+        "details": {
+          "clamd_running": false,
+          "running": false,
+          "tool_source": "missing",
+          "binary": null,
+          "systemd_unit": null,
+          "configured_paths": [
+            "~/Downloads",
+            "~/Desktop"
+          ],
+          "exclude_paths": [
+            "~/.cache",
+            "~/.local/share/Trash"
+          ],
+          "prevention_requested": false,
+          "uses_distro_unit": false,
+          "onaccess": {
+            "classification": "handoff_required",
+            "prevention_enforced": false,
+            "conf_path": null,
+            "kernel_access_permissions": true,
+            "prevention": null,
+            "include_paths": [],
+            "mount_paths": [],
+            "exclude_unames": [],
+            "user": null,
+            "disable_cache": null,
+            "local_socket": null,
+            "conflict_sidecars": [],
+            "error": "no readable clamd conf among candidates"
+          }
+        }
+      }
+    },
+    "freshclam-timer": {
+      "name": "freshclam-timer",
+      "kind": "user-timer",
+      "running": false,
+      "enabled": false,
+      "unit": "oyst-signatures.timer",
+      "details": {
+        "unit": "oyst-signatures.timer",
+        "installed": false,
+        "enabled": false,
+        "active": false,
+        "wanted": true,
+        "on_calendar": "*-*-* 00/6:00:00"
+      }
+    },
+    "fail2ban": {
+      "name": "fail2ban",
+      "kind": "systemctl",
+      "running": false,
+      "enabled": false,
+      "unit": "fail2ban",
+      "details": {
+        "doctor": {
+          "name": "fail2ban",
+          "tier": "optional",
+          "installed": false,
+          "version": null,
+          "min_version": null,
+          "version_ok": false,
+          "message": "",
+          "install_hint": "sudo apt install fail2ban",
+          "details": {}
+        },
+        "unit": {
+          "unit": "fail2ban",
+          "active": false,
+          "enabled": false
+        }
+      }
+    },
+    "maldet-monitor": {
+      "name": "maldet-monitor",
+      "kind": "systemctl",
+      "running": false,
+      "enabled": false,
+      "unit": "maldet",
+      "details": {
+        "enabled": false,
+        "mode": "users",
+        "paths": [],
+        "running": false,
+        "inotify_tools": false,
+        "max_user_watches": 128384,
+        "clamonacc_overlaps": []
+      }
+    },
+    "schedule-linger": {
+      "name": "schedule-linger",
+      "kind": "loginctl",
+      "running": false,
+      "enabled": false,
+      "details": {
+        "user": "root",
+        "linger": false,
+        "available": true,
+        "enable_hint": "loginctl enable-linger root"
+      }
+    }
+  },
+  "names": [
+    "clamd",
+    "clamonacc",
+    "freshclam-timer",
+    "fail2ban",
+    "maldet-monitor",
+    "schedule-linger"
+  ]
+}

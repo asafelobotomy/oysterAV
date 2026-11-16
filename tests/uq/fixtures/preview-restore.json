@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "dry_run": true,
+  "entry_id": 1,
+  "dest": "/home/user/Downloads/bad.exe",
+  "summary": "Restore bad.exe",
+  "changes": [
+    {
+      "label": "bad.exe",
+      "group": "Back to where it was found",
+      "detail": "/home/user/Downloads/bad.exe (Win.Test.EICAR_HDB-1)",
+      "bytes": 8
+    }
+  ],
+  "would_refuse": false,
+  "reason": ""
+}

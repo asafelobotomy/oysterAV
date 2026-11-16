@@ -1,0 +1,49 @@
+{
+  "recipe": "scan-privileged",
+  "title": "Start scan",
+  "summary": "200,020+ files, 3 scanner(s)",
+  "needs_elevation": true,
+  "privileged": [
+    {
+      "id": "chkrootkit",
+      "label": "chkrootkit scan",
+      "priority": 20
+    },
+    {
+      "id": "rkhunter",
+      "label": "rkhunter rootkit check",
+      "priority": 20
+    },
+    {
+      "id": "unhide",
+      "label": "unhide hidden-process scan",
+      "priority": 20
+    }
+  ],
+  "local": [],
+  "body": "Integrity and audit scanners require one admin authentication.\n\nAdministrator authentication is required once for:\n  \u2022 chkrootkit scan\n  \u2022 rkhunter rootkit check\n  \u2022 unhide hidden-process scan\n\nYou will not be asked again until this action finishes.",
+  "changes": [
+    {
+      "label": "chkrootkit scan",
+      "group": "Needs your password",
+      "detail": "Runs as root through oysterAV's helper"
+    },
+    {
+      "label": "rkhunter rootkit check",
+      "group": "Needs your password",
+      "detail": "Runs as root through oysterAV's helper"
+    },
+    {
+      "label": "unhide hidden-process scan",
+      "group": "Needs your password",
+      "detail": "Runs as root through oysterAV's helper"
+    },
+    {
+      "label": "/",
+      "group": "Looks at",
+      "detail": "200,020+ files"
+    }
+  ],
+  "would_refuse": false,
+  "reason": ""
+}

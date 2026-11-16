@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "state": "threat",
+  "reasons": [
+    "1 unresolved finding in the last scan",
+    "no virus signatures found"
+  ],
+  "scanning": false,
+  "last_scan_at": "2026-11-16T09:30:00",
+  "last_scan_age_hours": 5.325865817777778,
+  "last_scan_job_id": "job-1",
+  "last_scan_profile": "quick",
+  "last_scan_state": "completed",
+  "open_findings": 1,
+  "signature_age_hours": null,
+  "signatures_stale": true,
+  "quarantine_count": 1
+}

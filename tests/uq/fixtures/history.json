@@ -1,0 +1,16 @@
+[
+  {
+    "job_id": "job-1",
+    "profile": "quick",
+    "paths": [
+      "/home/user/Downloads"
+    ],
+    "started_at": "2026-11-16T09:30:00",
+    "finished_at": "2026-11-16T09:30:00",
+    "clean": false,
+    "findings_count": 1,
+    "open_findings_count": 1,
+    "state": "completed",
+    "has_errors": false
+  }
+]

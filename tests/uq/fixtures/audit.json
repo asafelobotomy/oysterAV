@@ -1,0 +1,13 @@
+[
+  {
+    "id": 1,
+    "ts": "2026-11-16T09:30:00",
+    "kind": "config.set",
+    "action": "scan.max_files",
+    "success": true,
+    "data": {
+      "old": "10000",
+      "new": "500"
+    }
+  }
+]

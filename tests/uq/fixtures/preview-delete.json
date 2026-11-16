@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "dry_run": true,
+  "entry_id": 1,
+  "summary": "Delete bad.exe for good",
+  "changes": [
+    {
+      "label": "bad.exe",
+      "group": "Deleted for good",
+      "detail": "/home/user/Downloads/bad.exe (Win.Test.EICAR_HDB-1)",
+      "bytes": 8,
+      "reversible": false
+    }
+  ],
+  "would_refuse": false,
+  "reason": ""
+}

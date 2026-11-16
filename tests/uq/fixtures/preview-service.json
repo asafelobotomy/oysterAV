@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "dry_run": true,
+  "name": "clamd",
+  "state": "on",
+  "summary": "Turn clamd on",
+  "changes": [
+    {
+      "label": "Turn clamd on",
+      "group": "Services",
+      "detail": "Asks for your password through oysterAV's helper",
+      "reversible": true
+    }
+  ],
+  "would_refuse": false,
+  "reason": ""
+}

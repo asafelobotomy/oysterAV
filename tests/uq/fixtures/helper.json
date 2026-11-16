@@ -1,0 +1,25 @@
+{
+  "installed": false,
+  "helper_path": "/usr/lib/oysterav/oyst-helper",
+  "polkit_path": "/usr/share/polkit-1/actions/io.github.asafelobotomy.policy",
+  "policy_version": 12,
+  "actions": [
+    "io.github.asafelobotomy.helper.systemctl",
+    "io.github.asafelobotomy.helper.systemctl-up",
+    "io.github.asafelobotomy.helper.run",
+    "io.github.asafelobotomy.helper.firewall",
+    "io.github.asafelobotomy.helper.fail2ban",
+    "io.github.asafelobotomy.helper.maldet-config",
+    "io.github.asafelobotomy.helper.rkhunter-whitelist",
+    "io.github.asafelobotomy.helper.clamd-cocontrol",
+    "io.github.asafelobotomy.helper.setup-harden",
+    "io.github.asafelobotomy.helper.setup-concert",
+    "io.github.asafelobotomy.helper.scan-concert",
+    "io.github.asafelobotomy.helper.update-concert",
+    "io.github.asafelobotomy.helper.install-script",
+    "io.github.asafelobotomy.helper.run-sealed"
+  ],
+  "actions_present": [],
+  "policy_current": false,
+  "import_ok": null
+}
