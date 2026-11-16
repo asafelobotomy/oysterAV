@@ -459,6 +459,31 @@ See [pack-commands.md](pack-commands.md) for the full pack inventory.
 
 ---
 
+## Apps that save files (other programs asking oysterAV to look)
+
+Download managers, app stores and game libraries (Hauler, appOFholding, romforge) check
+what they save by running **`oyst-cli scan <absolute-path>… --ndjson`**. This is the whole
+contract they rely on; it needs no running GUI and no extra flag.
+
+| Piece | Behavior |
+|-------|----------|
+| Input | One or more **absolute** paths (files or folders), no `--profile` needed (the default is fine). Relative paths are the caller's mistake, not oysterAV's. |
+| stdout | `{"event":"progress",…}` lines, then one `{"event":"result","clean":bool,"findings":[{"path","threat_name"}],"pack_errors":[{"error"}],…}` line. Callers read the **last** `result` line and ignore unknown events and keys. |
+| Exit 0 | Clean (`clean: true`, no `pack_errors`) |
+| Exit 1 | Threats found: `findings` names the file (`path`) and `threat_name` |
+| Exit 2 | Error: no `result`, or `pack_errors` set; the first stderr line is the reason to show |
+| Exit 3 | Job busy: another oysterAV job is running. Callers **wait and ask again** (they use 5 s, about 60 times) rather than fail |
+| Exit 5 | Required pack (ClamAV) missing |
+| Clean vs unknown | Only an exit-0 `clean: true` answer is "clean". Anything else is "threat" or "could not check", never silently treated as clean |
+| Quarantine | **Never automatic from these callers.** They do not pass `--quarantine`; they show the verdict and leave the file where it is. What to do with it is chosen in oysterAV (Quarantine tab, `oyst-cli quarantine add`) |
+| Testing | Callers take the CLI path from an environment variable (`HAULER_OYST_CLI`, `APPOFHOLDING_OYST_CLI`, `ROMFORGE_OYST_CLI`) so their tests can use a fake script that prints the lines above |
+
+Each of those apps keeps its own setting (off, warn or block; or on and off) for what to do
+with a verdict, and says plainly when oysterAV is not installed. A change to the lines or
+exit codes above breaks them, so treat it as a contract change.
+
+---
+
 ## Known GUI ↔ CLI behavioral differences
 
 | Topic | GUI | CLI |
