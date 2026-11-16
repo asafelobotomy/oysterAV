@@ -2,6 +2,153 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.3.0 - 2026-11-16
+
+### Bug Fixes
+
+- *(release)* Unblock tag builds on sha256sums=SKIP; harden uv cache for v10 (#33)
+
+
+### Miscellaneous
+
+- *(packaging)* Pin v0.2.3 checksums
+
+- *(deps)* Bump ossf/scorecard-action from 2.4.3 to 2.4.4 (#14)
+
+- *(deps)* Bump pypa/gh-action-pypi-publish from 1.12.4 to 1.14.2 (#17)
+
+
+### Other
+
+- *(deps)* Bump github/codeql-action/upload-sarif (#30)
+
+- *(deps)* Bump astral-sh/setup-uv from 9.0.0 to 10.2.0 (#31)
+
+- *(deps)* Bump softprops/action-gh-release from 2.2.2 to 3.0.3 (#32)
+
+- *(deps)* Bump ruff from 0.16.4 to 0.16.10 (#26)
+
+- *(deps)* Bump click from 8.4.2 to 8.5.0 (#28)
+
+- *(deps)* Bump mypy from 2.3.0 to 2.4.0 (#29)
+
+- *(deps)* Bump actions/upload-artifact from 7.0.1 to 7.0.2 (#34)
+
+- *(deps)* Bump actions/download-artifact from 8.0.1 to 8.0.2 (#35)
+
+- *(deps)* Bump mypy from 2.4.0 to 2.4.1 (#40)
+
+- *(deps)* Bump github/codeql-action/upload-sarif (#38)
+
+- *(deps)* Bump orhun/git-cliff-action from 4.8.0 to 4.9.1 (#39)
+
+- *(deps)* Bump ossf/scorecard-action from 2.4.4 to 2.5.0 (#36)
+
+- *(deps)* Bump pytest from 9.1.1 to 9.2.0 (#42)
+
+- *(deps)* Bump pydantic from 2.13.4 to 2.14.0 (#27)
+
+- *(deps)* Bump ruff from 0.16.10 to 0.17.3 (#41)
+
+- *(deps)* Bump certifi from 2026.7.22 to 2026.10.18
+
+- Merge pull request #43 from asafelobotomy/cursor/certifi-fangfrisch-bump-828c
+
+- Add setup permissions remediation plan
+
+- Project files: CODE_OF_CONDUCT.md, CODEOWNERS, CONTRIBUTING.md, .editorconfig, .gitattributes, issue template, pull_request_template.md
+
+- Slim AGENTS.md: move gates, GUI remapping status, debug/release, learned notes to docs/agents/
+
+- UQ integration: cheap status summary --json, Security tile and Settings page (#49)
+
+- *(deps)* Bump github/codeql-action/upload-sarif (#47)
+
+- *(deps)* Bump softprops/action-gh-release from 3.0.3 to 3.0.4 (#46)
+
+- *(deps)* Bump astral-sh/setup-uv from 10.2.0 to 10.3.3 (#45)
+
+- *(deps)* Bump pypa/gh-action-pypi-publish from 1.14.2 to 1.14.3 (#44)
+
+- *(deps)* Bump pydantic from 2.14.0 to 2.14.3 (#48)
+
+- *(deps)* Bump ruff from 0.17.3 to 0.17.4 (#51)
+
+- *(deps)* Bump click from 8.5.0 to 8.5.1 (#50)
+
+- Rebuild the uQ Security page: tabs, streamed scans, previews, preferences (#52)
+
+## 0.2.3 - 2026-10-11
+
+### Bug Fixes
+
+- *(flatpak)* Migrate to GNOME 50 and tolerate missing loginctl
+
+- *(security)* Close workspace audit residuals
+
+- *(tests)* Unbreak CI failures masked by ruff format gate
+
+- *(security,ux)* Close full-surface audit and first-run setup gaps
+
+- *(security)* Harden privileged helper boundary
+
+- *(core)* Scan correctness, quarantine safety, jobs, RPC and network
+
+- *(ci)* Skip widget tests without a display; import ParseError from defusedxml
+
+- *(clamav)* Working clamd backend, private signature timer, cancellable scans
+
+
+### CI
+
+- Harden release workflow and make security gates real
+
+
+### Documentation
+
+- *(changelog)* V0.2.2
+
+- *(packaging)* Withdraw Flathub; clarify AUR/COPR/PyPI human gates
+
+- *(packaging)* Mark PyPI available; defer COPR; note AUR email verify
+
+- *(packaging)* Mark AUR oysterav 0.2.2-1 as available
+
+- Refresh GUI screenshots and README for six-tab UI
+
+- Record 2026-10-11 full-surface audit and update guides
+
+
+### Features
+
+- *(gui)* Separate oyst-cli serve backend; fix GUI/CLI audit findings
+
+
+### Miscellaneous
+
+- *(packaging)* Pin v0.2.2 checksums and Flathub submit status
+
+- *(lock)* Sync uv.lock to oysterav 0.2.2
+
+- *(deps)* Land Dependabot bumps and unblock CI
+
+
+### Other
+
+- Add Ko-fi donation button
+
+- *(packaging)* Arch-independent deb/rpm with container install tests
+
+
+### Styling
+
+- Apply ruff format to helper install test
+
+
+### Testing
+
+- Compare IPv4-mapped addresses by value, not str()
+
 ## 0.2.2 - 2026-07-27
 
 ### Bug Fixes
