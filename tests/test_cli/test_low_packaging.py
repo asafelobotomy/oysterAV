@@ -62,7 +62,9 @@ def test_sync_version_check_passes_and_covers_distro_files(
         "packaging/oysterav/flatpak/flathub/io.github.asafelobotomy.OysterAV.yml tag",
     ):
         assert key in found
-    sv.check(sv.read_version(), strict_sha256=True)
+    # Not strict: a release bump carries sha256sums=SKIP until its tag exists
+    # (the hash of the tag archive cannot be known beforehand).
+    sv.check(sv.read_version())
     assert "in sync" in capsys.readouterr().out
 
 
