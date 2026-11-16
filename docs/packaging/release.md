@@ -84,8 +84,11 @@ see [docs/packaging/distro-submit.md](distro-submit.md).
 2. After the GitHub tag exists: `REQUIRE_SHA256=1 bash scripts/render_arch_pkgbuild.sh`.
    Then re-run `python scripts/sync_version.py` so the Flathub manifest picks up the
    archive sha256. Once tag `v<VERSION>` exists locally, `sync_version.py --check`
-   fails while PKGBUILD/.SRCINFO still say `sha256sums=SKIP` (`--strict-sha256`
-   enforces this even before the tag exists).
+   fails on any commit *after* the tag while PKGBUILD/.SRCINFO still say
+   `sha256sums=SKIP`. The tagged commit itself is exempt (its tree cannot contain
+   its own archive hash; release.yml and publish-pypi.yml build the tag, and the
+   `arch` job renders the real hash into the release assets). `--strict-sha256`
+   enforces a pinned hash everywhere, even before the tag exists.
 3. Copy `packaging/arch/PKGBUILD` and `packaging/arch/.SRCINFO` into the AUR git clone.
 4. `makepkg --printsrcinfo > .SRCINFO` (optional verify) and `git push` to `ssh://aur@aur.archlinux.org/oysterav.git`.
 

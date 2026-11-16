@@ -76,10 +76,26 @@ def test_check_fails_on_skip_sha_when_strict(
     with pytest.raises(SystemExit, match="SKIP"):
         sv.check("0.2.2", strict_sha256=True)
     monkeypatch.setattr(sv, "_tag_exists", lambda _v: True)
+    monkeypatch.setattr(sv, "_head_is_tag", lambda _v: False)
     with pytest.raises(SystemExit, match="SKIP"):
-        sv.check("0.2.2")
+        sv.check("0.2.2")  # commit after the tag: hash should be pinned
+    monkeypatch.setattr(sv, "_head_is_tag", lambda _v: True)
+    sv.check("0.2.2")  # release build of the tag commit itself: note only
+    with pytest.raises(SystemExit, match="SKIP"):
+        sv.check("0.2.2", strict_sha256=True)
     monkeypatch.setattr(sv, "_tag_exists", lambda _v: False)
+    monkeypatch.setattr(sv, "_head_is_tag", lambda _v: False)
     sv.check("0.2.2")  # pre-tag release prep: note only
+
+
+def test_head_is_tag_uses_git(monkeypatch: pytest.MonkeyPatch) -> None:
+    revs = {"refs/tags/v9.9.9^{commit}": "abc", "HEAD": "abc"}
+    monkeypatch.setattr(sv, "_git_rev", revs.get)
+    assert sv._tag_exists("9.9.9") and sv._head_is_tag("9.9.9")
+    assert not sv._skip_is_stale("9.9.9")
+    revs["HEAD"] = "def"
+    assert sv._skip_is_stale("9.9.9")
+    assert not sv._tag_exists("1.0.0") and not sv._skip_is_stale("1.0.0")
 
 
 def test_metainfo_has_no_invalid_oars_ids() -> None:
@@ -139,3 +155,29 @@ def test_fpm_after_remove_mirrors_polkit_refresh() -> None:
     script = PKG / "fpm" / "after-remove.sh"
     assert script.stat().st_mode & 0o111
     assert "systemctl reload polkit" in script.read_text(encoding="utf-8")
+
+
+def test_flathub_wheels_match_uv_lock() -> None:
+    """Every Flathub wheel for a locked package must be the exact locked artifact.
+
+    Catches Dependabot lock bumps (click, pydantic, ...) that leave the offline
+    Flathub pip install pinned to stale wheels. Build-only wheels absent from
+    uv.lock (hatchling, trove-classifiers) are skipped.
+    """
+    lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
+    locked_names = set(re.findall(r'(?m)^name = "([^"]+)"$', lock))
+    manifest = (
+        PKG / "oysterav" / "flatpak" / "flathub" / "io.github.asafelobotomy.OysterAV.yml"
+    ).read_text(encoding="utf-8")
+    pins = re.findall(
+        r"url: (\S+/([^/\s]+?)-[^/\s-]+-[^/\s]+\.whl)\n\s*sha256: ([0-9a-f]{64})", manifest
+    )
+    assert pins
+    checked = 0
+    for url, dist, sha in pins:
+        name = dist.lower().replace("_", "-")
+        if name not in locked_names:
+            continue
+        checked += 1
+        assert f'"{url}", hash = "sha256:{sha}"' in lock, f"{url} not in uv.lock"
+    assert checked >= 5

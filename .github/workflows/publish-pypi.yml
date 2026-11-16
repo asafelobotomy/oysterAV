@@ -35,7 +35,10 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          enable-cache: true
+          # Published artifacts: never restore a shared cache (poisoning risk).
+          # setup-uv v10 disables "auto" caching for release events; an explicit
+          # true would override that, so opt out explicitly here.
+          enable-cache: false
       - name: Build
         run: |
           set -euo pipefail
