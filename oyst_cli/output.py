@@ -21,8 +21,24 @@ def _format_text(data: Any, *, json_mode: bool) -> str:
     return str(data)
 
 
+# Commands the GUI and the uQ widgets run every few seconds: logging them filled the transcript
+# (tens of MB a day) and pushed out everything a person actually ran.
+_POLLED = frozenset(
+    {
+        ("config", "show"),
+        ("job", "status"),
+        ("setup", "status"),
+        ("setup", "check"),
+        ("status", "summary"),
+        ("services", "status"),
+        ("freshclam", "status"),
+    },
+)
+
+
 def _skip_transcript() -> bool:
-    return "terminal" in sys.argv[1:3]
+    args = sys.argv[1:3]
+    return "terminal" in args or tuple(args) in _POLLED
 
 
 def emit(data: Any, *, json_mode: bool = False) -> None:

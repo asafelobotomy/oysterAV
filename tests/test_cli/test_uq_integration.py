@@ -199,3 +199,14 @@ def test_packages_install_the_uq_folder(path: str) -> None:
     assert "/uq/shell/widgets/oysterav" in text, path
     assert "oysterav-bar" not in text, path  # the bar shield is uQ's own Security island
     assert "/uq/settings/pages/oysterav-security" in text, path
+
+
+def test_polled_commands_stay_out_of_the_terminal_transcript(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from oyst_cli import output
+
+    monkeypatch.setattr("sys.argv", ["oyst-cli", "job", "status", "--json"])
+    assert output._skip_transcript() is True
+    monkeypatch.setattr("sys.argv", ["oyst-cli", "scan", "--json"])
+    assert output._skip_transcript() is False

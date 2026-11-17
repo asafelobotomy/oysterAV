@@ -185,7 +185,8 @@ def _run_auto_install(wizard: SetupWizard) -> None:
             wizard.dialog,
             heading=heading,
             body=body,
-            copy_text="oyst-cli setup run --enable-linger",
+            copy_text=f"{body}\n\nRetry: oyst-cli setup run --enable-linger",
+            copy_label="Copy details",
         )
         wizard._refresh_schedule_status()
         run_doctor(wizard)

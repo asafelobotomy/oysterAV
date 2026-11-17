@@ -231,20 +231,46 @@ class ClamonaccPack(Pack):
         save_config(cfg)
         return True
 
+    def _onaccess_configured(self) -> tuple[bool, str]:
+        """Whether clamd.conf has what clamonacc needs to start: a folder to watch and an
+        excluded user (without them the unit exits with INVALIDARGUMENT and stays failed)."""
+        from oyst_core.packs.clamd_onaccess import discover_clamd_conf_paths, parse_clamd_conf
+
+        for conf in discover_clamd_conf_paths():
+            try:
+                parsed = parse_clamd_conf(conf.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                continue
+            if parsed["include_paths"] or parsed["mount_paths"]:
+                if parsed["exclude_unames"]:
+                    return True, ""
+        return False, (
+            "Real-time protection isn't set up yet: clamd.conf needs a folder to watch and "
+            "OnAccessExcludeUname. Pick the folders to watch under Protection first."
+        )
+
     def _enable_stack(self, *, success_verb: str = "enabled") -> tuple[bool, str]:
         """Signatures + enable --now clamd (if needed) + clamonacc via one polkit."""
         clam = ClamAVPack()
         unit = self._systemd_unit()
         if not unit:
             return False, "no distro clamonacc unit"
-        argv = ["enable-stack", f"--clamonacc-unit={unit}"]
+        ready, why = self._onaccess_configured()
+        argv = ["enable-stack"]
+        if ready:
+            argv.append(f"--clamonacc-unit={unit}")
         clamd_unit = clam.clamd_unit()
         if clamd_unit:
             argv.insert(1, f"--clamd-unit={clamd_unit}")
         sock = clam._clamd_socket()
         if sock:
             argv.append(f"--socket={sock}")
+        if not ready and not clamd_unit:
+            return False, why
         res = run_privileged_helper("clamd-cocontrol", argv)
+        if not ready:
+            # clamd is up; starting clamonacc now would only leave a failed unit behind.
+            return False, why
         if self.is_running():
             return True, f"{success_verb} via {unit}"
         return (

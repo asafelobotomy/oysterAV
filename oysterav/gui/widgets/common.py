@@ -13,8 +13,9 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gdk", "4.0")
 
-from gi.repository import Adw, Gdk, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
+from oysterav.gui.clipboard import copy_to_clipboard
 from oyst_core.health import SIGNATURE_STALE_HOURS
 from oyst_core.models import PROFILE_PATHS, ScanProfile
 
@@ -235,6 +236,7 @@ def show_command_dialog(
     heading: str,
     body: str,
     copy_text: str | None = None,
+    copy_label: str = "Copy command",
 ) -> None:
     dialog = Adw.MessageDialog(
         transient_for=window,
@@ -243,7 +245,7 @@ def show_command_dialog(
     )
     dialog.add_response("ok", "OK")
     if copy_text:
-        dialog.add_response("copy", "Copy command")
+        dialog.add_response("copy", copy_label)
 
     dialog.set_default_response("ok")
     dialog.set_close_response("ok")
@@ -252,8 +254,7 @@ def show_command_dialog(
 
         def on_response(_dialog: Adw.MessageDialog, response: str) -> None:
             if response == "copy":
-                clipboard = Gdk.Display.get_default().get_clipboard()
-                clipboard.set(Gdk.ContentProvider.new_for_value(copy_text))
+                copy_to_clipboard(copy_text)
 
         dialog.connect("response", on_response)
 
