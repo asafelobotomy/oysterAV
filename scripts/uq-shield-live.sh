@@ -61,12 +61,17 @@ shell_env=(env XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$wl" HYPRLAND_INSTANCE_SIG
 pids+=($!)
 for _ in $(seq 1 50); do hc layers -j | grep -q uq-bar && break; sleep 0.2; done
 hc layers -j | grep -q uq-bar || fail "the bar never appeared"
+dbus-monitor --address "unix:path=$tmp/bus" "interface='org.freedesktop.Notifications'" >"$tmp/notify.log" 2>&1 &
+pids+=($!)
 shot() { env XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$wl" grim "$@" 2>/dev/null; }
 hc layers -j | jq -c '.. | objects | select(.namespace? == "uq-bar") | {x,y,w,h}' | head -3 | sed 's/^/bar layer: /'
 
 # The widget loads and runs its summary; the notification should appear within a few seconds.
-sleep 4
+sleep 2
+shot "$cap/shield-0-bar.png"
+sleep 3
 shot "$cap/shield-1-bar-and-notification.png"
+echo "--- notification bus traffic"; grep -E "member=(Notify|GetServerInformation)|string \"(Security|ufw)" "$tmp/notify.log" | head -8; echo "---"
 grep -iE "oysterav|widget" "$tmp/qs.log" | head -10
 grep -qiE "TypeError|ReferenceError|oysterav-bar.*(error|fail)" "$tmp/qs.log" && fail "the widget logged errors"
 

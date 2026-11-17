@@ -14,9 +14,17 @@ from click.testing import CliRunner
 
 from oyst_cli.main import cli
 from oyst_core.events import EventLog
-from oyst_core.status_summary import build_summary, classify, quarantine_count
+from oyst_core.status_summary import build_summary, classify, firewall_check, quarantine_count
 
 NOW = datetime(2026, 11, 11, 12, 0, 0)
+
+
+@pytest.fixture(autouse=True)
+def _firewall_is_on():
+    """The host's own ufw state must not decide these tests."""
+    ok = {"id": "firewall", "state": "ok", "detail": "ufw is on"}
+    with patch("oyst_core.status_summary.firewall_check", return_value=ok):
+        yield
 
 
 def _scan(job_id: str, *, findings: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
@@ -194,7 +202,7 @@ def test_signature_age_uses_file_times_only(tmp_path: Path) -> None:
 
 
 def test_firewall_and_boot_guard_checks(tmp_path: Path) -> None:
-    from oyst_core.status_summary import boot_guard_check, firewall_check
+    from oyst_core.status_summary import boot_guard_check
 
     conf = tmp_path / "ufw.conf"
     assert firewall_check(conf)["state"] == "unknown"

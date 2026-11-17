@@ -3,7 +3,7 @@
 # scripts/smoke-in-container.sh, which this follows). /src is this checkout, /src/uq-src is uQ.
 set -eu
 card=${SMOKE_CARD:?}
-pacman -Syu --noconfirm --needed rust dbus hyprland quickshell qt6-declarative jq ttf-dejavu grim seatd socat gcc pkgconf wayland libxkbcommon libnotify kirigami qqc2-desktop-style >/dev/null
+pacman -Syu --noconfirm --needed rust dbus hyprland quickshell qt6-declarative jq ttf-dejavu grim seatd socat gcc pkgconf wayland libxkbcommon libnotify dbus kirigami qqc2-desktop-style >/dev/null
 id tester >/dev/null 2>&1 || useradd -m -u "${SMOKE_UID:-1000}" tester
 chmod 666 "$card"
 # The widget directory is under /usr/share: the unprivileged shell only reads it.

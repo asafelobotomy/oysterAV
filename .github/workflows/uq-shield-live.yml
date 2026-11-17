@@ -42,7 +42,7 @@ jobs:
       - name: Shield on Hyprland
         run: |
           mkdir -p captures && chmod 777 captures
-          docker run --rm --device "$SMOKE_CARD" -e SMOKE_CARD -e SMOKE_UID="$(id -u)" -e SHIELD_CLICK="${{ vars.SHIELD_CLICK }}" \
+          docker run --rm --device "$SMOKE_CARD" -e SMOKE_CARD -e SMOKE_UID="$(id -u)" -e SHIELD_CLICK="1124 38" \
             -v "$GITHUB_WORKSPACE:/src" archlinux:latest bash /src/scripts/uq-shield-in-container.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
