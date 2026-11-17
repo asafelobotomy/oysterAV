@@ -202,6 +202,9 @@ class UiConfig(BaseModel):
     )
     security_news_max_age_days: int = 14
     theme: UiThemeId = DEFAULT_UI_THEME
+    # One-time marker: configs written before the uQ theme existed had the old
+    # default (Gruvbox Dark Hard) auto-saved; it is moved to "uq" once.
+    theme_migrated: bool = True
     terminal_show_raw: bool = False
 
 

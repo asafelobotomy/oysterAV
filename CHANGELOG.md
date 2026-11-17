@@ -6,7 +6,7 @@ All notable changes to oysterAV are documented here and on each
 
 ### Features
 
-- The window now follows the uQ theme by default: colours come from uQ's `tokens.json` and update live when the uQ theme changes. Gruvbox and System remain as fixed choices in Settings. New installs default to `uQ`; existing configs keep their saved theme (`oyst-cli config set ui.theme uq`).
+- The window now follows the uQ theme by default: colours come from uQ's `tokens.json` and update live when the uQ theme changes. Gruvbox and System remain as fixed choices in Settings. New installs default to `uQ`; existing configs that still have the old auto-saved Gruvbox Dark Hard default are moved to `uQ` once; any other saved choice is kept.
 
 ## 0.4.1 - 2026-11-17
 

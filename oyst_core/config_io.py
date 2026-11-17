@@ -71,6 +71,12 @@ def _migrate_raw_config(raw: dict[str, Any]) -> dict[str, Any]:
         if "clamav_profile" not in scan:
             scan["clamav_profile"] = runtime["clamav_profile"]
         del runtime["clamav_profile"]
+    ui = raw.get("ui")
+    if isinstance(ui, dict) and "theme_migrated" not in ui:
+        # Pre-uQ configs auto-saved the old default; follow uQ from now on.
+        if ui.get("theme", "gruvbox-dark-hard") == "gruvbox-dark-hard":
+            ui["theme"] = "uq"
+        ui["theme_migrated"] = True
     return raw
 
 
@@ -243,5 +249,6 @@ def save_config(config: OysterConfig) -> None:
     )
     lines.append(f"security_news_max_age_days = {int(config.ui.security_news_max_age_days)}")
     lines.append(f"theme = {_toml_str(config.ui.theme)}")
+    lines.append("theme_migrated = true")
     lines.append(f"terminal_show_raw = {'true' if config.ui.terminal_show_raw else 'false'}")
     _atomic_write_text(path, "\n".join(lines) + "\n")

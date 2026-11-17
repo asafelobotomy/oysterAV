@@ -301,3 +301,26 @@ def test_ui_theme_default_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert load_config().firewall.managed_backend == "none"
     with pytest.raises(KeyError, match="firewall.managed_backend"):
         set_config_value("firewall.managed_backend", "iptables")
+
+
+def test_old_default_theme_migrates_to_uq_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg_dir = tmp_path / "config" / "oysterav"
+    cfg_dir.mkdir(parents=True)
+    monkeypatch.setattr("oyst_core.config.config_dir", lambda: cfg_dir)
+    monkeypatch.setattr("oyst_core.config.config_path", lambda: cfg_dir / "config.toml")
+    (cfg_dir / "config.toml").write_text('[ui]\ntheme = "gruvbox-dark-hard"\n')
+    assert load_config().ui.theme == "uq"
+    # An explicit later choice of the old default sticks (marker was written).
+    set_config_value("ui.theme", "gruvbox-dark-hard")
+    assert load_config().ui.theme == "gruvbox-dark-hard"
+
+
+def test_other_saved_theme_is_kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg_dir = tmp_path / "config" / "oysterav"
+    cfg_dir.mkdir(parents=True)
+    monkeypatch.setattr("oyst_core.config.config_dir", lambda: cfg_dir)
+    monkeypatch.setattr("oyst_core.config.config_path", lambda: cfg_dir / "config.toml")
+    (cfg_dir / "config.toml").write_text('[ui]\ntheme = "gruvbox-light-soft"\n')
+    assert load_config().ui.theme == "gruvbox-light-soft"
