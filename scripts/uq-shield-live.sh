@@ -56,7 +56,12 @@ sleep 0.5
 shell_env=(env XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$wl" HYPRLAND_INSTANCE_SIGNATURE="$sig"
     DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp/bus" PATH="$(dirname "$uqctl"):$PATH"
     XDG_STATE_HOME="$tmp/state" QT_QPA_PLATFORM=wayland LC_ALL=C.UTF-8)
-"${shell_env[@]}" qs -p "$root/shell" --no-duplicate >"$tmp/qs.log" 2>&1 &
+# No uqd runs here, so the bar draws uQ's fallback layout (the old switches), which has no Security
+# island; a copy of the shell with the island added to it stands in for a saved default bar.
+cp -r "$root/shell" "$tmp/shell"
+sed -i 's|if (on("status")) end.push({ id: "status", size: null });|end.push({ id: "security", size: null });\n    &|' "$tmp/shell/logic/barlayout.js"
+grep -q '"security", size: null' "$tmp/shell/logic/barlayout.js" || skip "couldn't patch the fallback layout"
+"${shell_env[@]}" qs -p "$tmp/shell" --no-duplicate >"$tmp/qs.log" 2>&1 &
 pids+=($!)
 for _ in $(seq 1 50); do hc layers -j | grep -q uq-bar && break; sleep 0.2; done
 hc layers -j | grep -q uq-bar || fail "the bar never appeared"
