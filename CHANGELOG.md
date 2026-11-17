@@ -2,6 +2,13 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.4.2 - 2026-11-17
+
+### Bug Fixes
+
+- Update signatures always uses oysterAV's own freshclam config and folder, so it no longer fails on the system's root-owned freshclam log
+- The Security page's header and Protection icons are neutral; the Overview icon is the one that shows the state
+
 ## 0.4.1 - 2026-11-17
 
 ### Documentation

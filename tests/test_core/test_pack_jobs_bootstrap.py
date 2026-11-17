@@ -148,19 +148,14 @@ def test_full_bootstrap_skip_install_and_sigs() -> None:
     assert any(s.get("skipped") and s["step"] == "signatures" for s in result["steps"])
 
 
-def test_freshclam_update_via_runtime_conf() -> None:
+def test_freshclam_update_always_uses_the_runtime_conf() -> None:
     from oyst_core.packs.freshclam import FreshclamPack
-    from oyst_core.privileged.runner import CommandResult
 
     pack = FreshclamPack()
     with (
         patch(
             "oyst_core.packs.freshclam.resolve_pack_binary",
             return_value=("/usr/bin/freshclam", "system"),
-        ),
-        patch(
-            "oyst_core.packs.freshclam.freshclam_conf_path",
-            return_value=MagicMock(is_file=lambda: True),
         ),
         patch(
             "oyst_core.packs.freshclam.update_clamav_signatures",
@@ -170,24 +165,6 @@ def test_freshclam_update_via_runtime_conf() -> None:
         ok, msg = pack.update()
     assert ok is True
     assert msg == "sigs"
-
-    with (
-        patch(
-            "oyst_core.packs.freshclam.resolve_pack_binary",
-            return_value=("/usr/bin/freshclam", "system"),
-        ),
-        patch(
-            "oyst_core.packs.freshclam.freshclam_conf_path",
-            return_value=MagicMock(is_file=lambda: False),
-        ),
-        patch(
-            "oyst_core.packs.freshclam.run_command",
-            return_value=CommandResult(0, "ClamAV update process started\n", ""),
-        ),
-    ):
-        ok2, msg2 = pack.update()
-    assert ok2 is True
-    assert "ClamAV" in msg2
 
 
 def test_freshclam_update_not_installed() -> None:
