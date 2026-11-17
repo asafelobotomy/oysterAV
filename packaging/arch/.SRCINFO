@@ -14,6 +14,7 @@ depends = python-gobject
 depends = gtk4
 depends = libadwaita
 depends = polkit
+depends = clamav
 makedepends = python-build
 makedepends = python-installer
 makedepends = python-wheel
