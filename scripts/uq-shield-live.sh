@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The oysterAV bar shield in the real uQ shell on a headless Hyprland (CI: .github/workflows/uq-shield-live.yml).
-# Installs uq/widgets/oysterav-bar under /usr/share/uq/shell/widgets/, with a fake `oyst-cli` that
+# Runs uQ's Security island against a fake `oyst-cli` that
 # reports a warning, then captures the bar, the notification uQ shows, and (when SHIELD_CLICK="X Y"
 # is set) the popup after a click. Needs UQ_ROOT (a uQ checkout with a built uqctl) and UQCTL.
 # Exit 77 when this environment can't run it.

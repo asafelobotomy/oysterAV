@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - uq/widgets/oysterav-bar/**
+      - uq/widgets/oysterav/**
       - scripts/uq-shield-live.sh
       - .github/workflows/uq-shield-live.yml
 
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: asafelobotomy/uq
-          ref: 2a06c819c640972de6e0f6f5af730144d069b388
+          ref: 4dff95f3ba4fc3f7bcba2353e05d509543b3b232
           path: uq-src
           persist-credentials: false
       - name: Load vkms

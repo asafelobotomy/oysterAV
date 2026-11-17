@@ -2,6 +2,18 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.4.1 - 2026-11-17
+
+### Bug Fixes
+
+- The boot-guard check runs in the background with a cached answer, so `status summary --deep` no longer outruns the Security page
+- The Security page's Overview icon is a question mark when the status can't be read, and amber or red when it isn't fine
+- ClamAV is a required dependency of the Arch package
+
+### Other
+
+- The bar shield widget is retired: uQ's own Security island shows the status and sends the notification
+
 ## 0.4.0 - 2026-11-17
 
 ### Documentation

@@ -7,7 +7,6 @@ these files unless uQ is installed; every oysterAV package (Arch, Debian, RPM, t
 | Folder | Installed to | What it adds |
 |---|---|---|
 | `widgets/oysterav/` | `/usr/share/uq/shell/widgets/oysterav/` | A **Security** tile in quick settings: ok / needs attention / threat found, and the last scan time. Click for the reasons, signature age and quarantine count. |
-| `widgets/oysterav-bar/` | `/usr/share/uq/shell/widgets/oysterav-bar/` | A **shield** in the bar (green / amber / red) from the same status as the tile. A click shows why; a notification goes out when the state gets worse. |
 | `pages/oysterav-security/` | `/usr/share/uq/settings/pages/oysterav-security/` | A **Security** page in uQ Settings with seven tabs: Overview, Scans, Quarantine, Schedule, Protection, Preferences, System (below). |
 
 ## The Security page
