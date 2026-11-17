@@ -258,8 +258,11 @@ def is_dark_theme(theme_id: UiThemeId | str) -> bool:
 
 
 def semantic_colors_for(theme_id: UiThemeId | str) -> SemanticColors | None:
-    """Return semantic colors for a Gruvbox theme id, or None for ``system``."""
-    if theme_id == "system":
+    """Return semantic colors for a Gruvbox theme id, or None for ``system``/``uq``.
+
+    The ``uq`` theme is read from uQ's tokens.json (see ``uq_tokens``).
+    """
+    if theme_id in ("system", "uq"):
         return None
     bg0_key = _THEME_BG0.get(theme_id)
     if bg0_key is None:

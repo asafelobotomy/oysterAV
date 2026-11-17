@@ -255,7 +255,7 @@ def test_ui_theme_default_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr("oyst_core.config.config_path", lambda: cfg_dir / "config.toml")
 
     cfg = load_config()
-    assert cfg.ui.theme == "gruvbox-dark-hard"
+    assert cfg.ui.theme == "uq"
 
     set_config_value("ui.theme", "gruvbox-light-soft")
     assert load_config().ui.theme == "gruvbox-light-soft"

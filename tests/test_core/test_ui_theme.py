@@ -17,13 +17,13 @@ from oysterav.gui.theme.palettes import (
 )
 
 
-def test_default_theme_is_gruvbox_dark_hard() -> None:
-    assert DEFAULT_UI_THEME == "gruvbox-dark-hard"
+def test_default_theme_is_uq() -> None:
+    assert DEFAULT_UI_THEME == "uq"
 
 
 def test_all_gruvbox_themes_have_required_semantic_keys() -> None:
     for theme_id in UI_THEME_IDS:
-        if theme_id == "system":
+        if theme_id in ("system", "uq"):
             assert semantic_colors_for(theme_id) is None
             continue
         colors = semantic_colors_for(theme_id)

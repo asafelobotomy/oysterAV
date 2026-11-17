@@ -231,7 +231,7 @@ SCHEMA: tuple[dict[str, Any], ...] = (
         "kind": "choice",
         "choices": list(UI_THEME_IDS),
         "label": "Colour theme",
-        "help": "The oysterAV window only; uQ Settings follows uQ.",
+        "help": "uQ follows the active uQ theme live; the others are fixed.",
     },
 )
 

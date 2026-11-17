@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from oysterav.gui.theme.manager import apply_theme as apply_theme
     from oysterav.gui.theme.manager import current_theme as current_theme
     from oysterav.gui.theme.manager import install_app_stylesheet as install_app_stylesheet
+    from oysterav.gui.theme.manager import watch_uq_theme as watch_uq_theme
 
 DEFAULT_THEME = DEFAULT_UI_THEME
 THEME_IDS = UI_THEME_IDS
@@ -38,7 +39,7 @@ def theme_display_name(theme_id: str) -> str:
 
 def __getattr__(name: str) -> Any:
     """Lazy-load GTK-backed manager APIs so palette/CSS tests need no display."""
-    if name in ("apply_theme", "current_theme", "install_app_stylesheet"):
+    if name in ("apply_theme", "current_theme", "install_app_stylesheet", "watch_uq_theme"):
         from oysterav.gui.theme import manager as _manager
 
         return getattr(_manager, name)
@@ -66,4 +67,5 @@ __all__ = [
     "semantic_as_dict",
     "semantic_colors_for",
     "theme_display_name",
+    "watch_uq_theme",
 ]

@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Literal
 
 UiThemeId = Literal[
+    "uq",
     "system",
     "gruvbox-dark-hard",
     "gruvbox-dark-medium",
@@ -18,9 +19,10 @@ UiThemeId = Literal[
     "gruvbox-light-soft",
 ]
 
-DEFAULT_UI_THEME: UiThemeId = "gruvbox-dark-hard"
+DEFAULT_UI_THEME: UiThemeId = "uq"
 
 UI_THEME_IDS: tuple[UiThemeId, ...] = (
+    "uq",
     "system",
     "gruvbox-dark-hard",
     "gruvbox-dark-medium",
@@ -33,6 +35,7 @@ UI_THEME_IDS: tuple[UiThemeId, ...] = (
 UI_THEME_ID_SET: frozenset[str] = frozenset(UI_THEME_IDS)
 
 UI_THEME_LABELS: dict[UiThemeId, str] = {
+    "uq": "uQ (follows the uQ theme)",
     "system": "System (Adwaita)",
     "gruvbox-dark-hard": "Gruvbox Dark Hard",
     "gruvbox-dark-medium": "Gruvbox Dark Medium",

@@ -18,7 +18,7 @@ from oyst_core.serve import ensure_rpc_server
 from oysterav.gui.app_quit import confirm_quit_if_busy, present_startup_error
 from oysterav.gui.rpc_actions import request_updates_check
 from oysterav.gui.tray import OysterTray, create_tray
-from oysterav.gui.theme import apply_theme
+from oysterav.gui.theme import apply_theme, watch_uq_theme
 from oysterav.gui.widgets import (
     DashboardPage,
     QuarantinePage,
@@ -75,6 +75,7 @@ class OysterApp(Adw.Application):
     def do_activate(self) -> None:
         cfg = load_config()
         apply_theme(cfg.ui.theme)
+        watch_uq_theme()
         install_default_app_icon()
         try:
             self._ensure_serve()
