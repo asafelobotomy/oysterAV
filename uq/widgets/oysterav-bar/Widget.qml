@@ -108,21 +108,17 @@ Item {
         return out;
     }
 
+    // The popup gets the widget's own `ctx` (set before the widget loads): the `ctx` the shell hands
+    // a popup arrives after its content is built and was still null when the text Loader looked.
     property Component popup: Component {
         Item {
-            property var ctx
             implicitWidth: 280
             implicitHeight: 20 * widget.detailLines().length + 16
-            Component.onCompleted: console.warn("DBG popup ctx=" + (ctx ? "set" : "null") + " size=" + width + "x" + height)
             Loader {
-                id: block
                 anchors.fill: parent
                 anchors.margins: 8
-                sourceComponent: ctx ? ctx.UqText : null
-                onLoaded: {
-                    item.text = Qt.binding(function () { return widget.detailLines().join("\n"); });
-                    console.warn("DBG text loaded " + item.width + "x" + item.height + " '" + item.text + "' vis=" + item.visible + " color=" + item.color);
-                }
+                sourceComponent: widget.ctx ? widget.ctx.UqText : null
+                onLoaded: item.text = Qt.binding(function () { return widget.detailLines().join("\n"); })
             }
         }
     }

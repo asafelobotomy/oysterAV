@@ -86,5 +86,5 @@ if [ -n "${SHIELD_CLICK:-}" ]; then
     sleep 2
     shot "$cap/shield-2-popup.png"
 fi
-grep -E "DBG|oysterav" "$tmp/qs.log" | head -20
+grep -iE "oysterav" "$tmp/qs.log" | head -10
 echo "ok: captures in $cap"
