@@ -2,23 +2,16 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
-## Unreleased
-
-### Features
-
-- The window now follows the uQ theme by default: colours come from uQ's `tokens.json` and update live when the uQ theme changes. Gruvbox and System remain as fixed choices in Settings. New installs default to `uQ`; existing configs that still have the old auto-saved Gruvbox Dark Hard default are moved to `uQ` once; any other saved choice is kept.
-
 ## 0.4.1 - 2026-11-17
 
-### Bug Fixes
+### Documentation
 
-- The boot-guard check runs in the background with a cached answer, so `status summary --deep` no longer outruns the Security page
-- The Security page's Overview icon is a question mark when the status can't be read, and amber or red when it isn't fine
-- ClamAV is a required dependency of the Arch package
+- *(changelog)* V0.4.0
+
 
 ### Other
 
-- The bar shield widget is retired: uQ's own Security island shows the status and sends the notification
+- Release 0.4.1: faster status, clamav dependency, bar widget retired (#59)
 
 ## 0.4.0 - 2026-11-17
 
