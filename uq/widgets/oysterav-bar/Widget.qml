@@ -92,47 +92,32 @@ Item {
         onTriggered: widget.refresh()
     }
 
-    // Why the shield has its colour.
+    // Why the shield has its colour: one plain-text block, built the way uQ's widget template does.
+    function detailLines() {
+        if (widget.problem !== "")
+            return [widget.problem];
+        var s = widget.summary;
+        if (!s)
+            return ["Checking…"];
+        var out = (s.reasons || []).map(function (r) { return String(r); });
+        if (out.length === 0)
+            out.push("Protected: no open findings, signatures current.");
+        (s.checks || []).forEach(function (c) {
+            out.push(String(c.id).replace("_", " ") + ": " + String(c.state));
+        });
+        return out;
+    }
+
     property Component popup: Component {
         Item {
-            id: detail
-
             property var ctx
-            readonly property var lines: {
-                if (widget.problem !== "")
-                    return [widget.problem];
-                var s = widget.summary;
-                if (!s)
-                    return ["Checking…"];
-                var out = (s.reasons || []).map(function (r) { return String(r); });
-                if (out.length === 0)
-                    out.push("Protected: no open findings, signatures current.");
-                (s.checks || []).forEach(function (c) {
-                    out.push(String(c.id).replace("_", " ") + ": " + String(c.state));
-                });
-                return out;
-            }
-
-            implicitWidth: 260
-            implicitHeight: column.implicitHeight + 16
-
-            Column {
-                id: column
+            implicitWidth: 280
+            implicitHeight: 20 * widget.detailLines().length + 16
+            Loader {
                 anchors.fill: parent
                 anchors.margins: 8
-                spacing: 4
-                Repeater {
-                    model: detail.lines
-                    delegate: Loader {
-                        required property var modelData
-                        width: column.width
-                        sourceComponent: detail.ctx ? detail.ctx.UqText : null
-                        onLoaded: {
-                            item.text = modelData;
-                            item.width = Qt.binding(function () { return column.width; });
-                        }
-                    }
-                }
+                sourceComponent: ctx ? ctx.UqText : null
+                onLoaded: item.text = Qt.binding(function () { return widget.detailLines().join("\n"); })
             }
         }
     }
