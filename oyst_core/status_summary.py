@@ -31,7 +31,11 @@ def firewall_check(conf: Path = UFW_CONF) -> dict[str, Any]:
     try:
         text = conf.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return {"id": "firewall", "state": "unknown", "detail": "ufw is not installed or not readable"}
+        return {
+            "id": "firewall",
+            "state": "unknown",
+            "detail": "ufw is not installed or not readable",
+        }
     on = any(line.strip().upper() == "ENABLED=YES" for line in text.splitlines())
     return {
         "id": "firewall",
@@ -46,13 +50,21 @@ def boot_guard_check(script: Path = BOOT_GUARD, timeout: float = 10.0) -> dict[s
     Runs a subprocess, so it is only used for `status summary --deep`.
     """
     if not script.is_file() or shutil.which("objcopy") is None:
-        return {"id": "boot_guard", "state": "unknown", "detail": "Bindle's boot-guard is not installed"}
+        return {
+            "id": "boot_guard",
+            "state": "unknown",
+            "detail": "Bindle's boot-guard is not installed",
+        }
     try:
         done = subprocess.run(  # noqa: S603
             [str(script)], capture_output=True, text=True, timeout=timeout, check=False
         )
     except (OSError, subprocess.SubprocessError):
-        return {"id": "boot_guard", "state": "unknown", "detail": "the boot-guard check could not run"}
+        return {
+            "id": "boot_guard",
+            "state": "unknown",
+            "detail": "the boot-guard check could not run",
+        }
     out = (done.stdout + done.stderr).strip()
     if out:
         return {"id": "boot_guard", "state": "warning", "detail": out.splitlines()[0][:200]}

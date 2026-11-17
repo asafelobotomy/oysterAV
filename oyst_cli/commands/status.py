@@ -61,7 +61,9 @@ Examples:
   oyst-cli status summary
 """,
 )
-@click.option("--deep", is_flag=True, help="Also run the checks that start a command (Bindle's boot-guard)")
+@click.option(
+    "--deep", is_flag=True, help="Also run the checks that start a command (Bindle's boot-guard)"
+)
 @json_option
 def status_summary_cmd(deep: bool, json_mode: bool) -> None:
     """Cheap ok/warning/threat summary; never scans or probes packs."""
