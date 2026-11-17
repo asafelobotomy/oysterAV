@@ -4,11 +4,20 @@ All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
 ## 0.4.0 - 2026-11-17
 
-### Features
+### Documentation
 
-- `oyst-cli status summary` now includes the firewall (ufw) and, with `--deep`, Bindle's boot-guard check; a failing check turns the state to "needs attention"
-- A security shield in uQ's bar (green, amber, red) with a popup of the reasons, and a notification when the state gets worse
-- Live check that runs the shield in the real uQ shell on a headless Hyprland
+- *(changelog)* V0.3.0
+
+
+### Other
+
+- Document the contract apps that save files rely on (#54)
+
+- Pin the 0.3.0 Arch source sum (#55)
+
+- Security summary covers firewall and boot-guard; add bar shield with notifications (#56)
+
+- Release 0.4.0 (#57)
 
 ## 0.3.0 - 2026-11-16
 
