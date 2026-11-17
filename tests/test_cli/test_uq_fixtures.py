@@ -29,7 +29,7 @@ WHEN = "2026-11-16T09:30:00"
 
 # fixture file -> the oyst-cli arguments it records.
 COMMANDS: dict[str, list[str]] = {
-    "summary.json": ["status", "summary", "--json"],
+    "summary.json": ["status", "summary", "--deep", "--json"],
     "job.json": ["job", "status", "--json"],
     "history.json": ["history", "--limit", "20", "--json"],
     "quarantine.json": ["quarantine", "list", "--json"],

@@ -54,6 +54,7 @@ EOF
 
   # uQ integration (inert without uQ): uq/README.md lists what each file adds.
   install -Dm644 -t "$pkgdir/usr/share/uq/shell/widgets/oysterav" uq/widgets/oysterav/*
+  install -Dm644 -t "$pkgdir/usr/share/uq/shell/widgets/oysterav-bar" uq/widgets/oysterav-bar/*
   install -Dm644 -t "$pkgdir/usr/share/uq/settings/pages/oysterav-security" \
     uq/pages/oysterav-security/*
 

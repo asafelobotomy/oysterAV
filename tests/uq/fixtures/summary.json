@@ -14,5 +14,17 @@
   "open_findings": 1,
   "signature_age_hours": null,
   "signatures_stale": true,
-  "quarantine_count": 1
+  "quarantine_count": 1,
+  "checks": [
+    {
+      "id": "firewall",
+      "state": "ok",
+      "detail": "ufw is on"
+    },
+    {
+      "id": "boot_guard",
+      "state": "ok",
+      "detail": "boot images match the installed kernels"
+    }
+  ]
 }

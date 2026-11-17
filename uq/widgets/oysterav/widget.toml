@@ -11,10 +11,11 @@ order = 60
 [requires]
 bins = ["oyst-cli"]
 
-# Reads local state only (last scan row, signature file times, quarantine count):
+# Reads local state (last scan row, signature file times, quarantine count, ufw.conf) and runs
+# Bindle's boot-guard check if present:
 # it never starts a scan, probes scanners or asks for a password.
 [[command]]
 id = "summary"
-argv = ["/usr/bin/oyst-cli", "status", "summary", "--json"]
+argv = ["/usr/bin/oyst-cli", "status", "summary", "--deep", "--json"]
 output = "json"
-timeout_ms = 5000
+timeout_ms = 15000

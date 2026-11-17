@@ -8,7 +8,9 @@ poll it every few seconds.
 
 from __future__ import annotations
 
+import shutil
 import sqlite3
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -19,6 +21,54 @@ from oyst_core.health import SIGNATURE_STALE_HOURS
 SummaryState = Literal["ok", "warning", "threat"]
 
 SUMMARY_SCHEMA = 1
+
+UFW_CONF = Path("/etc/ufw/ufw.conf")
+BOOT_GUARD = Path("/usr/local/libexec/bindle/boot-guard-check")
+
+
+def firewall_check(conf: Path = UFW_CONF) -> dict[str, Any]:
+    """ufw's on/off state from its config file; never runs ufw (that needs root)."""
+    try:
+        text = conf.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {
+            "id": "firewall",
+            "state": "unknown",
+            "detail": "ufw is not installed or not readable",
+        }
+    on = any(line.strip().upper() == "ENABLED=YES" for line in text.splitlines())
+    return {
+        "id": "firewall",
+        "state": "ok" if on else "warning",
+        "detail": "ufw is on" if on else "ufw is installed but turned off",
+    }
+
+
+def boot_guard_check(script: Path = BOOT_GUARD, timeout: float = 10.0) -> dict[str, Any]:
+    """Bindle's boot-guard: warnings from its check script mean a boot image is stale.
+
+    Runs a subprocess, so it is only used for `status summary --deep`.
+    """
+    if not script.is_file() or shutil.which("objcopy") is None:
+        return {
+            "id": "boot_guard",
+            "state": "unknown",
+            "detail": "Bindle's boot-guard is not installed",
+        }
+    try:
+        done = subprocess.run(  # noqa: S603
+            [str(script)], capture_output=True, text=True, timeout=timeout, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {
+            "id": "boot_guard",
+            "state": "unknown",
+            "detail": "the boot-guard check could not run",
+        }
+    out = (done.stdout + done.stderr).strip()
+    if out:
+        return {"id": "boot_guard", "state": "warning", "detail": out.splitlines()[0][:200]}
+    return {"id": "boot_guard", "state": "ok", "detail": "boot images match the installed kernels"}
 
 
 def quarantine_count(vault_dir: Path) -> int:
@@ -95,14 +145,25 @@ def build_summary(
     vault_dir: Path | None = None,
     signature_age_hours: float | None | Literal["probe"] = "probe",
     now: datetime | None = None,
+    deep: bool = False,
+    checks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """The summary dict; arguments exist for tests."""
+    """The summary dict; arguments exist for tests. `deep` adds the checks that run a command."""
     events = events or EventLog()
     now = now or datetime.now()
     rows = events.history(limit=1)
     last = rows[0] if rows else None
     sig = _signature_age_hours() if signature_age_hours == "probe" else signature_age_hours
     state, reasons = classify(last_scan=last, signature_age_hours=sig)
+    if checks is None:
+        checks = [firewall_check()]
+        if deep:
+            checks.append(boot_guard_check())
+    for check in checks:
+        if check["state"] == "warning":
+            reasons.append(str(check["detail"]))
+            if state == "ok":
+                state = "warning"
     last_at = str(last["finished_at"] or last["started_at"]) if last else None
     return {
         "schema": SUMMARY_SCHEMA,
@@ -118,4 +179,5 @@ def build_summary(
         "signature_age_hours": None if sig is None else round(sig, 1),
         "signatures_stale": sig is None or sig > SIGNATURE_STALE_HOURS,
         "quarantine_count": quarantine_count(vault_dir or _vault_dir()),
+        "checks": checks,
     }

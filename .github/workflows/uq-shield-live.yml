@@ -1,0 +1,52 @@
+name: uQ bar shield (live)
+
+# Runs the bar shield in the real uQ shell on a headless Hyprland (vkms gives it a card) and keeps
+# screenshots. Not a gate: it exists to look at the widget in the real bar.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - uq/widgets/oysterav-bar/**
+      - scripts/uq-shield-live.sh
+      - .github/workflows/uq-shield-live.yml
+
+permissions:
+  contents: read
+
+jobs:
+  shield:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: asafelobotomy/uq
+          ref: a0b8fe8fadc8beedb8bb3036ffeb71291921cafa
+          path: uq-src
+          persist-credentials: false
+      - name: Load vkms
+        run: |
+          sudo modprobe vkms 2>/dev/null || {
+            sudo apt-get update -q && sudo apt-get install -y -q "linux-modules-extra-$(uname -r)" && sudo modprobe vkms
+          }
+          card=""
+          for c in /sys/class/drm/card*; do
+            case "${c##*/}" in *-*) continue ;; esac
+            [ "$(basename "$(readlink -f "$c/device")")" = vkms ] && card=/dev/dri/${c##*/}
+          done
+          [ -n "$card" ] || { echo "::error::no vkms card"; exit 1; }
+          echo "SMOKE_CARD=$card" >> "$GITHUB_ENV"
+      - name: Shield on Hyprland
+        run: |
+          mkdir -p captures && chmod 777 captures
+          docker run --rm --device "$SMOKE_CARD" -e SMOKE_CARD -e SMOKE_UID="$(id -u)" -e SHIELD_CLICK="1124 38" \
+            -v "$GITHUB_WORKSPACE:/src" archlinux:latest bash /src/scripts/uq-shield-in-container.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: shield-captures
+          path: captures/
+          if-no-files-found: ignore
