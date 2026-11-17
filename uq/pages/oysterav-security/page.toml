@@ -17,6 +17,11 @@ qml = "Page.qml"
 keywords = ["oysterav", "antivirus", "virus", "malware", "clamav", "scan", "quarantine", "rootkit", "firewall", "signatures"]
 
 [[setting]]
+id = "setup"
+label = "First-time setup"
+keywords = ["first run", "wizard", "get started", "install scanners", "hardening", "firewall"]
+
+[[setting]]
 id = "status"
 label = "Security status"
 keywords = ["threat", "signatures", "definitions", "protected"]
@@ -70,6 +75,13 @@ id = "summary"
 argv = ["/usr/bin/oyst-cli", "status", "summary", "--deep", "--json"]
 output = "json"
 timeout_ms = 15000
+
+# First-time setup state; it checks which scanners are installed, so it takes a moment.
+[[command]]
+id = "setup-status"
+argv = ["/usr/bin/oyst-cli", "setup", "status", "--json"]
+output = "json"
+timeout_ms = 60000
 
 [[command]]
 id = "job"
@@ -187,6 +199,38 @@ argv = ["/usr/bin/oyst-cli", "services", "set", "--dry-run", "--json"]
 output = "json"
 timeout_ms = 20000
 args = [{ name = "service", pattern = '^(clamd|clamonacc|freshclam-timer|fail2ban|maldet-monitor|schedule-linger)$' }, { name = "state", pattern = '^(on|off)$' }]
+
+# ---- First-time setup ---------------------------------------------------------------------------
+# The same guided setup oysterAV's window runs (`oyst-cli setup run`): scanners, the daily scan timer,
+# runtime bootstrap, and, in the recommended form, host hardening and the firewall. What needs root goes
+# through oysterAV's polkit helper. The basic form leaves hardening and the firewall alone.
+[[command]]
+id = "preview-setup"
+argv = ["/usr/bin/oyst-cli", "setup", "run", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+
+[[command]]
+id = "preview-setup-basic"
+argv = ["/usr/bin/oyst-cli", "setup", "run", "--skip-harden", "--no-enable-firewall", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+
+[[command]]
+id = "setup-run"
+argv = ["/usr/bin/oyst-cli", "setup", "run", "--confirm", "--json"]
+output = "json"
+timeout_ms = 600000
+confirm = "Run the first-time setup? It installs the scanners, applies host hardening and turns the firewall on, and asks for your password."
+preview = "preview-setup"
+
+[[command]]
+id = "setup-run-basic"
+argv = ["/usr/bin/oyst-cli", "setup", "run", "--skip-harden", "--no-enable-firewall", "--confirm", "--json"]
+output = "json"
+timeout_ms = 600000
+confirm = "Run the basic first-time setup? It installs the scanners and the scan timer, and asks for your password. Hardening and the firewall stay as they are."
+preview = "preview-setup-basic"
 
 # ---- Scans ----------------------------------------------------------------------------------
 # Quick (ClamAV) or full (ClamAV and maldet) on one folder, as you; quarantines nothing.

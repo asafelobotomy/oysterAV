@@ -163,7 +163,7 @@ function bytesText(n) {
 function parseSummary(result) {
     var env = envelope(result);
     if (!env.ok || !isObject(env.output))
-        return { ok: false, problem: env.ok ? "oysterAV printed no status." : env.error, state: "", title: "Status unavailable", reasons: [], scanning: false, lastScan: "never", sigText: "", sigStale: false, quarantined: 0, open: 0 };
+        return { ok: false, problem: env.ok ? "oysterAV printed no status." : env.error, state: "", title: "Status unavailable", reasons: [], scanning: false, lastScan: "never", sigText: "", sigStale: false, quarantined: 0, open: 0, setupDone: true };
     var d = env.output;
     var state = d.state === "ok" || d.state === "threat" ? d.state : "warning";
     var reasons = Array.isArray(d.reasons) ? d.reasons.slice(0, 20).map(clip) : [];
@@ -178,8 +178,46 @@ function parseSummary(result) {
         sigText: d.signature_age_hours === null || d.signature_age_hours === undefined ? "missing" : ageText(d.signature_age_hours),
         sigStale: d.signatures_stale === true,
         quarantined: Number(d.quarantine_count) || 0,
-        open: Number(d.open_findings) || 0
+        open: Number(d.open_findings) || 0,
+        // Only an explicit false gates the page: an older oyst-cli that doesn't say is taken as set up.
+        setupDone: d.setup_completed !== false
     };
+}
+
+/// `setup status --json`: {ok, problem, completed, needsAttention, lines}; lines say what is still open, in plain words.
+function parseSetup(result) {
+    var env = envelope(result);
+    if (!env.ok || !isObject(env.output))
+        return { ok: false, problem: env.ok ? "oysterAV printed no setup state." : env.error, completed: false, needsAttention: true, lines: [] };
+    var d = env.output;
+    var lines = [];
+    var req = Array.isArray(d.missing_required) ? d.missing_required.slice(0, 20).map(clip) : [];
+    if (req.length > 0)
+        lines.push("Scanners to install: " + req.join(", "));
+    if (d.missing_signatures === true)
+        lines.push("Virus signatures aren't downloaded yet.");
+    if (d.helper_missing === true)
+        lines.push("oysterAV's password helper isn't installed or is out of date.");
+    if (d.install_mismatch === true)
+        lines.push("Setup was run for a different install of oysterAV.");
+    if (d.completed !== true)
+        lines.unshift("First-time setup hasn't been run.");
+    return { ok: true, problem: "", completed: d.completed === true, needsAttention: d.needs_attention !== false, lines: lines };
+}
+
+/// What a finished setup run says: steps that failed are named, since oysterAV leaves setup open then.
+function setupOutcome(result) {
+    var env = envelope(result);
+    if (env.cancelled)
+        return null;
+    var out = isObject(env.output) ? env.output : {};
+    if (!env.ok && !Array.isArray(out.steps))
+        return { message: env.error, failed: true };
+    var steps = Array.isArray(out.steps) ? out.steps : [];
+    var bad = steps.filter(function (s) { return isObject(s) && s.ok === false && s.skipped !== true; }).slice(0, 6).map(function (s) { return clip(s.step || "a step") + (s.message ? " (" + clip(s.message) + ")" : ""); });
+    if (out.completed === true)
+        return { message: "Setup is complete.", failed: false };
+    return { message: bad.length > 0 ? "Setup isn't finished: " + bad.join("; ") + "." : "Setup isn't finished.", failed: true };
 }
 
 function summaryLine(s) {

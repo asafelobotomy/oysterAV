@@ -70,6 +70,9 @@ Item {
     function answers() {
         return {
             summary: summary(),
+            "setup-status": ok(Object.assign(fixture("setup-status.json"), { completed: true, needs_attention: false, missing_required: [], missing_signatures: false, helper_missing: false })),
+            "setup-run": ok({ ok: true, completed: true, steps: [] }),
+            "setup-run-basic": ok({ ok: true, completed: true, steps: [] }),
             job: ok(fixture("job.json")),
             history: ok(fixture("history.json")),
             "quarantine-list": ok(fixture("quarantine.json")),
@@ -106,7 +109,7 @@ Item {
     FakeContext {
         id: fake
         commands: root.answers()
-        confirmed: ["quarantine-add", "quarantine-restore", "quarantine-delete", "quarantine-reconcile", "service-set", "rootkit-check", "schedule-disable", "schedule-run"]
+        confirmed: ["quarantine-add", "quarantine-restore", "quarantine-delete", "quarantine-reconcile", "service-set", "rootkit-check", "schedule-disable", "schedule-run", "setup-run", "setup-run-basic"]
         events: ({
             "scan-folder": root.threatEvents(),
             "rootkit-check": root.cleanEvents()

@@ -1,0 +1,26 @@
+{
+  "recipe": "setup",
+  "title": "Auto-Install",
+  "summary": "Administrator authentication is required once to install security packs and apply recommended host hardenings.",
+  "needs_elevation": true,
+  "privileged": [
+    {
+      "id": "packs",
+      "label": "Install missing required and recommended packs",
+      "priority": 10
+    }
+  ],
+  "local": [
+    {
+      "id": "schedule",
+      "label": "Install daily scheduled scan timer",
+      "priority": 110
+    },
+    {
+      "id": "bootstrap",
+      "label": "Runtime / maintenance bootstrap",
+      "priority": 111
+    }
+  ],
+  "body": "Administrator authentication is required once to install security packs and apply recommended host hardenings.\n\nAdministrator authentication is required once for:\n  \u2022 Install missing required and recommended packs\n\nThen continues without further password prompts for:\n  \u2022 Install daily scheduled scan timer\n  \u2022 Runtime / maintenance bootstrap\n\nYou will not be asked again until this action finishes."
+}

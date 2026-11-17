@@ -139,6 +139,13 @@ def _signature_age_hours() -> float | None:
     return FreshclamPack().signature_age_hours()
 
 
+def _setup_completed() -> bool:
+    """Whether first-time setup has been marked complete (config only; no pack probing)."""
+    from oyst_core.config import load_config
+
+    return bool(load_config().setup.completed)
+
+
 def _vault_dir() -> Path:
     from oyst_core.config import load_config
 
@@ -193,6 +200,7 @@ def build_summary(
     now: datetime | None = None,
     deep: bool = False,
     checks: list[dict[str, Any]] | None = None,
+    setup_completed: bool | None = None,
 ) -> dict[str, Any]:
     """The summary dict; arguments exist for tests. `deep` adds the checks that run a command."""
     events = events or EventLog()
@@ -226,4 +234,5 @@ def build_summary(
         "signatures_stale": sig is None or sig > SIGNATURE_STALE_HOURS,
         "quarantine_count": quarantine_count(vault_dir or _vault_dir()),
         "checks": checks,
+        "setup_completed": _setup_completed() if setup_completed is None else setup_completed,
     }

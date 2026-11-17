@@ -1,0 +1,21 @@
+{
+  "completed": false,
+  "completed_at": null,
+  "skipped_steps": [],
+  "needs_attention": true,
+  "missing_required": [
+    "clamav",
+    "freshclam"
+  ],
+  "missing_recommended": [
+    "clamonacc",
+    "rkhunter",
+    "chkrootkit",
+    "lynis",
+    "firewall"
+  ],
+  "missing_signatures": false,
+  "helper_missing": true,
+  "install_mismatch": false,
+  "recommended_action": "oyst-cli setup run"
+}
