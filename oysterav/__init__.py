@@ -1,3 +1,3 @@
 """oysterAV GTK4 GUI — thin client over oyst-cli."""
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"

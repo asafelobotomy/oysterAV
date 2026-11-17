@@ -8,9 +8,11 @@ poll it every few seconds.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -44,10 +46,29 @@ def firewall_check(conf: Path = UFW_CONF) -> dict[str, Any]:
     }
 
 
-def boot_guard_check(script: Path = BOOT_GUARD, timeout: float = 10.0) -> dict[str, Any]:
+BOOT_GUARD_CACHE_HOURS = 6.0
+
+
+def _boot_guard_cache() -> Path:
+    base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(base) / "oysterav" / "boot-guard.txt"
+
+
+def _boot_guard_result(out: str) -> dict[str, Any]:
+    out = out.strip()
+    if out:
+        return {"id": "boot_guard", "state": "warning", "detail": out.splitlines()[0][:200]}
+    return {"id": "boot_guard", "state": "ok", "detail": "boot images match the installed kernels"}
+
+
+def boot_guard_check(
+    script: Path = BOOT_GUARD, cache: Path | None = None, now: float | None = None
+) -> dict[str, Any]:
     """Bindle's boot-guard: warnings from its check script mean a boot image is stale.
 
-    Runs a subprocess, so it is only used for `status summary --deep`.
+    The script can take several seconds (it reads every boot image), far too long for a status
+    bar, so it runs detached and writes its answer to a cache file; the summary reports the cached
+    answer (refreshed after six hours) and says so while there is none yet.
     """
     if not script.is_file() or shutil.which("objcopy") is None:
         return {
@@ -55,20 +76,45 @@ def boot_guard_check(script: Path = BOOT_GUARD, timeout: float = 10.0) -> dict[s
             "state": "unknown",
             "detail": "Bindle's boot-guard is not installed",
         }
+    cache = cache or _boot_guard_cache()
+    now = time.time() if now is None else now
+    cached: dict[str, Any] | None = None
+    fresh = False
     try:
-        done = subprocess.run(  # noqa: S603
-            [str(script)], capture_output=True, text=True, timeout=timeout, check=False
-        )
-    except (OSError, subprocess.SubprocessError):
-        return {
-            "id": "boot_guard",
-            "state": "unknown",
-            "detail": "the boot-guard check could not run",
-        }
-    out = (done.stdout + done.stderr).strip()
-    if out:
-        return {"id": "boot_guard", "state": "warning", "detail": out.splitlines()[0][:200]}
-    return {"id": "boot_guard", "state": "ok", "detail": "boot images match the installed kernels"}
+        cached = _boot_guard_result(cache.read_text(encoding="utf-8", errors="replace"))
+        fresh = now - cache.stat().st_mtime < BOOT_GUARD_CACHE_HOURS * 3600
+    except OSError:
+        pass
+    if not fresh and not cache.with_suffix(".lock").exists():
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            lock = cache.with_suffix(".lock")
+            lock.write_text("", encoding="utf-8")
+            subprocess.Popen(  # noqa: S603
+                [
+                    "/bin/sh",
+                    "-c",
+                    'out=$("$1" 2>&1 | head -n 1); printf %s "$out" >"$2.tmp"'
+                    ' && mv "$2.tmp" "$2"; rm -f "$3"',
+                    "boot-guard",
+                    str(script),
+                    str(cache),
+                    str(lock),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError:
+            pass
+    if cached is not None:
+        return cached
+    return {
+        "id": "boot_guard",
+        "state": "unknown",
+        "detail": "checking the boot images; ask again in a moment",
+    }
 
 
 def quarantine_count(vault_dir: Path) -> int:

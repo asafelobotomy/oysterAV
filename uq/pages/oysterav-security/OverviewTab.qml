@@ -20,12 +20,21 @@ SettingsTab {
         return tab.summary.state === "threat" ? tab.host.errorColor() : tab.host.warningColor();
     }
 
+    // A green shield only when oysterAV says everything is fine; unknown looks unknown.
+    function stateIcon() {
+        if (tab.summary === null || !tab.summary.ok)
+            return "dialog-question";
+        if (tab.summary.state === "ok")
+            return "security-high";
+        return tab.summary.state === "threat" ? "security-low" : "security-medium";
+    }
+
     title: "Overview"
-    iconName: "security-high"
+    iconName: stateIcon()
 
     SettingsCard {
         title: "Security status"
-        iconName: "security-high"
+        iconName: tab.stateIcon()
         help: "Read from oysterAV's last scan, its signature files and the quarantine. Looking never starts a scan."
         wide: true
         Layout.fillWidth: true

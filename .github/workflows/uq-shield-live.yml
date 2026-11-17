@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - uq/widgets/oysterav-bar/**
+      - uq/widgets/oysterav/**
       - scripts/uq-shield-live.sh
       - .github/workflows/uq-shield-live.yml
 
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: asafelobotomy/uq
-          ref: a0b8fe8fadc8beedb8bb3036ffeb71291921cafa
+          ref: 4dff95f3ba4fc3f7bcba2353e05d509543b3b232
           path: uq-src
           persist-credentials: false
       - name: Load vkms
@@ -42,7 +42,7 @@ jobs:
       - name: Shield on Hyprland
         run: |
           mkdir -p captures && chmod 777 captures
-          docker run --rm --device "$SMOKE_CARD" -e SMOKE_CARD -e SMOKE_UID="$(id -u)" -e SHIELD_CLICK="1124 38" \
+          docker run --rm --device "$SMOKE_CARD" -e SMOKE_CARD -e SMOKE_UID="$(id -u)" -e SHIELD_CLICK="1013 38" \
             -v "$GITHUB_WORKSPACE:/src" archlinux:latest bash /src/scripts/uq-shield-in-container.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

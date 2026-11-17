@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The oysterAV bar shield in the real uQ shell on a headless Hyprland (CI: .github/workflows/uq-shield-live.yml).
-# Installs uq/widgets/oysterav-bar under /usr/share/uq/shell/widgets/, with a fake `oyst-cli` that
+# Runs uQ's Security island against a fake `oyst-cli` that
 # reports a warning, then captures the bar, the notification uQ shows, and (when SHIELD_CLICK="X Y"
 # is set) the popup after a click. Needs UQ_ROOT (a uQ checkout with a built uqctl) and UQCTL.
 # Exit 77 when this environment can't run it.
@@ -21,9 +21,8 @@ cleanup() { for p in "${pids[@]}"; do kill "$p" 2>/dev/null; done; wait 2>/dev/n
 trap cleanup EXIT
 fail() { echo "FAIL: $*"; for f in hypr qs; do [ -f "$tmp/$f.log" ] && { echo "--- $f.log"; tail -n 40 "$tmp/$f.log"; }; done; exit 1; }
 
-# The widget is installed under /usr/share/uq/shell/widgets/ and a fake oyst-cli answers with a warning
+# The shield is uQ's own Security island (in the default bar, shown when oyst-cli answers); a fake oyst-cli
 # (uq-shield-in-container.sh does both as root).
-[ -f /usr/share/uq/shell/widgets/oysterav-bar/widget.toml ] || skip "the widget isn't installed under /usr/share"
 [ -x /usr/bin/oyst-cli ] || skip "no (fake) /usr/bin/oyst-cli"
 
 "$root/tests/live/tools/build-uqinput.sh" "$tmp/uqinput" || skip "uqinput didn't build"
@@ -57,7 +56,12 @@ sleep 0.5
 shell_env=(env XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$wl" HYPRLAND_INSTANCE_SIGNATURE="$sig"
     DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp/bus" PATH="$(dirname "$uqctl"):$PATH"
     XDG_STATE_HOME="$tmp/state" QT_QPA_PLATFORM=wayland LC_ALL=C.UTF-8)
-"${shell_env[@]}" qs -p "$root/shell" --no-duplicate >"$tmp/qs.log" 2>&1 &
+# No uqd runs here, so the bar draws uQ's fallback layout (the old switches), which has no Security
+# island; a copy of the shell with the island added to it stands in for a saved default bar.
+cp -r "$root/shell" "$tmp/shell"
+sed -i 's|if (on("status")) end.push({ id: "status", size: null });|end.push({ id: "security", size: null });\n    &|' "$tmp/shell/logic/barlayout.js"
+grep -q '"security", size: null' "$tmp/shell/logic/barlayout.js" || skip "couldn't patch the fallback layout"
+"${shell_env[@]}" qs -p "$tmp/shell" --no-duplicate >"$tmp/qs.log" 2>&1 &
 pids+=($!)
 for _ in $(seq 1 50); do hc layers -j | grep -q uq-bar && break; sleep 0.2; done
 hc layers -j | grep -q uq-bar || fail "the bar never appeared"

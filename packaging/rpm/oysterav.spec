@@ -2,7 +2,7 @@
 # Community GitHub .rpm artifacts remain fpm-built; this .spec is the COPR path.
 
 Name:           oysterav
-Version:        0.4.0
+Version:        0.4.1
 Release:        1%{?dist}
 Summary:        Linux security orchestrator (oyst-cli + GTK4 GUI)
 License:        GPL-3.0-or-later
@@ -60,7 +60,6 @@ install -Dm644 packaging/polkit/io.github.asafelobotomy.policy \
   %{buildroot}%{_datadir}/polkit-1/actions/io.github.asafelobotomy.policy
 # uQ integration (inert without uQ): uq/README.md lists what each file adds.
 install -Dm644 -t %{buildroot}%{_datadir}/uq/shell/widgets/oysterav uq/widgets/oysterav/*
-install -Dm644 -t %{buildroot}%{_datadir}/uq/shell/widgets/oysterav-bar uq/widgets/oysterav-bar/*
 install -Dm644 -t %{buildroot}%{_datadir}/uq/settings/pages/oysterav-security \
   uq/pages/oysterav-security/*
 
@@ -83,7 +82,6 @@ done
 %{_metainfodir}/io.github.asafelobotomy.OysterAV.metainfo.xml
 %{_datadir}/polkit-1/actions/io.github.asafelobotomy.policy
 %{_datadir}/uq/shell/widgets/oysterav/
-%{_datadir}/uq/shell/widgets/oysterav-bar/
 %{_datadir}/uq/settings/pages/oysterav-security/
 %{_datadir}/icons/hicolor/*/apps/oysterav.png
 

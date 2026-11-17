@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -214,11 +215,19 @@ def test_firewall_and_boot_guard_checks(tmp_path: Path) -> None:
     script = tmp_path / "guard"
     script.write_text("#!/bin/sh\necho 'stale boot image' >&2\n")
     script.chmod(0o755)
+    cache = tmp_path / "cache" / "boot-guard.txt"
     with patch("oyst_core.status_summary.shutil.which", return_value="/usr/bin/objcopy"):
-        assert boot_guard_check(script)["state"] == "warning"
-        script.write_text("#!/bin/sh\nexit 0\n")
-        assert boot_guard_check(script)["state"] == "ok"
-    assert boot_guard_check(tmp_path / "missing")["state"] == "unknown"
+        # First ask: nothing cached yet, the check starts in the background.
+        assert boot_guard_check(script, cache)["state"] == "unknown"
+        for _ in range(50):
+            if cache.exists():
+                break
+            time.sleep(0.1)
+        assert boot_guard_check(script, cache)["state"] == "warning"
+        # A fresh cache is used as it is, without running the script again.
+        cache.write_text("")
+        assert boot_guard_check(script, cache)["state"] == "ok"
+    assert boot_guard_check(tmp_path / "missing", cache)["state"] == "unknown"
 
 
 def test_summary_warns_on_a_failing_check() -> None:

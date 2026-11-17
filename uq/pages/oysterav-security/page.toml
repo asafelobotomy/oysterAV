@@ -69,7 +69,7 @@ bins = ["oyst-cli"]
 id = "summary"
 argv = ["/usr/bin/oyst-cli", "status", "summary", "--deep", "--json"]
 output = "json"
-timeout_ms = 5000
+timeout_ms = 15000
 
 [[command]]
 id = "job"
