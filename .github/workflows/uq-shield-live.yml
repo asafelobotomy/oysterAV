@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: asafelobotomy/uq
-          ref: c7289547a700a875c7129cb712af0b0b0a9c05b1
+          ref: 2a06c819c640972de6e0f6f5af730144d069b388
           path: uq-src
           persist-credentials: false
       - name: Load vkms
