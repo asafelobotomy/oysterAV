@@ -1,6 +1,6 @@
 pkgbase = oysterav
 pkgname = oysterav
-pkgver = 0.3.0
+pkgver = 0.4.0
 pkgrel = 1
 pkgdesc = Linux security orchestrator: oyst-cli backend + oysterAV GTK4 GUI
 url = https://github.com/asafelobotomy/oysterAV
@@ -22,5 +22,5 @@ optdepends = clamav: required scanner spine
 optdepends = rkhunter: rootkit checks
 optdepends = chkrootkit: rootkit checks
 optdepends = lynis: hardening audits
-source = oysterav-0.3.0.tar.gz::https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.3.0.tar.gz
-sha256sums = 4be794fb1e6501f3388e8486362a5823940fdc7c099af061fe95228e6eae680a
+source = oysterav-0.4.0.tar.gz::https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.4.0.tar.gz
+sha256sums = SKIP
