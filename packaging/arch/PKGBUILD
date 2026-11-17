@@ -26,7 +26,7 @@ optdepends=(
   'uq: security tile and Settings page in the uQ desktop'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('a3482e84efac5bc7b0100fd50ba3caef84d37f20a3c74553269e7557561309eb')
 
 build() {
   cd "oysterAV-$pkgver"
