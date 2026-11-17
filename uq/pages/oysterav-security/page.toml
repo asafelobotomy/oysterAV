@@ -11,7 +11,7 @@
 uq_api = 3
 id = "oysterav-security"
 name = "Security"
-icon = "security-high"
+icon = "preferences-system-privacy"
 category = "apps"
 qml = "Page.qml"
 keywords = ["oysterav", "antivirus", "virus", "malware", "clamav", "scan", "quarantine", "rootkit", "firewall", "signatures"]

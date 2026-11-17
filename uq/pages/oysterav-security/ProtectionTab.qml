@@ -22,12 +22,12 @@ SettingsTab {
     }
 
     title: "Protection"
-    iconName: "security-high"
+    iconName: "preferences-system-privacy"
     onVisibleChanged: tab.autoload()
 
     SettingsCard {
         title: "Real-time protection"
-        iconName: "security-high"
+        iconName: "preferences-system-privacy"
         help: "Background services that keep this computer protected between scans."
         wide: true
         Layout.fillWidth: true

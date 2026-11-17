@@ -12,7 +12,6 @@ from oyst_core.privileged.runner import run_command
 from oyst_core.runtime.bundles.clamav import (
     clamav_db_dir,
     clamscan_database_args,
-    freshclam_conf_path,
     update_clamav_signatures,
 )
 
@@ -112,13 +111,10 @@ class FreshclamPack(Pack):
         path, _ = resolve_pack_binary("freshclam", "freshclam")
         if not path:
             return False, "freshclam not installed"
-        if freshclam_conf_path().is_file():
-            result = update_clamav_signatures()
-            return bool(result.get("ok")), str(result.get("message", ""))
-        res = run_command([path], timeout=1800)
-        ok = res.returncode == 0
-        msg = res.stdout or res.stderr
-        return ok, msg.strip()
+        # Always oysterAV's own config and signature folder: the system freshclam.conf logs to
+        # /var/log/clamav/freshclam.log, which only the clamav user may write.
+        result = update_clamav_signatures()
+        return bool(result.get("ok")), str(result.get("message", ""))
 
     def status_text(self) -> dict[str, str | float | None]:
         age = self.signature_age_hours()
