@@ -158,7 +158,7 @@ Dashboard “Open Settings” (missing required packs) deep-links to **Security 
 | Scan backend | `config.set scan.backend` | `oyst-cli config set scan.backend auto\|clamd\|clamscan` |
 | Default scan profile | `config.set scan.profile` | `oyst-cli config set scan.profile quick\|…` (Scan tab + CLI default) |
 | Clamonacc enable | Real-time switch → `clamonacc.enable/disable` | Services shows status only (no duplicate toggle) |
-| Theme | `config.set ui.theme` | `oyst-cli config set ui.theme gruvbox-dark-hard\|…\|system` (default: Gruvbox Dark Hard) |
+| Theme | `config.set ui.theme` | `oyst-cli config set ui.theme uq\|gruvbox-dark-hard\|…\|system` (default: `uq`, follows uQ's tokens.json live) |
 | Run at startup | `config.set ui.run_at_startup` | `oyst-cli desktop install-autostart` / `remove-autostart` or `config set ui.run_at_startup` |
 | Icons + app launcher | (GUI auto on start) | `oyst-cli desktop install` / `install-icons` / `install-launcher` |
 | Start minimized | `config.set ui.start_minimized` | `oyst-cli config set ui.start_minimized true` (+ `oysterav --minimized`) |

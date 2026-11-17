@@ -21,7 +21,7 @@ Moved from AGENTS.md. Read before designing or changing GUI/UX behaviour, privil
 
 - oysterAV is a from-scratch successor to deprecated xanadOS Search & Destroy (https://github.com/asafelobotomy/xanadOS-Search_Destroy).
 - Repository license is GPLv3.
-- Default GUI themeing target is Gruvbox Dark Hard via a shared theme/color library.
+- Default GUI theme is "uq": colours come from uQ's `~/.local/state/uq/theme/tokens.json` (live-reloaded); Gruvbox sets and System stay as explicit overrides.
 - Status-bar oysterAV GitHub Release and pack/service update notices take priority over the security-news ticker.
 - Security-news ticker freshness is configurable in Settings (7/14/30 days; default 14).
 - Privileged-helper install refuses to embed a user-writable oysterAV checkout; `oyst_core` must live under a root-owned prefix (distro package or root install), which matters on externally-managed Python distros (e.g. Arch/CachyOS).

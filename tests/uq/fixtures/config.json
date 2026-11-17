@@ -39,7 +39,7 @@
     "ui.run_at_startup": false,
     "ui.start_minimized": false,
     "ui.minimize_to_tray": false,
-    "ui.theme": "gruvbox-dark-hard"
+    "ui.theme": "uq"
   },
   "schema": [
     {
@@ -276,6 +276,7 @@
       "group": "App",
       "kind": "choice",
       "choices": [
+        "uq",
         "system",
         "gruvbox-dark-hard",
         "gruvbox-dark-medium",

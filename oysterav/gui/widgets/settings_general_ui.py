@@ -126,7 +126,7 @@ def build_general_section(page: SettingsPage) -> None:
     appearance = Adw.PreferencesGroup(title="Appearance &amp; desktop")
 
     page.theme_row = combo_row(title="Theme")
-    page.theme_row.set_subtitle("Application colors (default: Gruvbox Dark Hard)")
+    page.theme_row.set_subtitle("Application colors (default: follow the uQ theme)")
     bind_string_combo_row(page.theme_row, THEME_LABELS)
     page.theme_row.connect("notify::selected", lambda *a: on_theme_saved(page, *a))
     appearance.add(page.theme_row)

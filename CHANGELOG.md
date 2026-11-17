@@ -2,6 +2,12 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## Unreleased
+
+### Features
+
+- The window now follows the uQ theme by default: colours come from uQ's `tokens.json` and update live when the uQ theme changes. Gruvbox and System remain as fixed choices in Settings. New installs default to `uQ`; existing configs that still have the old auto-saved Gruvbox Dark Hard default are moved to `uQ` once; any other saved choice is kept.
+
 ## 0.4.1 - 2026-11-17
 
 ### Bug Fixes
