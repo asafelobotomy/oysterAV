@@ -1,0 +1,32 @@
+# oysterAV's shield in uQ's bar: one coloured cell (ok / needs attention / threat). It raises a
+# notification when the state gets worse, and a click shows why. Installed to
+# /usr/share/uq/shell/widgets/oysterav-bar/ by the oysterav package.
+uq_api = 1
+id = "oysterav-bar"
+name = "Security shield"
+slot = "bar"
+qml = "Widget.qml"
+order = 40
+
+[requires]
+bins = ["oyst-cli"]
+
+# `--deep` adds Bindle's boot-guard check to the cheap summary (firewall comes without it).
+[[command]]
+id = "summary"
+argv = ["/usr/bin/oyst-cli", "status", "summary", "--deep", "--json"]
+output = "json"
+timeout_ms = 15000
+
+# Goes to whichever notification server runs (uQ's own, noti-fi, ...). The text is oysterAV's
+# own fixed wording, never a file name or scanner output.
+[[command]]
+id = "notify"
+argv = ["/usr/bin/notify-send", "--app-name=oysterAV", "--icon=security-low", "--urgency"]
+args = [
+  { name = "urgency", pattern = "^(normal|critical)$" },
+  { name = "title", pattern = "^Security: (threat found|needs attention)$" },
+  { name = "body", pattern = "^[A-Za-z0-9][A-Za-z0-9 ,.'()/-]{0,199}$" },
+]
+output = "none"
+timeout_ms = 3000

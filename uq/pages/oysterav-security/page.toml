@@ -67,7 +67,7 @@ bins = ["oyst-cli"]
 # ---- Reads: local state, no scans, no passwords -----------------------------------------
 [[command]]
 id = "summary"
-argv = ["/usr/bin/oyst-cli", "status", "summary", "--json"]
+argv = ["/usr/bin/oyst-cli", "status", "summary", "--deep", "--json"]
 output = "json"
 timeout_ms = 5000
 

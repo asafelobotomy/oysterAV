@@ -61,12 +61,13 @@ Examples:
   oyst-cli status summary
 """,
 )
+@click.option("--deep", is_flag=True, help="Also run the checks that start a command (Bindle's boot-guard)")
 @json_option
-def status_summary_cmd(json_mode: bool) -> None:
+def status_summary_cmd(deep: bool, json_mode: bool) -> None:
     """Cheap ok/warning/threat summary; never scans or probes packs."""
     from oyst_core.status_summary import build_summary
 
-    data = build_summary()
+    data = build_summary(deep=deep)
     if json_mode:
         emit(data, json_mode=True)
         return
@@ -77,6 +78,8 @@ def status_summary_cmd(json_mode: bool) -> None:
     sig = data["signature_age_hours"]
     click.echo(f"Signatures: {'missing' if sig is None else f'{sig:.0f} hours old'}")
     click.echo(f"Quarantined files: {data['quarantine_count']}")
+    for check in data["checks"]:
+        click.echo(f"{check['id']}: {check['state']} ({check['detail']})")
     if data["scanning"]:
         click.echo("A scan is running.")
 

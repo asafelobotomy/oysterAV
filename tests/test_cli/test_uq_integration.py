@@ -22,6 +22,7 @@ from oyst_cli.main import cli
 ROOT = Path(__file__).resolve().parents[2]
 UQ = ROOT / "uq"
 WIDGET = UQ / "widgets" / "oysterav" / "widget.toml"
+BAR = UQ / "widgets" / "oysterav-bar" / "widget.toml"
 PAGE = UQ / "pages" / "oysterav-security" / "page.toml"
 
 # A value each declared argument must accept, by argument name.
@@ -171,6 +172,21 @@ def test_status_summary_is_what_both_use() -> None:
     assert widget["summary"]["argv"][1:3] == ["status", "summary"]
 
 
+def test_bar_shield_reads_the_same_summary_and_notifies_safely() -> None:
+    bar = _manifest(BAR)
+    cmds = {c["id"]: c for c in bar["command"]}
+    assert bar["id"] == BAR.parent.name and bar["slot"] == "bar" and bar["uq_api"] == 1
+    assert (BAR.parent / bar["qml"]).is_file()
+    page = {c["id"]: c for c in _manifest(PAGE)["command"]}
+    assert cmds["summary"]["argv"] == page["summary"]["argv"]
+    argv = cmds["notify"]["argv"]
+    assert argv[0] == "/usr/bin/notify-send" and argv[-1] == "--urgency"
+    title, body = (_pattern(a) for a in cmds["notify"]["args"][1:])
+    assert title.fullmatch("Security: threat found") and not title.fullmatch("Security: -h")
+    assert body.fullmatch("1 unresolved finding in the last scan")
+    assert not body.fullmatch("--help") and not body.fullmatch("line\nbreak")
+
+
 def test_qml_shows_text_only_through_uq_components() -> None:
     banned = re.compile(
         r"(^|[^A-Za-z0-9_.])([A-Za-z_][A-Za-z0-9_]*\.)*(TextEdit|TextInput|Text|Label)\s*\{"
@@ -197,4 +213,6 @@ def test_packages_install_the_uq_folder(path: str) -> None:
     assert "uq/widgets/oysterav/" in text, path
     assert "uq/pages/oysterav-security/" in text, path
     assert "/uq/shell/widgets/oysterav" in text, path
+    assert "uq/widgets/oysterav-bar/" in text, path
+    assert "/uq/shell/widgets/oysterav-bar" in text, path
     assert "/uq/settings/pages/oysterav-security" in text, path

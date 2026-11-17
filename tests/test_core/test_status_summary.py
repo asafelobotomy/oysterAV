@@ -191,3 +191,31 @@ def test_signature_age_uses_file_times_only(tmp_path: Path) -> None:
     ):
         age = status_summary._signature_age_hours()
     assert age == pytest.approx(10.0, abs=0.1)
+
+
+def test_firewall_and_boot_guard_checks(tmp_path: Path) -> None:
+    from oyst_core.status_summary import boot_guard_check, firewall_check
+
+    conf = tmp_path / "ufw.conf"
+    assert firewall_check(conf)["state"] == "unknown"
+    conf.write_text("ENABLED=no\n")
+    assert firewall_check(conf)["state"] == "warning"
+    conf.write_text("# x\nENABLED=yes\n")
+    assert firewall_check(conf)["state"] == "ok"
+
+    script = tmp_path / "guard"
+    script.write_text("#!/bin/sh\necho 'stale boot image' >&2\n")
+    script.chmod(0o755)
+    with patch("oyst_core.status_summary.shutil.which", return_value="/usr/bin/objcopy"):
+        assert boot_guard_check(script)["state"] == "warning"
+        script.write_text("#!/bin/sh\nexit 0\n")
+        assert boot_guard_check(script)["state"] == "ok"
+    assert boot_guard_check(tmp_path / "missing")["state"] == "unknown"
+
+
+def test_summary_warns_on_a_failing_check() -> None:
+    check = {"id": "firewall", "state": "warning", "detail": "ufw is installed but turned off"}
+    data = build_summary(
+        EventLog(), vault_dir=Path("/nonexistent"), signature_age_hours=1.0, now=NOW, checks=[check]
+    )
+    assert data["state"] == "warning" and "ufw is installed but turned off" in data["reasons"]

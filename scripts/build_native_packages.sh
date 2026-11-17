@@ -71,6 +71,7 @@ install -Dm644 packaging/polkit/io.github.asafelobotomy.policy \
 
 echo "==> uQ integration (inert without uQ; see uq/README.md)"
 install -Dm644 -t "$STAGE/usr/share/uq/shell/widgets/oysterav" uq/widgets/oysterav/*
+install -Dm644 -t "$STAGE/usr/share/uq/shell/widgets/oysterav-bar" uq/widgets/oysterav-bar/*
 install -Dm644 -t "$STAGE/usr/share/uq/settings/pages/oysterav-security" \
   uq/pages/oysterav-security/*
 
