@@ -67,21 +67,14 @@ shot() { env XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$wl" grim "$@" 2>/dev/null; 
 hc layers -j | jq -c '.. | objects | select(.namespace? == "uq-bar") | {x,y,w,h}' | head -3 | sed 's/^/bar layer: /'
 
 # The widget loads and runs its summary; the notification should appear within a few seconds.
-sleep 2
-shot "$cap/shield-0-bar.png"
-sleep 14
-shot "$cap/shield-1-bar-and-notification.png"
+# One frame every 1.5 s for 15 s: the widget's own notification shows for a few seconds somewhere
+# in there (it waits for uQ's notification server to take its name).
+for i in $(seq 0 9); do shot "$cap/shield-1-t$(printf %02d $i).png"; sleep 1.5; done
 hc dismissnotify >/dev/null 2>&1   # Hyprland's own "started without start-hyprland" banner
-echo "--- who owns org.freedesktop.Notifications:"
-env DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp/bus" dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetNameOwner string:org.freedesktop.Notifications 2>&1 | tail -2
-echo "--- manual notify-send:"
-env DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp/bus" XDG_RUNTIME_DIR="$rt" timeout 10 notify-send --app-name=oysterAV --icon=security-low --urgency critical "Security: threat found" "1 unresolved finding in the last scan" 2>&1 | tail -3; echo "exit ${PIPESTATUS[0]}"
-sleep 1
-shot "$cap/shield-1b-manual-notification.png"
-echo "--- qs log (notifications)"; grep -i "notif" "$tmp/qs.log" | head -8
-echo "--- notification bus traffic"; grep -E "member=(Notify|GetServerInformation)|string \"(Security|ufw)" "$tmp/notify.log" | head -8; echo "---"
-grep -iE "oysterav|widget" "$tmp/qs.log" | head -10
+grep -iE "notif" "$tmp/qs.log" | head -5
+echo "--- notification bus traffic"; grep -E "member=Notify" -A3 "$tmp/notify.log" | grep -E "member=Notify|string \"(Security|ufw)" | head -6; echo "---"
 grep -qiE "TypeError|ReferenceError" "$tmp/qs.log" && fail "the widget logged errors"
+sleep 8   # let the notification card go before the popup opens under it
 
 if [ -n "${SHIELD_CLICK:-}" ]; then
     mkfifo "$tmp/in"
