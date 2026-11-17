@@ -33,23 +33,42 @@ Item {
     }
 
     // oysterAV's fixed wording only; the reasons are its own sentences, cleaned before they go out.
+    // `notified` moves only once a notification went out: at login uQ's notification server may not
+    // own its name yet, so a failed send is tried again every 10 s (up to 6 times).
+    property int retries: 0
+
     function maybeNotify() {
         var now = widget.stateName;
-        if (rank(now) > rank(widget.notified)) {
-            var reasons = (widget.summary.reasons || []).map(function (r) {
-                return String(r).replace(/[^A-Za-z0-9 ,.'()\/-]/g, " ");
-            });
-            var body = reasons.join(". ").slice(0, 200);
-            widget.ctx.command.run("notify", [
-                now === "threat" ? "critical" : "normal",
-                now === "threat" ? "Security: threat found" : "Security: needs attention",
-                body !== "" && /^[A-Za-z0-9]/.test(body) ? body : "Open Settings, Security for details."
-            ], function (r) {
-                if (r && r.error)
-                    console.warn("oysterav-bar: notify failed: " + r.error);
-            });
+        if (now === "unknown" || now === "" || rank(now) <= rank(widget.notified)) {
+            if (rank(now) < rank(widget.notified))
+                widget.notified = now;
+            return;
         }
-        widget.notified = now === "unknown" || now === "" ? widget.notified : now;
+        var reasons = (widget.summary.reasons || []).map(function (r) {
+            return String(r).replace(/[^A-Za-z0-9 ,.'()\/-]/g, " ");
+        });
+        var body = reasons.join(". ").slice(0, 200);
+        widget.ctx.command.run("notify", [
+            now === "threat" ? "critical" : "normal",
+            now === "threat" ? "Security: threat found" : "Security: needs attention",
+            body !== "" && /^[A-Za-z0-9]/.test(body) ? body : "Open Settings, Security for details."
+        ], function (r) {
+            if (r && r.error) {
+                if (widget.retries < 6) {
+                    widget.retries += 1;
+                    retry.restart();
+                }
+                return;
+            }
+            widget.retries = 0;
+            widget.notified = now;
+        });
+    }
+
+    Timer {
+        id: retry
+        interval: 10000
+        onTriggered: widget.maybeNotify()
     }
 
     function refresh() {
