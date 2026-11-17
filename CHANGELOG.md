@@ -2,6 +2,12 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.4.3 - 2026-11-17
+
+### Other
+
+- Release 0.4.3: signature updates use oysterAV's own freshclam config; neutral page icons (#62)
+
 ## 0.4.2 - 2026-11-17
 
 ### Documentation
