@@ -16,10 +16,10 @@ depends=(
   'gtk4'
   'libadwaita'
   'polkit'
+  'clamav'
 )
 makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling')
 optdepends=(
-  'clamav: required scanner spine'
   'rkhunter: rootkit checks'
   'chkrootkit: rootkit checks'
   'lynis: hardening audits'

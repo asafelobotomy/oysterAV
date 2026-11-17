@@ -219,6 +219,12 @@ def test_firewall_and_boot_guard_checks(tmp_path: Path) -> None:
         script.write_text("#!/bin/sh\nexit 0\n")
         assert boot_guard_check(script)["state"] == "ok"
     assert boot_guard_check(tmp_path / "missing")["state"] == "unknown"
+    # A slow check is skipped, never a reason for the whole summary to time out.
+    script.write_text("#!/bin/sh\nsleep 5\n")
+    with patch("oyst_core.status_summary.shutil.which", return_value="/usr/bin/objcopy"):
+        slow = boot_guard_check(script, timeout=0.2)
+    assert slow["state"] == "unknown"
+    assert "too long" in slow["detail"]
 
 
 def test_summary_warns_on_a_failing_check() -> None:

@@ -44,7 +44,7 @@ def firewall_check(conf: Path = UFW_CONF) -> dict[str, Any]:
     }
 
 
-def boot_guard_check(script: Path = BOOT_GUARD, timeout: float = 10.0) -> dict[str, Any]:
+def boot_guard_check(script: Path = BOOT_GUARD, timeout: float = 3.0) -> dict[str, Any]:
     """Bindle's boot-guard: warnings from its check script mean a boot image is stale.
 
     Runs a subprocess, so it is only used for `status summary --deep`.
@@ -59,6 +59,12 @@ def boot_guard_check(script: Path = BOOT_GUARD, timeout: float = 10.0) -> dict[s
         done = subprocess.run(  # noqa: S603
             [str(script)], capture_output=True, text=True, timeout=timeout, check=False
         )
+    except subprocess.TimeoutExpired:
+        return {
+            "id": "boot_guard",
+            "state": "unknown",
+            "detail": "the boot-guard check took too long and was skipped",
+        }
     except (OSError, subprocess.SubprocessError):
         return {
             "id": "boot_guard",
