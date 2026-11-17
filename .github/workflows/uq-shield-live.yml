@@ -17,6 +17,10 @@ jobs:
   shield:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        state: [ok, warning, threat]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,7 +28,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: asafelobotomy/uq
-          ref: 4dff95f3ba4fc3f7bcba2353e05d509543b3b232
+          ref: 02b8dccb1ac4b02ded689184c0d08cee2977f2f5
           path: uq-src
           persist-credentials: false
       - name: Load vkms
@@ -42,11 +46,11 @@ jobs:
       - name: Shield on Hyprland
         run: |
           mkdir -p captures && chmod 777 captures
-          docker run --rm --device "$SMOKE_CARD" -e SMOKE_CARD -e SMOKE_UID="$(id -u)" -e SHIELD_CLICK="1013 38" \
+          docker run --rm --device "$SMOKE_CARD" -e SMOKE_CARD -e SMOKE_UID="$(id -u)" -e SHIELD_CLICK="1013 38" -e SHIELD_STATE="${{ matrix.state }}" \
             -v "$GITHUB_WORKSPACE:/src" archlinux:latest bash /src/scripts/uq-shield-in-container.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: shield-captures
+          name: shield-captures-${{ matrix.state }}
           path: captures/
           if-no-files-found: ignore

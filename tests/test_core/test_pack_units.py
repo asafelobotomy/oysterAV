@@ -222,6 +222,7 @@ def test_clamonacc_enable_calls_clamd_and_start() -> None:
         patch("oyst_core.packs.clamonacc.set_config_value") as set_cfg,
         patch.object(pack, "_systemd_unit", return_value="clamav-clamonacc"),
         patch.object(pack, "is_running", return_value=True),
+        patch.object(pack, "_onaccess_configured", return_value=(True, "")),
         patch("oyst_core.packs.clamonacc.ClamAVPack.clamd_unit", return_value="clamav-daemon"),
         patch("oyst_core.packs.clamonacc.ClamAVPack._clamd_socket", return_value=None),
         patch(
@@ -238,11 +239,34 @@ def test_clamonacc_enable_calls_clamd_and_start() -> None:
     assert "enabled via clamav-clamonacc" in msg
 
 
+def test_clamonacc_is_not_started_without_its_clamd_settings() -> None:
+    """No watched folder / OnAccessExcludeUname: the unit would only exit and stay failed."""
+    pack = ClamonaccPack()
+    with (
+        patch("oyst_core.packs.clamonacc.set_config_value"),
+        patch.object(pack, "_systemd_unit", return_value="clamav-clamonacc"),
+        patch.object(pack, "is_running", return_value=False),
+        patch.object(pack, "_onaccess_configured", return_value=(False, "set it up first")),
+        patch("oyst_core.packs.clamonacc.ClamAVPack.clamd_unit", return_value="clamav-daemon"),
+        patch("oyst_core.packs.clamonacc.ClamAVPack._clamd_socket", return_value=None),
+        patch(
+            "oyst_core.packs.clamonacc.run_privileged_helper",
+            return_value=CommandResult(0, "", ""),
+        ) as helper,
+    ):
+        ok, msg = pack.enable()
+    assert ok is False
+    assert msg == "set it up first"
+    argv = helper.call_args.args[1]
+    assert not any(a.startswith("--clamonacc-unit") for a in argv)
+
+
 def test_clamonacc_start_uses_enable_stack() -> None:
     pack = ClamonaccPack()
     with (
         patch.object(pack, "_binary", return_value=("/usr/bin/clamonacc", "system")),
         patch.object(pack, "is_running", side_effect=[False, True]),
+        patch.object(pack, "_onaccess_configured", return_value=(True, "")),
         patch.object(pack, "_systemd_unit", return_value="clamav-clamonacc"),
         patch("oyst_core.packs.clamonacc.ClamAVPack.clamd_unit", return_value="clamav-daemon"),
         patch("oyst_core.packs.clamonacc.ClamAVPack._clamd_socket", return_value=None),

@@ -2,6 +2,14 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.4.4 - 2026-11-17
+
+### Bug Fixes
+
+- The "Copy" buttons in dialogs (the end of Auto-Install, schedule, findings) use wl-copy when it is installed, so the text stays on the clipboard after the dialog closes; the Auto-Install dialog copies the whole list of issues
+- Turning on real-time protection no longer leaves a failed `clamav-clamonacc` unit when clamd.conf has no watched folder or OnAccessExcludeUname; it says what is missing instead
+- Commands the GUI and widgets poll every few seconds are no longer written to the terminal transcript
+
 ## 0.4.3 - 2026-11-17
 
 ### Other

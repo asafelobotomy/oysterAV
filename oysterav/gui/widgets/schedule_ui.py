@@ -10,9 +10,10 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.client import OystClient
+from oysterav.gui.clipboard import copy_to_clipboard
 from oysterav.gui.widgets.common import dialog_parent, run_in_thread, show_command_dialog
 
 
@@ -129,8 +130,7 @@ def _prompt_linger_and_apply(
 
     def on_response(_dlg: Adw.MessageDialog, response: str) -> None:
         if response == "copy":
-            clipboard = Gdk.Display.get_default().get_clipboard()
-            clipboard.set(Gdk.ContentProvider.new_for_value(hint))
+            copy_to_clipboard(hint)
             if on_cancel:
                 on_cancel()
         elif response == "enable":

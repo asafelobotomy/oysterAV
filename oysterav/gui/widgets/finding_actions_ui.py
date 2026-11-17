@@ -11,10 +11,11 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gdk", "4.0")
 
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Adw, Gtk  # noqa: E402
 
 from oyst_core.packs.rkhunter_resolve import plan_resolve
 from oyst_core.privilege import PrivilegePlan, build_rkhunter_resolve_plan
+from oysterav.gui.clipboard import copy_to_clipboard
 from oysterav.gui.finding_present import DisplayFinding
 from oysterav.gui.rpc_actions import (
     request_quarantine_add,
@@ -40,12 +41,9 @@ def disabled_label_button(label: str) -> Gtk.Button:
 
 
 def copy_text(text: str, on_status: Callable[[str], None] | None) -> None:
-    display = Gdk.Display.get_default()
-    if display is None:
-        return
-    display.get_clipboard().set(Gdk.ContentProvider.new_for_value(text))
+    ok = copy_to_clipboard(text)
     if on_status:
-        on_status("Copied to clipboard")
+        on_status("Copied to clipboard" if ok else "Couldn't copy to the clipboard")
 
 
 def confirm_quarantine(
