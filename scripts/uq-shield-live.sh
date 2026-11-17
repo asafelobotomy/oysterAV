@@ -71,6 +71,14 @@ sleep 2
 shot "$cap/shield-0-bar.png"
 sleep 3
 shot "$cap/shield-1-bar-and-notification.png"
+hc dismissnotify >/dev/null 2>&1   # Hyprland's own "started without start-hyprland" banner
+echo "--- who owns org.freedesktop.Notifications:"
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp/bus" dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.GetNameOwner string:org.freedesktop.Notifications 2>&1 | tail -2
+echo "--- manual notify-send:"
+env DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp/bus" XDG_RUNTIME_DIR="$rt" timeout 10 notify-send --app-name=oysterAV --icon=security-low --urgency critical "Security: threat found" "1 unresolved finding in the last scan" 2>&1 | tail -3; echo "exit ${PIPESTATUS[0]}"
+sleep 1
+shot "$cap/shield-1b-manual-notification.png"
+echo "--- qs log (notifications)"; grep -i "notif" "$tmp/qs.log" | head -8
 echo "--- notification bus traffic"; grep -E "member=(Notify|GetServerInformation)|string \"(Security|ufw)" "$tmp/notify.log" | head -8; echo "---"
 grep -iE "oysterav|widget" "$tmp/qs.log" | head -10
 grep -qiE "TypeError|ReferenceError|oysterav-bar.*(error|fail)" "$tmp/qs.log" && fail "the widget logged errors"

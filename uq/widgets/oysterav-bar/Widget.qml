@@ -44,7 +44,10 @@ Item {
                 now === "threat" ? "critical" : "normal",
                 now === "threat" ? "Security: threat found" : "Security: needs attention",
                 body !== "" && /^[A-Za-z0-9]/.test(body) ? body : "Open Settings, Security for details."
-            ], function () {});
+            ], function (r) {
+                if (r && r.error)
+                    console.warn("oysterav-bar: notify failed: " + r.error);
+            });
         }
         widget.notified = now === "unknown" || now === "" ? widget.notified : now;
     }
