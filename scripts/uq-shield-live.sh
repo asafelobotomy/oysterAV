@@ -21,9 +21,8 @@ cleanup() { for p in "${pids[@]}"; do kill "$p" 2>/dev/null; done; wait 2>/dev/n
 trap cleanup EXIT
 fail() { echo "FAIL: $*"; for f in hypr qs; do [ -f "$tmp/$f.log" ] && { echo "--- $f.log"; tail -n 40 "$tmp/$f.log"; }; done; exit 1; }
 
-# The widget is installed under /usr/share/uq/shell/widgets/ and a fake oyst-cli answers with a warning
+# The shield is uQ's own Security island (in the default bar, shown when oyst-cli answers); a fake oyst-cli
 # (uq-shield-in-container.sh does both as root).
-[ -f /usr/share/uq/shell/widgets/oysterav-bar/widget.toml ] || skip "the widget isn't installed under /usr/share"
 [ -x /usr/bin/oyst-cli ] || skip "no (fake) /usr/bin/oyst-cli"
 
 "$root/tests/live/tools/build-uqinput.sh" "$tmp/uqinput" || skip "uqinput didn't build"

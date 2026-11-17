@@ -11,8 +11,7 @@ install -d -m 755 /usr/share/uq/shell/widgets/oysterav-bar
 SEATD_VTBOUND=0 seatd -u tester -l error &
 rc=0
 su tester -c "set -e; cd /src/uq-src; cargo build --locked -p uqctl"
-# Install as root (the script writes /usr/share and /usr/bin), then run the rest as tester.
-cp -r /src/uq/widgets/oysterav-bar/. /usr/share/uq/shell/widgets/oysterav-bar/
+# A fake oyst-cli answers with a warning; then the rest runs as tester.
 printf '#!/bin/sh\ncat <<JSON\n{"schema":1,"state":"warning","reasons":["ufw is installed but turned off","virus signatures are 70 hours old"],"scanning":false,"last_scan_at":null,"last_scan_age_hours":null,"open_findings":0,"signature_age_hours":70,"signatures_stale":true,"quarantine_count":0,"checks":[{"id":"firewall","state":"warning","detail":"ufw is installed but turned off"}]}\nJSON\n' >/usr/bin/oyst-cli
 chmod +x /usr/bin/oyst-cli
 su tester -c "set -e; cd /src
