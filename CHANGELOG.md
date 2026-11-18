@@ -2,6 +2,21 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.4.5 - 2026-11-18
+
+### Documentation
+
+- *(changelog)* V0.4.4
+
+
+### Other
+
+- UQ Settings: first-time setup tab, Security tabs wait for it (#64)
+
+- Status summary: report scan progress while a scan runs (#65)
+
+- Release 0.4.5: scan progress in status, first-time setup tab (#66)
+
 ## 0.4.4 - 2026-11-17
 
 ### Documentation
