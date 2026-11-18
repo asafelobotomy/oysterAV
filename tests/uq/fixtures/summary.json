@@ -26,5 +26,6 @@
       "state": "ok",
       "detail": "boot images match the installed kernels"
     }
-  ]
+  ],
+  "setup_completed": true
 }

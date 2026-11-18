@@ -350,3 +350,44 @@ test("helpers: stamp, age, bytes, plural, clip, folderPath", () => {
   assert.equal(logic.folderPath("file:///home/me/My%20Folder"), "/home/me/My Folder");
   assert.equal(logic.folderPath("https://evil"), "");
 });
+
+// ---- First-time setup -------------------------------------------------------------------------------------------------
+
+test("setup: summary gates only on an explicit false", () => {
+  assert.equal(logic.parseSummary(ok({ state: "ok", setup_completed: false })).setupDone, false);
+  assert.equal(logic.parseSummary(ok({ state: "ok", setup_completed: true })).setupDone, true);
+  assert.equal(logic.parseSummary(ok({ state: "ok" })).setupDone, true, "an older oyst-cli doesn't lock the page");
+  assert.equal(logic.parseSummary({ code: 127, error: "not found", output: null }).setupDone, true);
+});
+
+test("setup: parseSetup words what is still open", () => {
+  const s = logic.parseSetup(ok(fixture("setup-status.json")));
+  assert.equal(s.ok, true);
+  assert.equal(s.completed, false);
+  assert.equal(s.needsAttention, true);
+  assert.deepEqual(plain(s.lines), ["First-time setup hasn't been run.", "Scanners to install: clamav, freshclam", "oysterAV's password helper isn't installed or is out of date."]);
+  assert.equal(logic.parseSetup({ code: 1, error: "boom", output: null }).ok, false);
+});
+
+test("setup: outcome names failed steps and says when it is done", () => {
+  assert.equal(logic.setupOutcome({ cancelled: true }), null);
+  assert.deepEqual(plain(logic.setupOutcome(ok({ ok: true, completed: true, steps: [] }))), { message: "Setup is complete.", failed: false });
+  const bad = logic.setupOutcome({ code: 2, error: "exit code 2", output: { ok: false, completed: false, steps: [{ step: "packs", ok: false, message: "pacman failed" }, { step: "schedule", skipped: true }] } });
+  assert.equal(bad.failed, true);
+  assert.equal(bad.message, "Setup isn't finished: packs (pacman failed).");
+});
+
+test("manifest: setup runs ask first and show a plan, and the basic form leaves host changes alone", () => {
+  for (const id of ["setup-run", "setup-run-basic"]) {
+    assert.ok(command(id).confirm, id);
+    assert.ok(command(id).argv.includes("--confirm"), id);
+  }
+  assert.equal(command("setup-run").preview, "preview-setup");
+  assert.equal(command("setup-run-basic").preview, "preview-setup-basic");
+  for (const flag of ["--skip-harden", "--no-enable-firewall"]) {
+    assert.ok(command("setup-run-basic").argv.includes(flag));
+    assert.ok(command("preview-setup-basic").argv.includes(flag));
+  }
+  assert.ok(!command("setup-run").argv.includes("--skip-harden"));
+  assert.deepEqual(plain(command("setup-status").argv.slice(1)), ["setup", "status", "--json"]);
+});

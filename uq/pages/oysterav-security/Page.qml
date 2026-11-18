@@ -19,6 +19,7 @@ SettingsPage {
 
     // What oyst-cli last printed, parsed (Logic.parse*). null until the read has answered.
     property var summary: null
+    property var setup: null
     property var job: ({ active: false, percent: 0, pack: "", message: "", jobId: "" })
     property var history: null
     property var quarantine: null
@@ -96,6 +97,16 @@ SettingsPage {
         page.ctx.command.run(command, [], page.guard(result => {
             page[name] = parse(result);
         }));
+    }
+
+    /// First-time setup hasn't been run: the other tabs stay hidden until it has.
+    readonly property bool setupNeeded: page.summary !== null && page.summary.ok && !page.summary.setupDone
+
+    // The tab shown can be one that has just gone: land on Setup while it is needed, Overview once it is done.
+    onSetupNeededChanged: page.show(page.setupNeeded ? setupTab : overview)
+
+    function loadSetup() {
+        page.load("setup", "setup-status", Logic.parseSetup);
     }
 
     function loadSummary() {
@@ -280,6 +291,7 @@ SettingsPage {
         if (page.ctx && page.ctx !== page.openedWith) {
             page.openedWith = page.ctx;
             page.loadSummary();
+            page.loadSetup();
             page.loadJob();
             page.ctx.command.watch("config", page.guard(r => {
                 page.prefs = Logic.parseConfig(r);
@@ -322,30 +334,42 @@ SettingsPage {
     OverviewTab {
         id: overview
         host: page
+        available: !page.setupNeeded
+    }
+
+    SetupTab {
+        id: setupTab
+        host: page
     }
 
     ScansTab {
         id: scans
         host: page
+        available: !page.setupNeeded
     }
 
     QuarantineTab {
         host: page
+        available: !page.setupNeeded
     }
 
     ScheduleTab {
         host: page
+        available: !page.setupNeeded
     }
 
     ProtectionTab {
         host: page
+        available: !page.setupNeeded
     }
 
     PreferencesTab {
         host: page
+        available: !page.setupNeeded
     }
 
     SystemTab {
         host: page
+        available: !page.setupNeeded
     }
 }

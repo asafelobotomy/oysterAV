@@ -236,3 +236,19 @@ def test_summary_warns_on_a_failing_check() -> None:
         EventLog(), vault_dir=Path("/nonexistent"), signature_age_hours=1.0, now=NOW, checks=[check]
     )
     assert data["state"] == "warning" and "ufw is installed but turned off" in data["reasons"]
+
+
+def test_summary_reports_whether_setup_has_run(tmp_path: Path) -> None:
+    events = EventLog(db_path=tmp_path / "events.db")
+    done = build_summary(
+        events, vault_dir=tmp_path, signature_age_hours=1.0, now=NOW, setup_completed=True
+    )
+    fresh = build_summary(
+        events, vault_dir=tmp_path, signature_age_hours=1.0, now=NOW, setup_completed=False
+    )
+    assert done["setup_completed"] is True
+    assert fresh["setup_completed"] is False
+    with patch("oyst_core.config.load_config") as load:
+        load.return_value.setup.completed = False
+        probed = build_summary(events, vault_dir=tmp_path, signature_age_hours=1.0, now=NOW)
+    assert probed["setup_completed"] is False
