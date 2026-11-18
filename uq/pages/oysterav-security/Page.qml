@@ -288,6 +288,7 @@ SettingsPage {
         if (page.ctx && page.ctx !== page.openedWith) {
             page.openedWith = page.ctx;
             page.loadSummary();
+            page.loadSetup();
             page.loadJob();
             page.ctx.command.watch("config", page.guard(r => {
                 page.prefs = Logic.parseConfig(r);
@@ -327,15 +328,15 @@ SettingsPage {
         }
     ]
 
-    SetupTab {
-        id: setupTab
-        host: page
-    }
-
     OverviewTab {
         id: overview
         host: page
         available: !page.setupNeeded
+    }
+
+    SetupTab {
+        id: setupTab
+        host: page
     }
 
     ScansTab {

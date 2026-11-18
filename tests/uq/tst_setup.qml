@@ -37,10 +37,11 @@ PageHarness {
             root.open();
             tryVerify(() => root.pageLoader.item.setupNeeded);
             tryVerify(() => root.named("setup-run") !== null);
+            // what the run did: the status read afterwards says setup has been completed
+            root.fakeCtx.commands.summary = root.summary({ setup_completed: true });
             root.press(root.named("setup-run"));
             tryVerify(() => root.runs("setup-run").length === 1);
             tryVerify(() => root.shown("Setup is complete.") !== null);
-            root.fakeCtx.commands.summary = root.summary({ setup_completed: true });
             tryVerify(() => root.runs("summary").length >= 2, 2000, "the status is read again");
             tryVerify(() => !root.pageLoader.item.setupNeeded);
         }
