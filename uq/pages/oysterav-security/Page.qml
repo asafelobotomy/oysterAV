@@ -102,6 +102,9 @@ SettingsPage {
     /// First-time setup hasn't been run: the other tabs stay hidden until it has.
     readonly property bool setupNeeded: page.summary !== null && page.summary.ok && !page.summary.setupDone
 
+    // The tab shown can be one that has just gone: land on Setup while it is needed, Overview once it is done.
+    onSetupNeededChanged: page.show(page.setupNeeded ? setupTab : overview)
+
     function loadSetup() {
         page.load("setup", "setup-status", Logic.parseSetup);
     }
