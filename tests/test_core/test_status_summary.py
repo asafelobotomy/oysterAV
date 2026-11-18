@@ -144,13 +144,6 @@ def test_quarantine_count_is_read_only_and_tolerant(tmp_path: Path) -> None:
     assert quarantine_count(vault) == 0
 
 
-def test_summary_reports_a_running_scan(tmp_path: Path) -> None:
-    events = EventLog(db_path=tmp_path / "events.db")
-    with patch.object(EventLog, "active_job", return_value="job-1"):
-        data = build_summary(events, vault_dir=tmp_path, signature_age_hours=1.0, now=NOW)
-    assert data["scanning"] is True
-
-
 def test_cli_status_summary_never_scans_or_probes_packs(tmp_path: Path) -> None:
     events = EventLog(db_path=tmp_path / "events.db")
     events.save_scan(_scan("cli", findings=[]))
@@ -252,3 +245,16 @@ def test_summary_reports_whether_setup_has_run(tmp_path: Path) -> None:
         load.return_value.setup.completed = False
         probed = build_summary(events, vault_dir=tmp_path, signature_age_hours=1.0, now=NOW)
     assert probed["setup_completed"] is False
+
+
+def test_summary_reports_scan_progress_while_a_scan_runs(tmp_path: Path) -> None:
+    events = EventLog(db_path=tmp_path / "events.db")
+    idle = build_summary(events, vault_dir=tmp_path, signature_age_hours=1.0, now=NOW)
+    assert idle["scanning"] is False and idle["scan_progress"] is None
+    assert events.acquire_job_lock("job-1")
+    events.set_job_progress("job-1", pack="clamav", message="Scanning /home", percent=42.5)
+    busy = build_summary(events, vault_dir=tmp_path, signature_age_hours=1.0, now=NOW)
+    assert busy["scanning"] is True
+    assert busy["scan_progress"]["percent"] == 42.5
+    assert busy["scan_progress"]["pack"] == "clamav"
+    assert busy["scan_progress"]["message"] == "Scanning /home"

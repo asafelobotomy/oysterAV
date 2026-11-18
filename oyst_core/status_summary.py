@@ -192,6 +192,21 @@ def classify(
     return state, reasons
 
 
+def scan_progress(job: dict[str, Any]) -> dict[str, Any]:
+    """The running scan's progress for a status bar: percent 0-100, the pack and a short stage."""
+    try:
+        percent = max(0.0, min(100.0, float(job.get("percent") or 0)))
+    except (TypeError, ValueError):
+        percent = 0.0
+    return {
+        "percent": round(percent, 1),
+        "pack": str(job.get("pack") or ""),
+        "message": str(job.get("message") or "")[:120],
+        "state": str(job.get("state") or "running"),
+        "started_at": job.get("started_at"),
+    }
+
+
 def build_summary(
     events: EventLog | None = None,
     *,
@@ -218,12 +233,15 @@ def build_summary(
             reasons.append(str(check["detail"]))
             if state == "ok":
                 state = "warning"
+    job = events.get_job_progress()
+    scanning = bool(job["active"])
     last_at = str(last["finished_at"] or last["started_at"]) if last else None
     return {
         "schema": SUMMARY_SCHEMA,
         "state": state,
         "reasons": reasons,
-        "scanning": events.active_job() is not None,
+        "scanning": scanning,
+        "scan_progress": scan_progress(job) if scanning else None,
         "last_scan_at": last_at,
         "last_scan_age_hours": _age_hours(last_at, now),
         "last_scan_job_id": last["job_id"] if last else None,

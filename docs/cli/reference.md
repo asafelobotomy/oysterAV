@@ -95,7 +95,8 @@ oyst-cli doctor --json
 database file times and the quarantine vault's row count). It never scans, probes
 packs, runs a subprocess or asks for a password, so a status bar can poll it. Fields:
 `schema` (1), `state` (`ok` | `warning` | `threat`), `reasons` (short sentences),
-`scanning`, `last_scan_at`, `last_scan_age_hours`, `last_scan_job_id`,
+`scanning`, `scan_progress` (while a scan runs: `percent` 0-100, `pack`,
+`message`, `state`, `started_at`; otherwise null), `last_scan_at`, `last_scan_age_hours`, `last_scan_job_id`,
 `last_scan_profile`, `last_scan_state`, `open_findings`, `signature_age_hours`,
 `signatures_stale`, `quarantine_count`. `threat` means the last scan still has open
 findings; `warning` means no scan yet, a failed scan or scanner errors, or missing or
