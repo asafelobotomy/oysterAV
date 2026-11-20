@@ -15,6 +15,7 @@ from oysterav.gui.widgets.plain_rows import switch_row
 from oysterav.gui.widgets.bulk_checklist import (
     add_action_item,
     add_switch_item,
+    boxed,
     make_bulk_expander,
 )
 from oysterav.gui.widgets.clamonacc_ui import (
@@ -55,7 +56,7 @@ def build_harden_page(wizard: SetupWizard, harden_box: Gtk.Box) -> None:
         "Steps included in Apply recommended hardenings",
         subtitle=(
             "Toggle steps for Apply; each Ensure is a separate privileged action "
-            "(may prompt). Prefer Apply recommended hardenings for one concert."
+            "(may prompt). Apply recommended hardenings runs them together in one privileged step."
         ),
         expanded=True,
     )
@@ -93,7 +94,7 @@ def build_harden_page(wizard: SetupWizard, harden_box: Gtk.Box) -> None:
         button_label="Ensure",
         on_clicked=lambda: _ensure_disable_cache(wizard),
     )
-    harden_box.append(expander)
+    harden_box.append(boxed(expander))
 
     harden_group = Adw.PreferencesGroup(title="Host firewall")
     note = Gtk.Label(

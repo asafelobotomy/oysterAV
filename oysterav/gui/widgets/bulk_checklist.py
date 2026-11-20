@@ -9,7 +9,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw  # noqa: E402
+from gi.repository import Adw, Gtk  # noqa: E402
 
 from oysterav.gui.widgets.plain_rows import action_row, expander_row, switch_row
 from oysterav.gui.widgets.common import make_button
@@ -27,6 +27,18 @@ def make_bulk_expander(
         expander.set_subtitle(subtitle)
     expander.set_expanded(expanded)
     return expander
+
+
+def boxed(expander: Adw.ExpanderRow) -> Gtk.ListBox:
+    """The expander in a boxed list, for placing it in a plain Gtk.Box.
+
+    Adw.ExpanderRow only works inside a Gtk.ListBox (Adwaita warns and draws it
+    without its frame otherwise); Adw.PreferencesGroup already provides one.
+    """
+    box = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+    box.add_css_class("boxed-list")
+    box.append(expander)
+    return box
 
 
 def add_action_item(
