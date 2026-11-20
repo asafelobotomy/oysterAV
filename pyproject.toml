@@ -1,6 +1,6 @@
 [project]
 name = "oysterav"
-version = "0.4.5"
+version = "0.4.6"
 description = "Linux security orchestrator (CLI-first). Prefer AUR/deb/rpm for Polkit helper; pip is for CLI discovery."
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
