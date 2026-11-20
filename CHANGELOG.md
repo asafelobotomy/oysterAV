@@ -2,6 +2,17 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.4.6 - 2026-11-20
+
+### Documentation
+
+- *(changelog)* V0.4.5
+
+
+### Other
+
+- Release 0.4.6: setup wizard checklists framed (#67)
+
 ## 0.4.5 - 2026-11-18
 
 ### Documentation
