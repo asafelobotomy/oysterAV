@@ -12,7 +12,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from oysterav.gui.widgets.plain_rows import banner, combo_row, entry_row, switch_row
-from oysterav.gui.widgets.bulk_checklist import add_switch_item, make_bulk_expander
+from oysterav.gui.widgets.bulk_checklist import add_switch_item, boxed, make_bulk_expander
 from oysterav.gui.widgets.common import (
     bind_string_combo_row,
     make_button,
@@ -73,7 +73,7 @@ def build_pages(wizard: SetupWizard) -> None:
             subtitle=subtitle,
             active=True,
         )
-    welcome_box.append(recipe)
+    welcome_box.append(boxed(recipe))
     review_btn = make_button("Review packs")
     review_btn.connect("clicked", lambda *_: wizard._go_to_page(1))
     welcome_box.append(review_btn)
