@@ -36,37 +36,33 @@ sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA256}/g" \
   packaging/arch/PKGBUILD.in > packaging/arch/PKGBUILD
 cp packaging/arch/PKGBUILD "$OUT_DIR/PKGBUILD"
 
-# Full .SRCINFO for AUR tooling (no makepkg required).
-cat >"$OUT_DIR/.SRCINFO" <<EOF
-pkgbase = oysterav
-pkgname = oysterav
-pkgver = ${VERSION}
-pkgrel = 1
-pkgdesc = Linux security orchestrator: oyst-cli backend + oysterAV GTK4 GUI
-url = https://github.com/asafelobotomy/oysterAV
-arch = any
-license = GPL-3.0-or-later
-depends = python
-depends = python-click
-depends = python-pydantic
-depends = python-defusedxml
-depends = python-gobject
-depends = gtk4
-depends = libadwaita
-depends = polkit
-makedepends = python-build
-makedepends = python-installer
-makedepends = python-wheel
-makedepends = python-hatchling
-optdepends = clamav: required scanner spine
-optdepends = rkhunter: rootkit checks
-optdepends = chkrootkit: rootkit checks
-optdepends = lynis: hardening audits
-source = oysterav-${VERSION}.tar.gz::https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v${VERSION}.tar.gz
-sha256sums = ${SHA256}
-EOF
-
-cp "$OUT_DIR/.SRCINFO" packaging/arch/.SRCINFO
+# .SRCINFO from the PKGBUILD itself (makepkg), so the two can't drift: a hand-written copy
+# here once listed clamav as optional while the PKGBUILD depends on it. makepkg refuses to run
+# as root, so as root (the release job's Arch container) it runs as a throwaway user.
+srcinfo() {
+  local dir
+  dir="$(mktemp -d)"
+  cp packaging/arch/PKGBUILD "$dir/PKGBUILD"
+  if [[ "$(id -u)" == "0" ]]; then
+    id -u builder >/dev/null 2>&1 || useradd -m builder
+    chown -R builder "$dir"
+    su builder -c "cd '$dir' && makepkg --printsrcinfo"
+  else
+    (cd "$dir" && makepkg --printsrcinfo)
+  fi
+  rm -rf "$dir"
+}
+if command -v makepkg >/dev/null 2>&1; then
+  srcinfo >"$OUT_DIR/.SRCINFO"
+  grep -qx "	pkgver = ${VERSION}" "$OUT_DIR/.SRCINFO"
+  cp "$OUT_DIR/.SRCINFO" packaging/arch/.SRCINFO
+elif [[ "$REQUIRE_SHA256" == "1" ]]; then
+  echo "ERROR: makepkg is needed to write .SRCINFO (run this on Arch)" >&2
+  exit 1
+else
+  echo "makepkg not found: .SRCINFO not written (run this on Arch for the AUR files)" >&2
+  rm -f "$OUT_DIR/.SRCINFO"
+fi
 
 if [[ "$SHA256" == "SKIP" ]]; then
   echo "Wrote $OUT_DIR/PKGBUILD and $OUT_DIR/.SRCINFO (sha256sums=SKIP; tag archive unavailable)"
