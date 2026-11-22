@@ -2,6 +2,12 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.4.8 - 2026-11-22
+
+### Changed
+
+- **uQ's theme is read by uQ's own code.** Finding and checking uQ's `tokens.json` is now uQ's shared uq-theme 1.1.0 module (`oysterav/gui/theme/uq_theme.py`, vendored unchanged and pinned in `uq/native.toml`), so oysterAV reads the theme exactly as uQ's other apps do. Like uQ, a relative `XDG_STATE_HOME` is ignored, and a tokens file over 256 KiB is not read. CI checks the vendored copy with uQ's `scripts/check-uq-native.sh`.
+
 ## 0.4.7 - 2026-11-20
 
 ### Documentation

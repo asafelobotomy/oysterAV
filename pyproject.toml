@@ -1,6 +1,6 @@
 [project]
 name = "oysterav"
-version = "0.4.7"
+version = "0.4.8"
 description = "Linux security orchestrator (CLI-first). Prefer AUR/deb/rpm for Polkit helper; pip is for CLI discovery."
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
@@ -72,6 +72,8 @@ fail_under = 65
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# uQ's uq-theme, vendored unchanged (uq/native.toml; scripts/check-uq-native.sh)
+extend-exclude = ["oysterav/gui/theme/uq_theme.py"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -94,6 +96,11 @@ packages = ["oyst_core", "oyst_cli", "oysterav"]
 [[tool.mypy.overrides]]
 module = ["gi.*", "gi.repository.*"]
 ignore_missing_imports = true
+
+# uQ's uq-theme, vendored unchanged and untyped; uq_tokens.py types what it returns.
+[[tool.mypy.overrides]]
+module = ["oysterav.gui.theme.uq_theme"]
+ignore_errors = true
 
 [dependency-groups]
 dev = [
