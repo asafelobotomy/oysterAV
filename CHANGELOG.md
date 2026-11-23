@@ -2,11 +2,28 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
-## 0.4.8 - 2026-11-22
+## 0.4.8 - 2026-11-23
 
-### Changed
+### Documentation
 
-- **uQ's theme is read by uQ's own code.** Finding and checking uQ's `tokens.json` is now uQ's shared uq-theme 1.1.0 module (`oysterav/gui/theme/uq_theme.py`, vendored unchanged and pinned in `uq/native.toml`), so oysterAV reads the theme exactly as uQ's other apps do. Like uQ, a relative `XDG_STATE_HOME` is ignored, and a tokens file over 256 KiB is not read. CI checks the vendored copy with uQ's `scripts/check-uq-native.sh`.
+- *(changelog)* V0.4.7
+
+
+### Other
+
+- Write .SRCINFO with makepkg, not by hand (#69)
+
+- *(deps)* Bump ossf/scorecard-action from 2.5.0 to 2.6.0 (#70)
+
+- *(deps)* Bump astral-sh/setup-uv from 10.3.3 to 10.4.0 (#71)
+
+- *(deps)* Bump ruff from 0.17.4 to 0.17.5 (#73)
+
+- *(deps)* Bump pygobject from 3.56.3 to 3.58.1 (#74)
+
+- *(deps)* Pydantic 2.14.4 (pydantic-core 2.50.5), with the Flathub wheel pins (#75)
+
+- 0.4.8 — read uQ's theme with uQ's uq_theme.py (#76)
 
 ## 0.4.7 - 2026-11-20
 
