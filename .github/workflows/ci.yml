@@ -35,6 +35,8 @@ jobs:
         run: uv run python scripts/sync_version.py --check
       - name: Production files must stay within 400-line hard limit
         run: uv run python scripts/check_loc.py
+      - name: uQ's kits (uq/native.toml) are the pinned releases
+        run: scripts/check-uq-native.sh
       - run: uv run ruff format --check oyst_core oyst_cli oysterav tests
       - run: uv run ruff check oyst_core oyst_cli oysterav tests
       - run: uv run mypy oyst_core oyst_cli oysterav
@@ -71,7 +73,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       # The uQ release whose `uqctl` checks the page (uq_api 3 is in every release since v0.3.0).
-      UQ_TAG: v0.3.21
+      UQ_TAG: v0.3.37
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

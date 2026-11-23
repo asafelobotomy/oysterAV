@@ -1,62 +1,49 @@
 """Read uQ's rendered theme (``tokens.json``) and map it to oysterAV semantic colors.
 
 uQ's daemon renders the active theme to ``$XDG_STATE_HOME/uq/theme/tokens.json``
-(default ``~/.local/state/uq/theme``). No GTK imports here, so it is testable
-without a display.
+(default ``~/.local/state/uq/theme``). Finding and checking the file is uQ's shared
+uq-theme module (``uq_theme.py``, vendored unchanged), so oysterAV reads it exactly as
+uQ's other apps do. No GTK imports here, so it is testable without a display.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import re
 from pathlib import Path
 from typing import Any
 
+from oysterav.gui.theme import uq_theme
 from oysterav.gui.theme.palettes import SemanticColors, semantic_colors_for
-
-_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
-_REQUIRED = (
-    "bg",
-    "surface",
-    "surface_alt",
-    "text",
-    "accent",
-    "accent_text",
-    "border",
-    "success",
-    "warning",
-    "error",
-)
 
 
 def tokens_path() -> Path:
-    state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(state) / "uq" / "theme" / "tokens.json"
+    """``$XDG_STATE_HOME/uq/theme/tokens.json`` (an absolute one only, as uQ), else under
+    ``~/.local/state``."""
+    path = uq_theme.tokens_path()
+    return Path(path) if path is not None else Path.home() / ".local/state/uq/theme/tokens.json"
+
+
+def _present(tokens: Any) -> dict[str, Any] | None:
+    return tokens if isinstance(tokens, dict) and tokens.get("present") else None
 
 
 def parse_tokens(text: str) -> dict[str, Any] | None:
-    """Return the parsed tokens, or None when malformed or incomplete."""
-    try:
-        data = json.loads(text)
-    except ValueError:
-        return None
-    if not isinstance(data, dict):
-        return None
-    colors = data.get("colors")
-    if not isinstance(colors, dict):
-        return None
-    for key in _REQUIRED:
-        value = colors.get(key)
-        if not isinstance(value, str) or not _HEX.match(value):
-            return None
-    return data
+    """Return the parsed tokens, or None when malformed or incomplete. ``variant`` is None when
+    the file names none (uq_theme reads that as dark; oysterAV goes by the background)."""
+    tokens = _present(uq_theme.parse(text))
+    if tokens is not None and json.loads(text).get("variant") not in ("dark", "light"):
+        tokens["variant"] = None
+    return tokens
 
 
 def load_tokens(path: Path | None = None) -> dict[str, Any] | None:
     try:
-        return parse_tokens((path or tokens_path()).read_text(encoding="utf-8"))
-    except OSError:
+        with open(path or tokens_path(), "rb") as f:
+            data = f.read(uq_theme.MAX_BYTES + 1)
+        if len(data) > uq_theme.MAX_BYTES:
+            return None
+        return parse_tokens(data.decode("utf-8"))
+    except (OSError, UnicodeDecodeError):
         return None
 
 
