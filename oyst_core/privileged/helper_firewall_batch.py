@@ -16,7 +16,7 @@ from oyst_core.privileged.validators import (
     UFW_RULE_ACTIONS,
     validate_cidr,
     validate_ip,
-    validate_port,
+    validate_port_range,
     validate_proto,
 )
 
@@ -66,7 +66,7 @@ def _normalize_rule(raw: object, index: int) -> dict[str, str]:
     action = str(raw.get("action") or "").strip().lower()
     if action not in UFW_RULE_ACTIONS:
         raise ValueError(f"rule {index}: action must be allow|deny|limit|delete")
-    port = validate_port(str(raw.get("port") or "").strip())
+    port = validate_port_range(str(raw.get("port") or "").strip())
     proto = validate_proto(str(raw.get("proto") or "tcp").strip())
     out: dict[str, str] = {"action": action, "port": port, "proto": proto}
     from_addr = raw.get("from_addr")

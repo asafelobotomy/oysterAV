@@ -82,6 +82,29 @@ def validate_port(value: str) -> str:
     return str(port)
 
 
+def validate_port_range(value: str) -> str:
+    """A port (``22``) or an inclusive range (``1714:1764``), as ufw writes them."""
+    cleaned = value.strip()
+    if ":" not in cleaned:
+        return validate_port(cleaned)
+    low, _, high = cleaned.partition(":")
+    lo, hi = int(validate_port(low)), int(validate_port(high))
+    if lo >= hi:
+        raise ValueError(f"port range must go from low to high, got {value!r}")
+    return f"{lo}:{hi}"
+
+
+def port_range_covers(spec: str, port: int) -> bool:
+    """True when ``spec`` (a port or ``low:high``) includes ``port``."""
+    low, _, high = str(spec).partition(":")
+    try:
+        lo = int(low)
+        hi = int(high) if high else lo
+    except ValueError:
+        return False
+    return lo <= port <= hi
+
+
 def validate_jail(name: str) -> str:
     cleaned = name.strip()
     if not JAIL_NAME_RE.match(cleaned):

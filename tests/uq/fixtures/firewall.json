@@ -1,0 +1,71 @@
+{
+  "ok": true,
+  "backend": "ufw",
+  "on": true,
+  "active": "ufw",
+  "conflict": false,
+  "installed": {
+    "ufw": true,
+    "firewalld": false
+  },
+  "recommended": "ufw",
+  "ssh_in_use": false,
+  "defaults": {
+    "incoming": "deny",
+    "outgoing": "allow",
+    "routed": "deny"
+  },
+  "rules": [
+    {
+      "action": "allow",
+      "port": "22",
+      "proto": "tcp",
+      "direction": "in",
+      "source": "anywhere",
+      "ipv6_only": false,
+      "title": "22/tcp \u00b7 ALLOW",
+      "subtitle": "IN \u00b7 Anywhere \u00b7 IPv4+IPv6",
+      "removable": true,
+      "editable": true
+    },
+    {
+      "action": "allow",
+      "port": "1714:1764",
+      "proto": "udp",
+      "direction": "in",
+      "source": "anywhere",
+      "ipv6_only": false,
+      "title": "1714:1764/udp \u00b7 ALLOW",
+      "subtitle": "IN \u00b7 Anywhere \u00b7 IPv4+IPv6",
+      "removable": true,
+      "editable": true
+    },
+    {
+      "action": "deny",
+      "port": "3306",
+      "proto": "tcp",
+      "direction": "in",
+      "source": "192.168.1.0/24",
+      "ipv6_only": false,
+      "title": "3306/tcp \u00b7 DENY",
+      "subtitle": "IN \u00b7 Anywhere \u00b7 from 192.168.1.0/24",
+      "removable": true,
+      "editable": true
+    },
+    {
+      "action": "allow",
+      "port": "80",
+      "proto": "tcp",
+      "direction": "in",
+      "source": "anywhere",
+      "ipv6_only": false,
+      "title": "80/tcp \u00b7 ALLOW",
+      "subtitle": "IN \u00b7 Anywhere",
+      "removable": false,
+      "editable": false
+    }
+  ],
+  "rules_readable": true,
+  "zones": [],
+  "version": "0.36.2"
+}

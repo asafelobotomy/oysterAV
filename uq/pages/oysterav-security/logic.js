@@ -34,6 +34,20 @@ var FOLDER = "^/[^\\x00-\\x1f\\x7f]*$";
 var ENTRY = "^[1-9][0-9]{0,8}$";
 var THREAT = "^[A-Za-z0-9][A-Za-z0-9._:/+() -]{0,199}$";
 var SERVICE = "^(clamd|clamonacc|freshclam-timer|fail2ban|maldet-monitor|schedule-linger)$";
+// The firewall's values (oyst-cli firewall ...). A port is one number or a range "1714:1764"; a source is
+// "anywhere" or an address or network.
+var FW_STATE = "^(on|off)$";
+var FW_BACKEND = "^(ufw|firewalld)$";
+var FW_DIRECTION = "^(incoming|outgoing|routed)$";
+var FW_POLICY = "^(allow|deny|reject)$";
+var FW_ACTION = "^(allow|deny|limit)$";
+var FW_PORT = "^[0-9]{1,5}(:[0-9]{1,5})?$";
+var FW_PROTO = "^(tcp|udp)$";
+var FW_SOURCE = "^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$";
+var FW_OP = "^(add|remove)$";
+var FW_ZONE = "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$";
+var FW_PORT_SPEC = "^[0-9]{1,5}/(tcp|udp)$";
+var FW_RULE = [FW_ACTION, FW_PORT, FW_PROTO, FW_SOURCE];
 var PATTERNS = {
     "scan-folder": ["^(quick|full)$", FOLDER],
     "preview-scan": ["^(quick|full)$", FOLDER],
@@ -50,6 +64,22 @@ var PATTERNS = {
     "schedule-weekday": ["^(mon|tue|wed|thu|fri|sat|sun)$"],
     "schedule-profile": ["^(quick|full|integrity|suite)$"],
     "schedule-quarantine": ["^(auto|on|off)$"],
+    "fw-turn": [FW_STATE],
+    "preview-fw-turn": [FW_STATE],
+    "fw-use": [FW_BACKEND],
+    "preview-fw-use": [FW_BACKEND],
+    "fw-policy": [FW_DIRECTION, FW_POLICY],
+    "preview-fw-policy": [FW_DIRECTION, FW_POLICY],
+    "fw-rule-add": FW_RULE,
+    "preview-fw-rule-add": FW_RULE,
+    "fw-rule-remove": FW_RULE,
+    "preview-fw-rule-remove": FW_RULE,
+    "fw-rule-change": FW_RULE.concat(FW_RULE),
+    "preview-fw-rule-change": FW_RULE.concat(FW_RULE),
+    "fw-zone-port": [FW_OP, FW_ZONE, FW_PORT_SPEC],
+    "preview-fw-zone-port": [FW_OP, FW_ZONE, FW_PORT_SPEC],
+    "fw-zone-service": [FW_OP, FW_ZONE, FW_ZONE],
+    "preview-fw-zone-service": [FW_OP, FW_ZONE, FW_ZONE],
     "config-set": ["^(scan|clamav|quarantine|clamonacc|maldet_monitor|runtime|fangfrisch|rkhunter|lynis|ui)\\.[a-z_]{1,40}$", "^[^\\x00-\\x1f\\x7f]{0,600}$"]
 };
 

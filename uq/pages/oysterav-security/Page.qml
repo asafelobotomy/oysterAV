@@ -1,4 +1,4 @@
-// oysterAV's "Security" page in uQ Settings, laid out like Settings' own pages (uq_api = 3): seven tabs of
+// oysterAV's "Security" page in uQ Settings, laid out like Settings' own pages (uq_api = 3): tabs of
 // cards. Everything runs through the commands declared in page.toml (oyst-cli as the user); what needs
 // root (the rootkit check, a service on or off) asks for a password through oysterAV's own polkit helper.
 // All text goes through org.uq.settings components (plain text). Parsing and the rules for what may be
@@ -8,6 +8,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.uq.settings
 import "logic.js" as Logic
+import "firewall.js" as Fw
 
 SettingsPage {
     id: page
@@ -31,6 +32,9 @@ SettingsPage {
     property var helper: null
     property var audit: null
     property var prefs: null
+    /// `firewall overview`, followed live (UFW's files) once the Firewall tab has been shown.
+    property var firewall: null
+    property var firewallWatch: null
     /// Counts the times the preferences were read again after a write: a field then shows what is saved.
     property int prefsRev: 0
 
@@ -137,6 +141,19 @@ SettingsPage {
         page.load("doctor", "doctor", Logic.parseDoctor);
         page.load("helper", "helper", Logic.parseHelper);
         page.load("audit", "audit", Logic.parseAudit);
+    }
+
+    /// Starts following the firewall: read now, and again whenever UFW's rule files change.
+    function followFirewall() {
+        if (!page.ctx || page.firewallWatch !== null)
+            return;
+        page.firewallWatch = page.ctx.command.watch("firewall", page.guard(r => {
+            page.firewall = Fw.parseFirewall(r);
+        }));
+    }
+
+    function loadFirewall() {
+        page.load("firewall", "firewall", Fw.parseFirewall);
     }
 
     function loadSignatures() {
@@ -290,6 +307,7 @@ SettingsPage {
     onCtxChanged: {
         if (page.ctx && page.ctx !== page.openedWith) {
             page.openedWith = page.ctx;
+            page.firewallWatch = null;
             page.loadSummary();
             page.loadSetup();
             page.loadJob();
@@ -359,6 +377,11 @@ SettingsPage {
     }
 
     ProtectionTab {
+        host: page
+        available: !page.setupNeeded
+    }
+
+    FirewallTab {
         host: page
         available: !page.setupNeeded
     }

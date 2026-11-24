@@ -210,6 +210,27 @@ Firewall enable checks for an SSH **allow/limit** rule (deny lines do not count)
 firewalld rich rules must match a small grammar (`rule … port|service … accept|reject|drop`).
 UFW `deny`/`delete` of port 22 requires `--force-lockout-risk`.
 
+### Firewall, as uQ Settings' Firewall tab uses it
+
+Positional values only (uQ appends arguments, never options), one password prompt per change, and a
+plan with `--dry-run --json`. SOURCE is `anywhere` or an address or network; PORT is `8080` or a range
+`1714:1764`. A rule change adds the new rule, then removes the old one, in one helper run.
+
+```bash
+oyst-cli firewall overview --json                      # state, default rules, rules, zones; no password
+oyst-cli firewall turn on|off --confirm --json
+oyst-cli firewall use ufw|firewalld --confirm --json   # same as `select`, with a plan
+oyst-cli firewall policy incoming deny --confirm --json
+oyst-cli firewall rule add allow 1714:1764 udp anywhere --confirm --json
+oyst-cli firewall rule remove deny 3306 tcp 192.168.1.0/24 --confirm --json
+oyst-cli firewall rule change allow 8080 tcp anywhere allow 8080 tcp 192.168.1.0/24 --confirm --json
+oyst-cli firewall zone port add public 8080/tcp --confirm --json      # firewalld: saved and applied
+oyst-cli firewall zone service remove public kdeconnect --confirm --json
+```
+
+These guard SSH (port 22) only while it is in use: an SSH server unit is active, or the command runs in
+an SSH session. On a desktop with no SSH server, turning the firewall on adds no rule for port 22.
+
 ## Schedule
 
 Config-driven systemd user timer (`oyst-scan.timer`). Scan semantics live in `[schedule]` config; the timer only holds the calendar.

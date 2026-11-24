@@ -14,7 +14,7 @@ name = "Security"
 icon = "preferences-system-privacy"
 category = "apps"
 qml = "Page.qml"
-keywords = ["oysterav", "antivirus", "virus", "malware", "clamav", "scan", "quarantine", "rootkit", "firewall", "signatures"]
+keywords = ["oysterav", "antivirus", "virus", "malware", "clamav", "scan", "quarantine", "rootkit", "firewall", "signatures", "ufw", "firewalld", "ports"]
 
 [[setting]]
 id = "setup"
@@ -55,6 +55,21 @@ keywords = ["timer", "daily", "weekly", "hourly", "run now"]
 id = "protection"
 label = "Real-time protection"
 keywords = ["on-access", "clamd", "daemon", "monitor", "services", "fail2ban"]
+
+[[setting]]
+id = "firewall"
+label = "Firewall"
+keywords = ["ufw", "firewalld", "block", "open port", "incoming", "outgoing"]
+
+[[setting]]
+id = "firewall-rules"
+label = "Firewall rules"
+keywords = ["allow port", "block port", "open port", "ufw rule", "exceptions", "zone", "service"]
+
+[[setting]]
+id = "firewall-defaults"
+label = "Default firewall rules"
+keywords = ["incoming", "outgoing", "forwarded", "routed", "policy", "deny all"]
 
 [[setting]]
 id = "preferences"
@@ -376,3 +391,142 @@ argv = ["/usr/bin/oyst-cli", "config", "set", "--json"]
 output = "json"
 timeout_ms = 30000
 args = [{ name = "key", pattern = '^(scan|clamav|quarantine|clamonacc|maldet_monitor|runtime|fangfrisch|rkhunter|lynis|ui)\.[a-z_]{1,40}$' }, { name = "value", pattern = '^[^\x00-\x1f\x7f]{0,600}$' }]
+
+# ---- Firewall ----------------------------------------------------------------------------------------
+# UFW (what Bindle sets up) or firewalld, through oysterAV's own polkit helper: one password prompt per
+# change, and a plan first. The read needs no password and follows UFW's files. Every value is positional
+# (`oyst-cli firewall rule add ACTION PORT PROTO SOURCE`); SOURCE is "anywhere" or an address or network.
+[[command]]
+id = "firewall"
+argv = ["/usr/bin/oyst-cli", "firewall", "overview", "--json"]
+output = "json"
+timeout_ms = 30000
+watch = { files = ["/etc/ufw/user.rules", "/etc/ufw/user6.rules", "/etc/ufw/ufw.conf", "/etc/default/ufw"] }
+
+[[command]]
+id = "preview-fw-turn"
+argv = ["/usr/bin/oyst-cli", "firewall", "turn", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "state", pattern = '^(on|off)$' }]
+
+[[command]]
+id = "fw-turn"
+argv = ["/usr/bin/oyst-cli", "firewall", "turn", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "state", pattern = '^(on|off)$' }]
+confirm = "Turn the firewall %s?"
+preview = "preview-fw-turn"
+
+[[command]]
+id = "preview-fw-use"
+argv = ["/usr/bin/oyst-cli", "firewall", "use", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "backend", pattern = '^(ufw|firewalld)$' }]
+
+[[command]]
+id = "fw-use"
+argv = ["/usr/bin/oyst-cli", "firewall", "use", "--confirm", "--json"]
+output = "json"
+timeout_ms = 300000
+args = [{ name = "backend", pattern = '^(ufw|firewalld)$' }]
+confirm = "Use %s as the firewall?"
+preview = "preview-fw-use"
+
+[[command]]
+id = "preview-fw-policy"
+argv = ["/usr/bin/oyst-cli", "firewall", "policy", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "direction", pattern = '^(incoming|outgoing|routed)$' }, { name = "policy", pattern = '^(allow|deny|reject)$' }]
+
+[[command]]
+id = "fw-policy"
+argv = ["/usr/bin/oyst-cli", "firewall", "policy", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "direction", pattern = '^(incoming|outgoing|routed)$' }, { name = "policy", pattern = '^(allow|deny|reject)$' }]
+confirm = "Change what happens to %s connections?"
+preview = "preview-fw-policy"
+
+[[command]]
+id = "preview-fw-rule-add"
+argv = ["/usr/bin/oyst-cli", "firewall", "rule", "add", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "action", pattern = '^(allow|deny|limit)$' }, { name = "port", pattern = '^[0-9]{1,5}(:[0-9]{1,5})?$' }, { name = "proto", pattern = '^(tcp|udp)$' }, { name = "source", pattern = '^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$' }]
+
+[[command]]
+id = "fw-rule-add"
+argv = ["/usr/bin/oyst-cli", "firewall", "rule", "add", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "action", pattern = '^(allow|deny|limit)$' }, { name = "port", pattern = '^[0-9]{1,5}(:[0-9]{1,5})?$' }, { name = "proto", pattern = '^(tcp|udp)$' }, { name = "source", pattern = '^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$' }]
+confirm = "Add this firewall rule?"
+preview = "preview-fw-rule-add"
+
+[[command]]
+id = "preview-fw-rule-remove"
+argv = ["/usr/bin/oyst-cli", "firewall", "rule", "remove", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "action", pattern = '^(allow|deny|limit)$' }, { name = "port", pattern = '^[0-9]{1,5}(:[0-9]{1,5})?$' }, { name = "proto", pattern = '^(tcp|udp)$' }, { name = "source", pattern = '^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$' }]
+
+[[command]]
+id = "fw-rule-remove"
+argv = ["/usr/bin/oyst-cli", "firewall", "rule", "remove", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "action", pattern = '^(allow|deny|limit)$' }, { name = "port", pattern = '^[0-9]{1,5}(:[0-9]{1,5})?$' }, { name = "proto", pattern = '^(tcp|udp)$' }, { name = "source", pattern = '^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$' }]
+confirm = "Remove this firewall rule?"
+preview = "preview-fw-rule-remove"
+
+[[command]]
+id = "preview-fw-rule-change"
+argv = ["/usr/bin/oyst-cli", "firewall", "rule", "change", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "action", pattern = '^(allow|deny|limit)$' }, { name = "port", pattern = '^[0-9]{1,5}(:[0-9]{1,5})?$' }, { name = "proto", pattern = '^(tcp|udp)$' }, { name = "source", pattern = '^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$' }, { name = "new_action", pattern = '^(allow|deny|limit)$' }, { name = "new_port", pattern = '^[0-9]{1,5}(:[0-9]{1,5})?$' }, { name = "new_proto", pattern = '^(tcp|udp)$' }, { name = "new_source", pattern = '^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$' }]
+
+[[command]]
+id = "fw-rule-change"
+argv = ["/usr/bin/oyst-cli", "firewall", "rule", "change", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "action", pattern = '^(allow|deny|limit)$' }, { name = "port", pattern = '^[0-9]{1,5}(:[0-9]{1,5})?$' }, { name = "proto", pattern = '^(tcp|udp)$' }, { name = "source", pattern = '^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$' }, { name = "new_action", pattern = '^(allow|deny|limit)$' }, { name = "new_port", pattern = '^[0-9]{1,5}(:[0-9]{1,5})?$' }, { name = "new_proto", pattern = '^(tcp|udp)$' }, { name = "new_source", pattern = '^(anywhere|[0-9A-Fa-f.:]{2,39}(/[0-9]{1,3})?)$' }]
+confirm = "Change this firewall rule?"
+preview = "preview-fw-rule-change"
+
+[[command]]
+id = "preview-fw-zone-port"
+argv = ["/usr/bin/oyst-cli", "firewall", "zone", "port", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "op", pattern = '^(add|remove)$' }, { name = "zone", pattern = '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' }, { name = "port_spec", pattern = '^[0-9]{1,5}/(tcp|udp)$' }]
+
+[[command]]
+id = "fw-zone-port"
+argv = ["/usr/bin/oyst-cli", "firewall", "zone", "port", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "op", pattern = '^(add|remove)$' }, { name = "zone", pattern = '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' }, { name = "port_spec", pattern = '^[0-9]{1,5}/(tcp|udp)$' }]
+confirm = "Change which ports are open in this zone?"
+preview = "preview-fw-zone-port"
+
+[[command]]
+id = "preview-fw-zone-service"
+argv = ["/usr/bin/oyst-cli", "firewall", "zone", "service", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 30000
+args = [{ name = "op", pattern = '^(add|remove)$' }, { name = "zone", pattern = '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' }, { name = "fw_service", pattern = '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' }]
+
+[[command]]
+id = "fw-zone-service"
+argv = ["/usr/bin/oyst-cli", "firewall", "zone", "service", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "op", pattern = '^(add|remove)$' }, { name = "zone", pattern = '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' }, { name = "fw_service", pattern = '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' }]
+confirm = "Change which services are open in this zone?"
+preview = "preview-fw-zone-service"
