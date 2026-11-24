@@ -2,6 +2,17 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.5.0 - 2026-11-24
+
+### Documentation
+
+- *(changelog)* V0.4.8
+
+
+### Other
+
+- 0.5.0 — Firewall tab on uQ Settings' Security page (#77)
+
 ## 0.4.8 - 2026-11-23
 
 ### Documentation
