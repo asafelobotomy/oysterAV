@@ -8,6 +8,7 @@ import click
 
 from oyst_cli.commands.packs.firewall_cmd_firewalld import register_firewalld_commands
 from oyst_cli.commands.packs.firewall_cmd_manage import register_manage_commands
+from oyst_cli.commands.packs.firewall_cmd_page import register_page_commands
 from oyst_cli.confirm import require_confirm
 from oyst_cli.output import emit
 from oyst_core.packs.firewall import FirewallPack
@@ -21,6 +22,7 @@ def firewall_group() -> None:
 
 register_manage_commands(firewall_group)
 register_firewalld_commands(firewall_group)
+register_page_commands(firewall_group)
 
 
 @firewall_group.command("detect")

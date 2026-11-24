@@ -15,7 +15,7 @@ from oyst_core.privileged.validators import (
     UFW_RULE_ACTIONS,
     validate_cidr,
     validate_ip,
-    validate_port,
+    validate_port_range,
     validate_port_spec,
     validate_proto,
     validate_rich_rule,
@@ -38,6 +38,14 @@ def _parse_flag(argv: Sequence[str], flag: str) -> tuple[str | None, list[str]]:
 
 def _has_flag(argv: Sequence[str], flag: str) -> bool:
     return flag in argv
+
+
+def _ufw_port(value: str, proto: str | None) -> str:
+    """One port, or a range ``low:high``; ufw takes a range only with a protocol."""
+    port = validate_port_range(value)
+    if ":" in port and not proto:
+        raise ValueError("a port range needs --proto tcp or udp")
+    return port
 
 
 def _build_ufw_argv(argv: Sequence[str]) -> list[str]:
@@ -73,14 +81,14 @@ def _build_ufw_argv(argv: Sequence[str]) -> list[str]:
             if proto:
                 cmd.extend(["proto", validate_proto(proto)])
             if port_val:
-                cmd.extend(["to", "any", "port", validate_port(port_val)])
+                cmd.extend(["to", "any", "port", _ufw_port(port_val, proto)])
             return cmd
         if port_val:
             # Simple syntax: "22/tcp" — accepted by all ufw versions.
             if proto:
-                cmd.append(f"{validate_port(port_val)}/{validate_proto(proto)}")
+                cmd.append(f"{_ufw_port(port_val, proto)}/{validate_proto(proto)}")
             else:
-                cmd.append(validate_port(port_val))
+                cmd.append(_ufw_port(port_val, proto))
             return cmd
         raise ValueError("ufw rule requires --port or --to-port")
     if action == "default":

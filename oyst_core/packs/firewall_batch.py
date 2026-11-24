@@ -9,14 +9,14 @@ from oyst_core.packs.firewall_ops import FirewallResult
 from oyst_core.privilege.recipes_firewall import MAX_BATCH_RULES, build_ufw_batch_plan
 from oyst_core.privilege.run import run_privilege_concert
 from oyst_core.privileged.helper_firewall_batch import parse_ufw_batch_rules
-from oyst_core.privileged.validators import validate_port
+from oyst_core.privileged.validators import port_range_covers, validate_port_range
 
 
 def _lockout_blocked(rules: list[dict[str, str]], *, force_lockout: bool) -> str | None:
     if force_lockout:
         return None
     for rule in rules:
-        if rule.get("port") != "22":
+        if not port_range_covers(str(rule.get("port") or ""), 22):
             continue
         if rule["action"] in {"deny", "delete"}:
             return "refusing to delete/deny SSH port 22; use --force-lockout-risk"
@@ -98,10 +98,10 @@ def ssh_port_in_rules(rules: list[dict[str, Any]]) -> bool:
     """True when any rule targets port 22 with delete/deny."""
     for rule in rules:
         try:
-            port = validate_port(str(rule.get("port") or ""))
+            port = validate_port_range(str(rule.get("port") or ""))
         except ValueError:
             continue
-        if port == "22" and str(rule.get("action") or "") in {"deny", "delete"}:
+        if port_range_covers(port, 22) and str(rule.get("action") or "") in {"deny", "delete"}:
             return True
     return False
 

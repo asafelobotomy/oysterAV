@@ -2,7 +2,7 @@
 # Community GitHub .rpm artifacts remain fpm-built; this .spec is the COPR path.
 
 Name:           oysterav
-Version:        0.4.8
+Version:        0.5.0
 Release:        1%{?dist}
 Summary:        Linux security orchestrator (oyst-cli + GTK4 GUI)
 License:        GPL-3.0-or-later

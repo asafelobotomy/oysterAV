@@ -7,7 +7,7 @@ these files unless uQ is installed; every oysterAV package (Arch, Debian, RPM, t
 | Folder | Installed to | What it adds |
 |---|---|---|
 | `widgets/oysterav/` | `/usr/share/uq/shell/widgets/oysterav/` | A **Security** tile in quick settings: ok / needs attention / threat found, and the last scan time. Click for the reasons, signature age and quarantine count. |
-| `pages/oysterav-security/` | `/usr/share/uq/settings/pages/oysterav-security/` | A **Security** page in uQ Settings with seven tabs: Overview, Scans, Quarantine, Schedule, Protection, Preferences, System (below). |
+| `pages/oysterav-security/` | `/usr/share/uq/settings/pages/oysterav-security/` | A **Security** page in uQ Settings with eight tabs: Overview, Scans, Quarantine, Schedule, Protection, Firewall, Preferences, System (below). |
 
 ## The Security page
 
@@ -21,11 +21,12 @@ anything that can't be undone.
 | Quarantine | Each file with **Restore** and **Delete**, a vault check, and a way to delete stray vault files. |
 | Schedule | On or off, how often, weekday, time, what to run, quarantine or not, and **Run now**. |
 | Protection | The ClamAV daemon, on-access scanning, signature updates, maldet, fail2ban and scans-while-logged-out, each a switch. |
+| Firewall | The firewall on or off and which program runs it (UFW, as Bindle sets up, or firewalld); what happens to incoming, outgoing and forwarded connections no rule matches; the list of rules with **Add rule**, **Change** and **Remove** (a port or a range, TCP or UDP, from anywhere or one address or network). With firewalld: each zone's open services and ports, to open or close. Followed live from UFW's files, so a change made in a terminal shows. |
 | Preferences | Every setting `oyst-cli config show` lists, drawn from its schema and followed live from `~/.config/oysterav/config.toml`; oysterAV's own reason when it refuses a value. |
 | System | Which scanners are installed (with the install command), whether the polkit helper is ready, and the audit log. |
 
-Anything the page can't do (setup, installing scanners, firewall rules, the news feed) is behind **Open
-oysterAV** in the page header.
+Anything the page can't do (installing scanners, the news feed) is behind **Open oysterAV** in the page
+header.
 
 ## How it works
 
@@ -41,6 +42,9 @@ patterns (an absolute folder, a quarantine entry number, `hourly|daily|weekly`, 
 - **Check for rootkits** is the one action that needs root: `oyst-cli scan --profile integrity
   --confirm` asks once through oysterAV's own polkit helper (`oyst-helper scan-concert`), and
   uQ's polkit agent shows the prompt. Nothing on the page runs as root itself.
+- **The firewall** changes through `oyst-cli firewall turn|use|policy|rule|zone`, each one password prompt
+  through oysterAV's helper (`oyst-helper firewall` or `setup-harden`) and a plan first. Port 22 is guarded
+  only while an SSH server runs, so a desktop isn't given an open SSH port it never asked for.
 - Restoring, deleting or quarantining a file, deleting stray vault files, turning a service on or off,
   running the schedule now, turning it off, and the rootkit check ask first (`confirm`). Those that can't be
   undone show a **plan** under the question, from the command's own `--dry-run --json`

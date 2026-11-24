@@ -102,14 +102,23 @@ Item {
             "schedule-quarantine": ok({ ok: true, config: {} }),
             "schedule-run": ok({ exit_code: 0, scan: { findings: [] } }),
             "service-set": ok({ ok: true }),
-            "config-set": ok({ ok: true, key: "k", value: "v" })
+            "config-set": ok({ ok: true, key: "k", value: "v" }),
+            firewall: ok(fixture("firewall.json")),
+            "fw-turn": ok({ ok: true, message: "The firewall is off." }),
+            "fw-use": ok({ ok: true, message: "firewalld is the firewall now." }),
+            "fw-policy": ok({ ok: true, message: "Outgoing connections: deny." }),
+            "fw-rule-add": ok({ ok: true, message: "Rule added." }),
+            "fw-rule-remove": ok({ ok: true, message: "Rule removed." }),
+            "fw-rule-change": ok({ ok: true, message: "Rule changed." }),
+            "fw-zone-port": ok({ ok: true, message: "8080/tcp is open in public." }),
+            "fw-zone-service": ok({ ok: true, message: "ssh is closed in public." })
         };
     }
 
     FakeContext {
         id: fake
         commands: root.answers()
-        confirmed: ["quarantine-add", "quarantine-restore", "quarantine-delete", "quarantine-reconcile", "service-set", "rootkit-check", "schedule-disable", "schedule-run", "setup-run", "setup-run-basic"]
+        confirmed: ["quarantine-add", "quarantine-restore", "quarantine-delete", "quarantine-reconcile", "service-set", "rootkit-check", "schedule-disable", "schedule-run", "setup-run", "setup-run-basic", "fw-turn", "fw-use", "fw-policy", "fw-rule-add", "fw-rule-remove", "fw-rule-change", "fw-zone-port", "fw-zone-service"]
         events: ({
             "scan-folder": root.threatEvents(),
             "rootkit-check": root.cleanEvents()

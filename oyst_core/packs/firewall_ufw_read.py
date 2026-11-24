@@ -67,10 +67,13 @@ def _entry(
     return out
 
 
+_PORT_RE = re.compile(r"\d{1,5}(?::\d{1,5})?")
+
+
 def _deletable(entry: dict[str, Any]) -> bool:
     return bool(
         entry.get("exact", True)
-        and str(entry.get("port") or "").isdigit()
+        and _PORT_RE.fullmatch(str(entry.get("port") or "")) is not None
         and entry.get("proto") in {"tcp", "udp"}
         and entry.get("direction") == "in"
         and entry.get("action") in {"allow", "deny", "limit", "reject"},

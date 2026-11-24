@@ -178,3 +178,30 @@ def test_quarantine_entry_shape_has_what_the_page_reads(state: Path) -> None:
     entry = record(state, "quarantine.json")[0]
     assert {"id", "original_path", "threat_name", "quarantined_at"} <= set(entry)
     assert datetime.fromisoformat(entry["quarantined_at"])
+
+
+def test_firewall_fixture_matches_overview(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """firewall.json: `firewall overview` on a computer running UFW as Bindle sets it up (SSH, KDE
+    Connect's range, one rule for a network, one bound to an interface), read as a user."""
+    from oyst_core.packs import firewall_view as fv
+    from tests.test_core.test_firewall_page import DEFAULTS, USER6_RULES, USER_RULES, _Res
+
+    (tmp_path / "user.rules").write_text(USER_RULES)
+    (tmp_path / "user6.rules").write_text(USER6_RULES)
+    (tmp_path / "ufw").write_text(DEFAULTS)
+    monkeypatch.setattr(fv, "_UFW_RULES", (tmp_path / "user.rules", tmp_path / "user6.rules"))
+    monkeypatch.setattr(fv, "_UFW_DEFAULTS", tmp_path / "ufw")
+    monkeypatch.setattr(
+        fv.FirewallPack,
+        "detect",
+        lambda _s: {"active": "ufw", "ufw": True, "firewalld": False, "version": "0.36.2"},
+    )
+    monkeypatch.setattr(fv, "run_command", lambda argv, timeout=0: _Res(1, "need root"))
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    result = CliRunner().invoke(cli, ["firewall", "overview", "--json"])
+    got = json.loads(result.output)
+    path = FIXTURES / "firewall.json"
+    if UPDATE:
+        path.write_text(json.dumps(got, indent=2) + "\n", encoding="utf-8")
+    want = json.loads(path.read_text(encoding="utf-8"))
+    assert want == got, f"firewall.json is out of date; run UPDATE_FIXTURES=1 pytest {__file__}"
