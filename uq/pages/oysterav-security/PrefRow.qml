@@ -5,27 +5,27 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.uq.settings
-import "logic.js" as Logic
+import "reports.js" as Reports
 
 ColumnLayout {
     id: row
 
     property var host
-    /// {key, label, help, kind, choices, min, value} from Logic.parseConfig.
+    /// {key, label, help, kind, choices, min, value} from Reports.parseConfig.
     property var def
     property string settingId: ""
-    readonly property string shown: Logic.prefText(row.def)
+    readonly property string shown: Reports.prefText(row.def)
     readonly property string noteKey: "pref:" + row.def.key
     readonly property int rev: row.host ? row.host.prefsRev : 0
 
     /// Writes what the person chose or typed; a number that isn't one is refused here, in words.
     function commit(text) {
-        const why = Logic.prefProblem(row.def, text);
+        const why = Reports.prefProblem(row.def, text);
         if (why !== "") {
             row.host.setNote(row.noteKey, { message: why, failed: true });
             return false;
         }
-        return row.host.setPref(row.def.key, Logic.prefValue(row.def, text));
+        return row.host.setPref(row.def.key, Reports.prefValue(row.def, text));
     }
 
     // After a write (accepted or refused) the field shows what the file holds, not what was typed.

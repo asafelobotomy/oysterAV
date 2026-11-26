@@ -4,6 +4,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.uq.settings
 import "logic.js" as Logic
+import "reports.js" as Reports
 
 SettingsTab {
     id: tab
@@ -52,7 +53,7 @@ SettingsTab {
         }
         UqLabel {
             visible: tab.sched !== null && tab.sched.ok
-            text: tab.sched !== null ? Logic.scheduleLine(tab.sched) : ""
+            text: tab.sched !== null ? Reports.scheduleLine(tab.sched) : ""
             opacity: 0.7
             wrapMode: Text.Wrap
             Layout.fillWidth: true
@@ -176,7 +177,7 @@ SettingsTab {
             text: "Run the scheduled scan now"
             icon.name: "media-playback-start"
             enabled: !!tab.host && !tab.host.busy
-            onClicked: tab.host.write("schedule:run", "schedule-run", [], () => tab.host.reloadAll(), Logic.scheduleRunOutcome)
+            onClicked: tab.host.write("schedule:run", "schedule-run", [], () => tab.host.reloadAll(), Reports.scheduleRunOutcome)
         }
         Outcome {
             host: tab.host

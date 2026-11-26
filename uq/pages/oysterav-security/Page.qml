@@ -8,6 +8,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.uq.settings
 import "logic.js" as Logic
+import "reports.js" as Reports
 import "firewall.js" as Fw
 
 SettingsPage {
@@ -118,29 +119,29 @@ SettingsPage {
     }
 
     function loadHistory() {
-        page.load("history", "history", Logic.parseHistory);
+        page.load("history", "history", Reports.parseHistory);
     }
 
     function loadQuarantine() {
-        page.load("quarantine", "quarantine-list", Logic.parseQuarantine);
+        page.load("quarantine", "quarantine-list", Reports.parseQuarantine);
     }
 
     function loadVerify() {
-        page.load("verify", "quarantine-verify", Logic.parseVerify);
+        page.load("verify", "quarantine-verify", Reports.parseVerify);
     }
 
     function loadSchedule() {
-        page.load("schedule", "schedule-status", Logic.parseSchedule);
+        page.load("schedule", "schedule-status", Reports.parseSchedule);
     }
 
     function loadServices() {
-        page.load("services", "services", Logic.parseServices);
+        page.load("services", "services", Reports.parseServices);
     }
 
     function loadSystem() {
-        page.load("doctor", "doctor", Logic.parseDoctor);
-        page.load("helper", "helper", Logic.parseHelper);
-        page.load("audit", "audit", Logic.parseAudit);
+        page.load("doctor", "doctor", Reports.parseDoctor);
+        page.load("helper", "helper", Reports.parseHelper);
+        page.load("audit", "audit", Reports.parseAudit);
     }
 
     /// Starts following the firewall: read now, and again whenever UFW's rule files change.
@@ -287,7 +288,7 @@ SettingsPage {
     /// the row shows what was written once it is.
     function setPref(key, value) {
         return page.write("pref:" + key, "config-set", [key, value], () => page.ctx.command.run("config", [], page.guard(r => {
-            page.prefs = Logic.parseConfig(r);
+            page.prefs = Reports.parseConfig(r);
             page.prefsRev++;
         })), "Saved.");
     }
@@ -312,7 +313,7 @@ SettingsPage {
             page.loadSetup();
             page.loadJob();
             page.ctx.command.watch("config", page.guard(r => {
-                page.prefs = Logic.parseConfig(r);
+                page.prefs = Reports.parseConfig(r);
             }));
         }
     }

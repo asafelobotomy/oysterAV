@@ -37,6 +37,8 @@ jobs:
         run: uv run python scripts/check_loc.py
       - name: uQ's kits (uq/native.toml) are the pinned releases
         run: scripts/check-uq-native.sh
+      - name: Every source file is within 400 lines of code (uQ's uq-loc)
+        run: scripts/check-loc.sh
       - run: uv run ruff format --check oyst_core oyst_cli oysterav tests
       - run: uv run ruff check oyst_core oyst_cli oysterav tests
       - run: uv run mypy oyst_core oyst_cli oysterav

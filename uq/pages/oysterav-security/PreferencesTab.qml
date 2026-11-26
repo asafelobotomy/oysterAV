@@ -3,7 +3,7 @@
 import QtQuick
 import QtQuick.Layouts
 import org.uq.settings
-import "logic.js" as Logic
+import "reports.js" as Reports
 
 SettingsTab {
     id: tab
@@ -39,7 +39,7 @@ SettingsTab {
             required property int index
 
             title: card.modelData.title
-            iconName: Logic.groupIcon(card.modelData.title)
+            iconName: Reports.groupIcon(card.modelData.title)
             wide: true
             Layout.fillWidth: true
 
