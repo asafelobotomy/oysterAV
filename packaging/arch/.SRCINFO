@@ -26,6 +26,7 @@ pkgbase = oysterav
 	optdepends = fail2ban: SSH brute-force protection
 	optdepends = ufw: firewall tab (or firewalld)
 	optdepends = uq: security tile and Settings page in the uQ desktop
+	conflicts = uq<0.3.41
 	source = oysterav-0.5.1.tar.gz::https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.5.1.tar.gz
 	sha256sums = SKIP
 

@@ -32,6 +32,8 @@ optdepends=(
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
+conflicts+=('uq<0.3.41')  # uq-compat: from uQ's compat/family.toml
+
 build() {
   cd "oysterAV-$pkgver"
   python -m build --wheel --no-isolation
