@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tarfile
@@ -23,10 +24,62 @@ RKHUNTER_TARBALL = (
 UNHIDE_VERSION = "v20240510"
 UNHIDE_TARBALL = f"https://codeload.github.com/YJesus/Unhide/tar.gz/refs/tags/{UNHIDE_VERSION}"
 
+# chkrootkit 0.58b and unhide predate GCC 14, which turned these warnings into
+# errors (chklastlog.c: signal() handler type). Keep them warnings so the
+# sources still build on current toolchains (Arch GCC 15).
+LEGACY_C_FLAGS = (
+    "-O2 -Wno-error=incompatible-pointer-types "
+    "-Wno-error=implicit-function-declaration -Wno-error=int-conversion"
+)
+CHKROOTKIT_HELPERS = ("chkproc", "chkdirs", "chklastlog", "chkwtmp", "ifpromisc")
+# unhide ships no Makefile: these mirror its build_all.sh, minus --static
+# (static glibc is not installed everywhere and the runtime is per-machine).
+UNHIDE_BUILDS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("unhide-linux", ("unhide-linux*.c", "unhide-output.c"), ("-pthread",)),
+    ("unhide-tcp", ("unhide-tcp.c", "unhide-tcp-fast.c", "unhide-output.c"), ()),
+)
+
+
+def _legacy_build_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env["CFLAGS"] = f"{env.get('CFLAGS', '')} {LEGACY_C_FLAGS}".strip()
+    return env
+
+
+def chkrootkit_runtime_complete(dest: Path) -> bool:
+    """The chkrootkit script plus its compiled helpers (a failed build leaves only the script)."""
+    return (dest / "chkrootkit").is_file() and all(
+        (dest / helper).is_file() for helper in CHKROOTKIT_HELPERS
+    )
+
+
+def build_unhide(src: Path) -> subprocess.CompletedProcess[str]:
+    """Compile unhide's binaries in ``src`` with the system C compiler."""
+    cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc") or "cc"
+    result: subprocess.CompletedProcess[str] = subprocess.CompletedProcess([], 0, "", "")
+    for output, patterns, extra in UNHIDE_BUILDS:
+        sources = sorted(str(p.name) for pat in patterns for p in src.glob(pat))
+        argv = [cc, *LEGACY_C_FLAGS.split(), "-Wall", *extra, *sources, "-o", output]
+        result = subprocess.run(
+            argv,
+            cwd=str(src),
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+        )
+        if result.returncode != 0:
+            return result
+    return result
+
 
 def install_chkrootkit_runtime(*, on_progress: ProgressCallback | None = None) -> dict[str, object]:
     existing = resolve_tool("chkrootkit")
-    if existing.path and existing.source == "runtime":
+    if (
+        existing.path
+        and existing.source == "runtime"
+        and chkrootkit_runtime_complete(runtime_root() / "chkrootkit")
+    ):
         emit_progress(on_progress, "install", 100)
         return {"ok": True, "message": "chkrootkit already in runtime"}
     emit_progress(on_progress, "install", 5)
@@ -64,6 +117,7 @@ def install_chkrootkit_runtime(*, on_progress: ProgressCallback | None = None) -
             text=True,
             timeout=600,
             check=False,
+            env=_legacy_build_env(),
         )
         if build.returncode != 0:
             return {
@@ -71,7 +125,7 @@ def install_chkrootkit_runtime(*, on_progress: ProgressCallback | None = None) -
                 "message": (build.stderr or build.stdout or "chkrootkit build failed")[:300],
             }
         bin_path = dest / "chkrootkit"
-        if bin_path.is_file():
+        if chkrootkit_runtime_complete(dest):
             link = runtime_bin_dir() / "chkrootkit"
             if link.exists() or link.is_symlink():
                 link.unlink()
@@ -185,19 +239,14 @@ def install_unhide_runtime(*, on_progress: ProgressCallback | None = None) -> di
         src_dirs = list(extract.glob("unhide-*")) + list(extract.glob("Unhide-*"))
         if not src_dirs:
             return {"ok": False, "message": "unhide source not found in tarball"}
+        if not (shutil.which("cc") or shutil.which("gcc") or os.environ.get("CC")):
+            return {"ok": False, "message": "a C compiler (gcc) is needed to build unhide"}
         dest = runtime_root() / "unhide"
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(src_dirs[0], dest)
         emit_progress(on_progress, "build", 70)
-        build = subprocess.run(
-            ["make"],
-            cwd=str(dest),
-            capture_output=True,
-            text=True,
-            timeout=600,
-            check=False,
-        )
+        build = build_unhide(dest)
         if build.returncode != 0:
             return {
                 "ok": False,

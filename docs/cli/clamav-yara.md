@@ -28,10 +28,10 @@ ClamAV DB directory **after** official CVD updates from freshclam. It may also
 deliver YARA-based databases from configured providers. See
 `oyst-cli fangfrisch --help`.
 
-Default providers: `sanesecurity`, `urlhaus`. Change with:
+Default provider: `sanesecurity` (URLhaus was retired: abuse.ch exports need an Auth-Key since 2026-10-21). Change with:
 
 ```bash
-oyst-cli config set fangfrisch.providers sanesecurity,urlhaus
+oyst-cli config set fangfrisch.providers sanesecurity,interserver
 oyst-cli fangfrisch ensure-config --force
 ```
 

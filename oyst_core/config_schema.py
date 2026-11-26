@@ -162,7 +162,7 @@ SCHEMA: tuple[dict[str, Any], ...] = (
         "key": "fangfrisch.providers",
         "group": "Updates",
         "kind": "list",
-        "choices": ["sanesecurity", "urlhaus", "interserver", "malwarepatrol", "securiteInfo"],
+        "choices": ["sanesecurity", "interserver", "malwarepatrol", "securiteInfo"],
         "label": "Extra signature feeds",
         "help": "Unofficial signatures, refreshed with fangfrisch.",
     },

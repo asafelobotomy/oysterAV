@@ -186,19 +186,15 @@ WantedBy=timers.target
         result["message"] = "Timer units written; schedule.enabled=false (timer disabled)"
 
     if smoke_test and sched.enabled:
-        start_res = _run_user_systemctl(["start", UNIT_SERVICE])
+        # oyst-scan.service is Type=oneshot: a blocking start waits for the whole scan,
+        # which outlives the 60s systemctl timeout. Queue it and let it run.
+        start_res = _run_user_systemctl(["start", "--no-block", UNIT_SERVICE])
         if start_res.returncode != 0:
             result["ok"] = False
             detail = (start_res.stderr or start_res.stdout or "service start failed").strip()
             result["message"] = f"Timer enabled but service failed: {detail[:300]}"
         else:
-            status_res = _run_user_systemctl(
-                ["show", UNIT_SERVICE, "-p", "ExecMainStatus", "--value"],
-            )
-            exit_code = (status_res.stdout or "").strip()
-            if exit_code and exit_code != "0":
-                result["ok"] = False
-                result["message"] = f"Service ran but exited with status {exit_code}"
+            result["smoke_test"] = "started"
 
     if result["ok"] and result.get("enabled") and result.get("active"):
         result["message"] = f"Scheduled scan timer enabled ({on_calendar})"

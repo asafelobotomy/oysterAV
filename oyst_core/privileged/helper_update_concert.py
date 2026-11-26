@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from collections.abc import Sequence
 from typing import Any
 
+from oyst_core.packs.rkhunter_result import rkhunter_detail, update_ok, update_summary
 from oyst_core.privileged.helper_clamd import _parse_flag, _parse_multi
-from oyst_core.privileged.helper_setup_harden import _has_bool, _run_cmd, _step
+from oyst_core.privileged.helper_setup_harden import _has_bool, _run_cmd, _secure_env, _step
 from oyst_core.privileged.helper_validate import (
     _validate_package_name,
     _validate_run_argv,
@@ -53,19 +55,31 @@ def _upgrade_packages(argv: Sequence[str]) -> list[dict[str, Any]]:
         return [_step("packages", ok=False, message=str(exc), soft_fail=True)]
 
 
-def _rkhunter_step(flag: str, step_id: str, argv_tail: list[str]) -> dict[str, Any]:
+def _run_rkhunter(argv_tail: list[str]) -> tuple[int, str]:
+    cmd = resolve_trusted_argv(["rkhunter", "--nocolors", *argv_tail])
+    proc = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_secure_env(),
+        timeout=900,
+    )
+    return proc.returncode, rkhunter_detail(proc.stdout or "", proc.stderr or "")
+
+
+def _rkhunter_step(step_id: str, argv_tail: list[str]) -> dict[str, Any]:
     try:
-        cmd = resolve_trusted_argv(["rkhunter", *argv_tail])
-        rc, detail = _run_cmd(cmd)
-        ok = rc == 0
-        return _step(
-            step_id,
-            ok=ok,
-            message=detail or ("ok" if ok else f"exit {rc}"),
-            soft_fail=not ok,
-        )
-    except (OSError, ValueError) as exc:
+        rc, detail = _run_rkhunter(argv_tail)
+    except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
         return _step(step_id, ok=False, message=str(exc), soft_fail=True)
+    if argv_tail == ["--update"]:
+        ok = update_ok(rc)
+        message = update_summary(rc, detail)
+    else:
+        ok = rc == 0
+        message = detail or ("ok" if ok else f"exit {rc}")
+    return _step(step_id, ok=ok, message=message, soft_fail=not ok)
 
 
 def run_update_concert(argv: Sequence[str]) -> int:
@@ -73,9 +87,9 @@ def run_update_concert(argv: Sequence[str]) -> int:
     steps: list[dict[str, Any]] = []
     steps.extend(_upgrade_packages(argv))
     if _has_bool(argv, "rkh-update"):
-        steps.append(_rkhunter_step("rkh-update", "rkhunter-update", ["--update"]))
+        steps.append(_rkhunter_step("rkhunter-update", ["--update"]))
     if _has_bool(argv, "rkh-propupd"):
-        steps.append(_rkhunter_step("rkh-propupd", "rkhunter-propupd", ["--propupd"]))
+        steps.append(_rkhunter_step("rkhunter-propupd", ["--propupd"]))
     if not steps:
         print("update-concert: no elevated steps requested", file=sys.stderr)
         return 2
