@@ -53,9 +53,14 @@ def chkrootkit_runtime_complete(dest: Path) -> bool:
     )
 
 
+def _c_compiler() -> str | None:
+    return shutil.which("cc") or shutil.which("gcc")
+
+
 def build_unhide(src: Path) -> subprocess.CompletedProcess[str]:
     """Compile unhide's binaries in ``src`` with the system C compiler."""
-    cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc") or "cc"
+    # The system compiler from PATH, never $CC: argv[0] must not come from the environment.
+    cc = _c_compiler() or "cc"
     result: subprocess.CompletedProcess[str] = subprocess.CompletedProcess([], 0, "", "")
     for output, patterns, extra in UNHIDE_BUILDS:
         sources = sorted(str(p.name) for pat in patterns for p in src.glob(pat))
@@ -239,7 +244,7 @@ def install_unhide_runtime(*, on_progress: ProgressCallback | None = None) -> di
         src_dirs = list(extract.glob("unhide-*")) + list(extract.glob("Unhide-*"))
         if not src_dirs:
             return {"ok": False, "message": "unhide source not found in tarball"}
-        if not (shutil.which("cc") or shutil.which("gcc") or os.environ.get("CC")):
+        if not _c_compiler():
             return {"ok": False, "message": "a C compiler (gcc) is needed to build unhide"}
         dest = runtime_root() / "unhide"
         if dest.exists():
