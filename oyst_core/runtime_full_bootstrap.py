@@ -10,6 +10,32 @@ from oyst_core.runtime.bootstrap import bootstrap_runtime, update_runtime
 from oyst_core.runtime.manifest import is_full_mode
 from oyst_core.runtime.progress import ProgressCallback, emit_progress
 
+# Root-only scanners: privileged scans run the distro package (helper_validate's
+# trusted /usr paths), never the private copy, so a failed private build is a
+# warning with a hint rather than a failed bootstrap.
+ROOT_ONLY_PACK_HINTS: dict[str, str] = {
+    "chkrootkit": "install your distro's chkrootkit package (AUR on Arch)",
+    "unhide": "install your distro's unhide package",
+}
+
+
+def _install_step(entry: dict[str, Any]) -> dict[str, Any]:
+    pack = str(entry.get("pack", "?"))
+    ok = bool(entry.get("ok"))
+    step: dict[str, Any] = {
+        "step": f"install-{pack}",
+        "ok": ok,
+        "message": entry.get("message", ""),
+    }
+    hint = ROOT_ONLY_PACK_HINTS.get(pack)
+    if not ok and hint:
+        step["advisory"] = True
+        step["message"] = (
+            f"Private {pack} build failed. Root scans use the system copy: {hint}.\n"
+            + str(step["message"])
+        )
+    return step
+
 
 def run_full_runtime_bootstrap(
     *,
@@ -39,14 +65,7 @@ def run_full_runtime_bootstrap(
         install_results = bootstrap_runtime(
             on_progress=_install_progress if on_progress else None,
         )
-        for entry in install_results:
-            steps.append(
-                {
-                    "step": f"install-{entry.get('pack', '?')}",
-                    "ok": bool(entry.get("ok")),
-                    "message": entry.get("message", ""),
-                },
-            )
+        steps.extend(_install_step(entry) for entry in install_results)
     else:
         steps.append({"step": "install", "ok": True, "skipped": True})
 

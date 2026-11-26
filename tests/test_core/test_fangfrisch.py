@@ -27,7 +27,7 @@ def test_fangfrisch_ensure_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     text = conf.read_text(encoding="utf-8")
     assert "local_directory" in text
     assert "sanesecurity" in text
-    assert "urlhaus" in text
+    assert "urlhaus" not in text
     assert "sqlite" in text
     assert str(tmp_path) in msg or "Wrote" in msg
 
@@ -35,9 +35,55 @@ def test_fangfrisch_ensure_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert ok2
     assert "exists" in msg2
 
-    set_config_value("fangfrisch.providers", "urlhaus")
+    set_config_value("fangfrisch.providers", "interserver")
     ok3, _msg3 = pack.ensure_config(force=True)
     assert ok3
     text3 = conf.read_text(encoding="utf-8")
-    assert "[urlhaus]" in text3
+    assert "[interserver]" in text3
     assert "[sanesecurity]" not in text3
+
+
+def test_retired_urlhaus_provider_is_dropped() -> None:
+    """URLhaus exports need an abuse.ch Auth-Key since 2026-10-21 (410 Gone)."""
+    from oyst_core.config_models import FangfrischConfig
+
+    assert FangfrischConfig().providers == ["sanesecurity"]
+    assert FangfrischConfig(providers=["urlhaus"]).providers == ["sanesecurity"]
+    assert FangfrischConfig(providers=["urlhaus", "interserver"]).providers == ["interserver"]
+    assert FangfrischConfig(providers=[]).providers == []
+    with pytest.raises(ValueError):
+        FangfrischConfig(providers=["nope"])
+
+
+def test_stale_managed_conf_is_rewritten(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A conf oysterAV wrote with the retired URLhaus feed is refreshed without --force."""
+    from oyst_core import config as cfg_mod
+    from oyst_core.packs import fangfrisch as ff_mod
+
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    monkeypatch.setattr(cfg_mod, "data_dir", lambda: tmp_path)
+    monkeypatch.setattr(ff_mod, "data_dir", lambda: tmp_path)
+    monkeypatch.setattr(cfg_mod, "config_dir", lambda: cfg_dir)
+    monkeypatch.setattr(cfg_mod, "config_path", lambda: cfg_dir / "config.toml")
+    load_config()
+    pack = FangfrischPack()
+    conf = pack._conf_path()
+    conf.parent.mkdir(parents=True, exist_ok=True)
+    conf.write_text(
+        ff_mod._MANAGED_HEADER + "\n[DEFAULT]\nenabled = no\n\n[urlhaus]\nenabled = yes\n",
+        encoding="utf-8",
+    )
+    ok, msg = pack.ensure_config()
+    assert ok
+    assert "Wrote" in msg
+    text = conf.read_text(encoding="utf-8")
+    assert "[urlhaus]" not in text
+    assert "[sanesecurity]" in text
+
+    # A hand-written conf is left alone without --force.
+    conf.write_text("[DEFAULT]\n[urlhaus]\nenabled = yes\n", encoding="utf-8")
+    ok, msg = pack.ensure_config()
+    assert ok
+    assert "exists" in msg
+    assert "[urlhaus]" in conf.read_text(encoding="utf-8")

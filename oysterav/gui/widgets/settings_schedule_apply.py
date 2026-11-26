@@ -184,10 +184,13 @@ def run_timer_apply(page: SettingsPage) -> bool:
         page._schedule_applying = False
         page._schedule_run_btn.set_sensitive(True)
 
+    # No smoke test here: this runs after every (debounced) schedule edit, and the
+    # smoke test starts a real quick scan (~15 min over ~/Downloads with clamscan).
+    # "Run now" is the explicit way to try the schedule.
     apply_schedule_timer(
         page.client,
         window=page._window,
-        smoke_test=True,
+        smoke_test=False,
         prompt_linger=page.sched_enabled_row.get_active(),
         on_status=page._set_status,
         on_error=on_error,

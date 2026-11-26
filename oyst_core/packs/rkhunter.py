@@ -6,6 +6,7 @@ import re
 
 from oyst_core.models import Finding, FindingSeverity, PackStatus, PackTier
 from oyst_core.packs.base import Pack, resolve_pack_binary
+from oyst_core.packs.rkhunter_result import rkhunter_detail, update_ok, update_summary
 from oyst_core.privileged.helper import run_privileged
 from oyst_core.privileged.helper_validate import resolve_trusted_binary
 from oyst_core.privileged.runner import run_command
@@ -50,11 +51,12 @@ class RKHunterPack(Pack):
 
     def update(self) -> tuple[bool, str]:
         res = run_privileged(["rkhunter", "--update"], timeout=600)
-        return res.returncode == 0, (res.stdout or res.stderr).strip()
+        detail = rkhunter_detail(res.stdout or "", res.stderr or "")
+        return update_ok(res.returncode), update_summary(res.returncode, detail)
 
     def propupd(self) -> tuple[bool, str]:
         res = run_privileged(["rkhunter", "--propupd"], timeout=600)
-        return res.returncode == 0, (res.stdout or res.stderr).strip()
+        return res.returncode == 0, rkhunter_detail(res.stdout or "", res.stderr or "")
 
     def versioncheck(self) -> tuple[bool, str]:
         path, _ = resolve_pack_binary("rkhunter", "rkhunter")

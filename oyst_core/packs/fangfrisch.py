@@ -14,6 +14,8 @@ from oyst_core.runtime.bundles.clamav import clamav_db_dir
 from oyst_core.runtime.manifest import is_full_mode
 from oyst_core.runtime.resolver import resolve_pack_tool
 
+_MANAGED_HEADER = "# Managed by oysterAV — unofficial signatures complement freshclam CVD."
+
 
 class FangfrischPack(Pack):
     """Refresh unofficial ClamAV DBs after freshclam (does not replace official CVD)."""
@@ -91,21 +93,33 @@ class FangfrischPack(Pack):
         return status
 
     def ensure_config(self, *, force: bool = False) -> tuple[bool, str]:
-        """Write oysterAV-managed fangfrisch.conf pointing at the ClamAV DB directory."""
+        """Write oysterAV-managed fangfrisch.conf pointing at the ClamAV DB directory.
+
+        A conf oysterAV wrote earlier is refreshed when it no longer matches the
+        config (e.g. it still enables the retired URLhaus feed); a hand-written one
+        is only replaced with ``force``.
+        """
         conf = self._conf_path()
-        if conf.is_file() and not force:
-            return True, f"exists (use --force to rewrite): {conf}"
-        conf.parent.mkdir(parents=True, exist_ok=True)
         db_dir = self._local_directory()
-        db_dir.mkdir(parents=True, exist_ok=True)
-        sqlite = self._sqlite_path()
         providers = load_config().fangfrisch.providers
+        text = self._render_config(db_dir, providers)
+        if conf.is_file() and not force:
+            current = conf.read_text(encoding="utf-8", errors="replace")
+            if current == text or not current.startswith(_MANAGED_HEADER):
+                return True, f"exists (use --force to rewrite): {conf}"
+        conf.parent.mkdir(parents=True, exist_ok=True)
+        db_dir.mkdir(parents=True, exist_ok=True)
+        conf.write_text(text, encoding="utf-8")
+        enabled = ", ".join(providers) if providers else "(none)"
+        return True, f"Wrote {conf} (local_directory={db_dir}; providers={enabled})"
+
+    def _render_config(self, db_dir: Path, providers: list[str]) -> str:
         sections = [
             textwrap.dedent(
                 f"""\
-                # Managed by oysterAV — unofficial signatures complement freshclam CVD.
+                {_MANAGED_HEADER}
                 [DEFAULT]
-                db_url = sqlite:///{sqlite}
+                db_url = sqlite:///{self._sqlite_path()}
                 local_directory = {db_dir}
                 integrity_check = sha256
                 log_level = WARNING
@@ -115,9 +129,7 @@ class FangfrischPack(Pack):
         ]
         for name in providers:
             sections.append(f"[{name}]\nenabled = yes")
-        conf.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
-        enabled = ", ".join(providers) if providers else "(none)"
-        return True, f"Wrote {conf} (local_directory={db_dir}; providers={enabled})"
+        return "\n\n".join(sections) + "\n"
 
     def initdb(self, *, force: bool = False) -> tuple[bool, str]:
         path = self._binary()
@@ -148,6 +160,8 @@ class FangfrischPack(Pack):
             ok, msg = self.initdb()
             if not ok:
                 return False, f"initdb required before refresh: {msg}"
+        else:
+            self.ensure_config()
         res = run_command(
             [path, "--conf", str(self._conf_path()), "refresh"],
             timeout=1800,

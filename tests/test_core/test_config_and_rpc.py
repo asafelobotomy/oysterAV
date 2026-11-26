@@ -64,7 +64,7 @@ def test_scan_tuning_config_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         set_config_value("scan.exclude_dirs", "~/.cache,/tmp")
         set_config_value("scan.apply_limits_to", "all")
         set_config_value("clamav.ignore_sigs", "Sanesecurity.Spam.1,Win.Test.2")
-        set_config_value("fangfrisch.providers", "urlhaus")
+        set_config_value("fangfrisch.providers", "interserver")
         set_config_value("clamonacc.prevention", "true")
         set_config_value("clamonacc.exclude_paths", "~/.cache")
         set_config_value("rkhunter.disable_tests", "suspscan,apps")
@@ -78,7 +78,7 @@ def test_scan_tuning_config_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert cfg.scan.exclude_dirs == ["~/.cache", "/tmp"]
     assert cfg.scan.apply_limits_to == "all"
     assert cfg.clamav.ignore_sigs == ["Sanesecurity.Spam.1", "Win.Test.2"]
-    assert cfg.fangfrisch.providers == ["urlhaus"]
+    assert cfg.fangfrisch.providers == ["interserver"]
     assert cfg.clamonacc.prevention is True
     assert cfg.clamonacc.exclude_paths == ["~/.cache"]
     assert cfg.rkhunter.disable_tests == ["suspscan", "apps"]

@@ -1,7 +1,7 @@
 # Maintainer: oysterAV contributors
 # shellcheck disable=SC2034
 pkgname=oysterav
-pkgver=0.5.0
+pkgver=0.5.1
 pkgrel=1
 pkgdesc="Linux security orchestrator: oyst-cli backend + oysterAV GTK4 GUI"
 arch=('any')
@@ -22,7 +22,11 @@ makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling'
 optdepends=(
   'rkhunter: rootkit checks'
   'chkrootkit: rootkit checks'
+  'unhide: hidden process and port checks'
   'lynis: hardening audits'
+  'inotify-tools: maldet real-time monitoring'
+  'fail2ban: SSH brute-force protection'
+  'ufw: firewall tab (or firewalld)'
   'uq: security tile and Settings page in the uQ desktop'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
