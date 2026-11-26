@@ -2,6 +2,19 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.5.1 - 2026-11-26
+
+### Documentation
+
+- *(changelog)* V0.5.0
+
+
+### Other
+
+- Keep every source file within 400 lines of code (uQ's uq-loc) (#78)
+
+- 0.5.1 — fix runtime bootstrap and Update all failures (#79)
+
 ## 0.5.0 - 2026-11-24
 
 ### Documentation
