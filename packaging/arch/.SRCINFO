@@ -22,6 +22,7 @@ pkgbase = oysterav
 	optdepends = chkrootkit: rootkit checks
 	optdepends = lynis: hardening audits
 	optdepends = uq: security tile and Settings page in the uQ desktop
+	conflicts = uq<0.3.41
 	source = oysterav-0.5.0.tar.gz::https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.5.0.tar.gz
 	sha256sums = SKIP
 
