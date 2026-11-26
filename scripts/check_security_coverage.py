@@ -49,6 +49,7 @@ TEST_PATHS = (
     "tests/test_core/test_privilege_concert.py",
     "tests/test_core/test_serve_dispatch.py",
     "tests/test_core/test_services_auth.py",
+    "tests/test_core/test_services_set.py",
     "tests/test_core/test_client_fallback.py",
 )
 

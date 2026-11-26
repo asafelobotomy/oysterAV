@@ -11,7 +11,10 @@ import { parseToml } from "./toml-lite.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pageDir = join(here, "../../uq/pages/oysterav-security");
-const logic = loadLogic(join(pageDir, "logic.js"));
+// logic.js holds the shared helpers and patterns; reports.js reads history, quarantine, schedule,
+// services and the system check. One API for the tests.
+const core = loadLogic(join(pageDir, "logic.js"));
+const logic = { ...core, ...loadLogic(join(pageDir, "reports.js"), { Logic: core }) };
 const manifest = parseToml(readFileSync(join(pageDir, "page.toml"), "utf8"));
 const qmlFiles = readdirSync(pageDir).filter((f) => f.endsWith(".qml")).sort();
 const qmlOf = (f) => readFileSync(join(pageDir, f), "utf8");
