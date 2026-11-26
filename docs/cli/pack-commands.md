@@ -59,7 +59,7 @@ Tune clamscan efficiency and detection via `oyst-cli config set` (see also [clam
 | `scan.exclude_dirs` | `[]` | `--exclude-dir` for clamscan (not clamonacc.exclude_paths) |
 | `scan.apply_limits_to` | `quick` | `quick` or `all` profiles |
 | `clamav.ignore_sigs` | `[]` | Managed `oysterav.ign2` in the ClamAV DB dir |
-| `fangfrisch.providers` | `sanesecurity,urlhaus` | Rewrites fangfrisch.conf on set |
+| `fangfrisch.providers` | `sanesecurity` | Rewrites fangfrisch.conf on set |
 | `clamonacc.exclude_paths` | `~/.cache`, Trash | Process-mode `--exclude-list` (on-access; not scan.exclude_dirs) |
 | `clamonacc.prevention` | `false` | Preference only — real blocking is host co-control ([ADR-008](../adr/008-clamav-host-cocontrol.md), [operator guide](../user-guide/clamonacc-prevention.md)) |
 | `rkhunter.disable_tests` | `suspscan` | `/etc/rkhunter.d/oysterav-defaults.conf` |

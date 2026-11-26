@@ -17,12 +17,16 @@ ApplyLimitsTo = Literal["quick", "all"]
 KNOWN_FANGFRISCH_PROVIDERS: frozenset[str] = frozenset(
     {
         "sanesecurity",
-        "urlhaus",
         "interserver",
         "malwarepatrol",
         "securiteInfo",
     },
 )
+# Providers that no longer serve fangfrisch's URLs. URLhaus file exports need an
+# abuse.ch Auth-Key since 2026-10-21 (the old URL answers 410 Gone), so configs that
+# still name it load fine and simply drop it.
+RETIRED_FANGFRISCH_PROVIDERS: frozenset[str] = frozenset({"urlhaus"})
+DEFAULT_FANGFRISCH_PROVIDERS: tuple[str, ...] = ("sanesecurity",)
 
 _RKHUNTER_TEST_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _SIG_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -105,16 +109,20 @@ class ClamavConfig(BaseModel):
 
 class FangfrischConfig(BaseModel):
     providers: list[str] = Field(
-        default_factory=lambda: ["sanesecurity", "urlhaus"],
+        default_factory=lambda: list(DEFAULT_FANGFRISCH_PROVIDERS),
     )
 
     @field_validator("providers")
     @classmethod
     def _validate_providers(cls, value: list[str]) -> list[str]:
         out: list[str] = []
+        dropped_retired = False
         for raw in value:
             name = raw.strip()
             if not name:
+                continue
+            if name in RETIRED_FANGFRISCH_PROVIDERS:
+                dropped_retired = True
                 continue
             if name not in KNOWN_FANGFRISCH_PROVIDERS:
                 raise ValueError(
@@ -123,6 +131,8 @@ class FangfrischConfig(BaseModel):
                 )
             if name not in out:
                 out.append(name)
+        if not out and dropped_retired:
+            out = list(DEFAULT_FANGFRISCH_PROVIDERS)
         return out
 
 

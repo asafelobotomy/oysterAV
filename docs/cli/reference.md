@@ -263,7 +263,7 @@ oyst-cli config get                  # dump full config (--json)
 oyst-cli config get scan.profile
 oyst-cli config set quarantine.auto true [--json]
 oyst-cli config set scan.max_filesize 50M
-oyst-cli config set fangfrisch.providers sanesecurity,urlhaus
+oyst-cli config set fangfrisch.providers sanesecurity,interserver
 oyst-cli config set clamav.ignore_sigs Sanesecurity.Spam.1
 oyst-cli config set rkhunter.disable_tests suspscan
 oyst-cli config set lynis.quick true

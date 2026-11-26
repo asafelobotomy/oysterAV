@@ -182,7 +182,7 @@ def assess_health(status: dict[str, Any]) -> dict[str, Any]:
                     "info",
                     "Fangfrisch has no providers enabled",
                     "Unofficial ClamAV databases will not refresh until providers are set.",
-                    "Run: oyst-cli config set fangfrisch.providers sanesecurity,urlhaus",
+                    "Run: oyst-cli config set fangfrisch.providers sanesecurity",
                 ),
             )
 

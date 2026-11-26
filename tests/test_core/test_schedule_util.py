@@ -104,6 +104,7 @@ def test_install_user_timer_writes_schedule_run_execstart(
     cli = tmp_path / "oyst-cli"
     cli.write_text("#!/bin/sh\n", encoding="utf-8")
     cli.chmod(0o755)
+    started: list[list[str]] = []
 
     def fake_systemctl(args: list[str]) -> CommandResult:
         if args == ["daemon-reload"]:
@@ -112,7 +113,8 @@ def test_install_user_timer_writes_schedule_run_execstart(
             return CommandResult(0, "", "")
         if args == ["is-active", "oyst-scan.timer"]:
             return CommandResult(0, "active\n", "")
-        if args == ["start", "oyst-scan.service"]:
+        if args == ["start", "--no-block", "oyst-scan.service"]:
+            started.append(args)
             return CommandResult(0, "", "")
         if args[0:2] == ["show", "oyst-scan.service"]:
             return CommandResult(0, "0\n", "")
@@ -136,6 +138,9 @@ def test_install_user_timer_writes_schedule_run_execstart(
     ):
         result = install_user_timer("quick", smoke_test=True)
 
+    # The smoke test queues the oneshot scan (a blocking start outlived the 60s timeout).
+    assert started == [["start", "--no-block", "oyst-scan.service"]]
+    assert result["smoke_test"] == "started"
     assert result["ok"] is True
     assert result["enabled"] is True
     assert result["active"] is True
