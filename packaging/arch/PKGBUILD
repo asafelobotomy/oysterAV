@@ -30,7 +30,7 @@ optdepends=(
   'uq: security tile and Settings page in the uQ desktop'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('73fe6a5ababaee59061b13f2d030d472ab4302fbe9caa1b7ed66522cbbf7edb9')
 
 conflicts+=('uq<0.3.41')  # uq-compat: from uQ's compat/family.toml
 

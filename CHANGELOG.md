@@ -2,6 +2,17 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.6.2 - 2026-11-27
+
+### Documentation
+
+- *(changelog)* V0.6.1; pin release checksums
+
+
+### Other
+
+- 0.6.2 — full scans skip rebuildable cache and build folders (#83)
+
 ## 0.6.1 - 2026-11-27
 
 ### Documentation
