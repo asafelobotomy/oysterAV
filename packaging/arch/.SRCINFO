@@ -1,6 +1,6 @@
 pkgbase = oysterav
 	pkgdesc = Linux security orchestrator: oyst-cli backend + oysterAV GTK4 GUI
-	pkgver = 0.6.1
+	pkgver = 0.6.2
 	pkgrel = 1
 	url = https://github.com/asafelobotomy/oysterAV
 	arch = any
@@ -27,7 +27,7 @@ pkgbase = oysterav
 	optdepends = ufw: firewall tab (or firewalld)
 	optdepends = uq: security tile and Settings page in the uQ desktop
 	conflicts = uq<0.3.41
-	source = oysterav-0.6.1.tar.gz::https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.6.1.tar.gz
-	sha256sums = 0a0179b0e3ff0cb5ce33331598ee86876ea8894efba1abaea92756d7c5234224
+	source = oysterav-0.6.2.tar.gz::https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.6.2.tar.gz
+	sha256sums = SKIP
 
 pkgname = oysterav

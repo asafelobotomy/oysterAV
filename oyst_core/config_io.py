@@ -191,6 +191,7 @@ def save_config(config: OysterConfig) -> None:
     lines.append(f"max_files = {config.scan.max_files}")
     lines.append(f"exclude_dirs = [{_toml_str_list(config.scan.exclude_dirs)}]")
     lines.append(f"apply_limits_to = {_toml_str(config.scan.apply_limits_to)}")
+    lines.append(f"skip_rebuildable = {str(config.scan.skip_rebuildable).lower()}")
     lines.append("")
     lines.append("[clamav]")
     lines.append(f"ignore_sigs = [{_toml_str_list(config.clamav.ignore_sigs)}]")

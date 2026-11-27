@@ -32,9 +32,12 @@ def test_exclude_dir_regex_is_anchored(excl: str, path: str, hit: bool) -> None:
 
 
 def test_append_exclude_dirs_emits_anchored_and_drops_relative() -> None:
-    with patch(
-        "oyst_core.packs.clamav.merged_clamav_exclude_dirs",
-        return_value=["/opt", ".", "cache"],
+    with (
+        patch(
+            "oyst_core.scan_excludes.merged_clamav_exclude_dirs",
+            return_value=["/opt", ".", "cache"],
+        ),
+        patch("oyst_core.scan_excludes.rebuildable_exclude_regexes", return_value=[]),
     ):
         argv: list[str] = []
         ClamAVPack()._append_exclude_dirs(argv)

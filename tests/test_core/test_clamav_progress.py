@@ -101,3 +101,51 @@ def test_pack_progress_is_throttled() -> None:
     for n in range(1, 10):
         report(n, 10)
     assert helper._emit_progress.call_count == 1
+
+
+def test_rebuildable_folders_are_skipped_unless_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    import re
+
+    from oyst_core import scan_excludes
+
+    cfg = MagicMock()
+    cfg.scan.skip_rebuildable = True
+    monkeypatch.setattr(scan_excludes, "load_config", lambda: cfg)
+    monkeypatch.setattr(scan_excludes.Path, "home", staticmethod(lambda: Path("/home/u")))
+    regexes = scan_excludes.rebuildable_exclude_regexes()
+
+    def skipped(path: str) -> bool:
+        return any(re.search(r, path) for r in regexes)
+
+    assert skipped("/home/u/Projects/app/node_modules")
+    assert skipped("/home/u/Projects/app/node_modules/x/y.js")
+    assert skipped("/home/u/Projects/crate/target/release")
+    assert skipped("/home/u/Projects/crate/target/x86_64-unknown-linux-gnu")
+    assert skipped("/home/u/.cache/pip")
+    assert not skipped("/home/u/.cache/pipx")
+    assert not skipped("/home/u/Downloads")
+    assert not skipped("/home/u/Documents/target")
+    assert not skipped("/home/u/my_node_modules_notes")
+    cfg.scan.skip_rebuildable = False
+    assert scan_excludes.rebuildable_exclude_regexes() == []
+
+
+def test_count_files_uses_the_same_regexes(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.js").write_text("a")
+    (tmp_path / "node_modules" / "dep").mkdir(parents=True)
+    (tmp_path / "node_modules" / "dep" / "b.js").write_text("b")
+    assert count_files([str(tmp_path)], ["/(node_modules)(/|$)"]) == 1
+
+
+def test_skip_rebuildable_is_settable_and_saved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from oyst_core import config as cfg_facade
+    from oyst_core.config_access import get_config_value, set_config_value
+
+    monkeypatch.setattr(cfg_facade, "config_dir", lambda: tmp_path)
+    assert get_config_value("scan.skip_rebuildable") == "true"
+    set_config_value("scan.skip_rebuildable", "false")
+    assert "skip_rebuildable = false" in (tmp_path / "config.toml").read_text()
+    assert get_config_value("scan.skip_rebuildable") == "false"
