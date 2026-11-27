@@ -19,14 +19,17 @@ KNOWN_FANGFRISCH_PROVIDERS: frozenset[str] = frozenset(
         "sanesecurity",
         "interserver",
         "malwarepatrol",
-        "securiteInfo",
+        "securiteinfo",
     },
 )
+# Older configs spelled it like this; fangfrisch's section is lowercase.
+_FANGFRISCH_ALIASES: dict[str, str] = {"securiteInfo": "securiteinfo"}
 # Providers that no longer serve fangfrisch's URLs. URLhaus file exports need an
 # abuse.ch Auth-Key since 2026-10-21 (the old URL answers 410 Gone), so configs that
 # still name it load fine and simply drop it.
 RETIRED_FANGFRISCH_PROVIDERS: frozenset[str] = frozenset({"urlhaus"})
-DEFAULT_FANGFRISCH_PROVIDERS: tuple[str, ...] = ("sanesecurity",)
+# Both free and keyless; the others need an account (receipt / customer id).
+DEFAULT_FANGFRISCH_PROVIDERS: tuple[str, ...] = ("sanesecurity", "interserver")
 
 _RKHUNTER_TEST_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _SIG_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -119,6 +122,7 @@ class FangfrischConfig(BaseModel):
         dropped_retired = False
         for raw in value:
             name = raw.strip()
+            name = _FANGFRISCH_ALIASES.get(name, name)
             if not name:
                 continue
             if name in RETIRED_FANGFRISCH_PROVIDERS:

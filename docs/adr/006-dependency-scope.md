@@ -24,11 +24,18 @@ the product stays focused on a desktop-friendly orchestrator with a ClamAV spine
   a second engine — see [ADR-008](008-clamav-host-cocontrol.md) (probe → response
   bridge → optional safe concert).
 - **fangfrisch** — optional pack that adds unofficial ClamAV DBs **after** freshclam.
-- **maldet** — optional; layer with ClamAV (`scan_clamscan`); oysterAV vault is primary quarantine.
+- **maldet** — optional; runs its own engine (`scan_clamscan="0"`, since oysterAV already runs ClamAV on the same paths); oysterAV vault is primary quarantine.
 - **rkhunter** + **chkrootkit** — keep both recommended (complementary heuristics).
 - **lynis** — recommended audit; suite profile runs audit stage after path scans.
 - **firewall** / **fail2ban** — always host-integrated (ADR-004); full CLI orchestration
   via polkit helper; limited GUI (status / unban) per ADR-007 Wave 4 residual.
+
+### System hardening (read, plus one safe fix)
+
+- `oyst-cli status hardening` reports MAC (AppArmor / SELinux), Secure Boot, lockdown, CPU
+  mitigations, auditd, USBGuard and desktop-safe sysctls without root. The only change oysterAV
+  makes is its own sysctl drop-in (Harden / Undo on the Security page); turning on AppArmor,
+  auditd or USBGuard stays with the user or Bindle (bootloader and policy choices).
 
 ### Do not add
 

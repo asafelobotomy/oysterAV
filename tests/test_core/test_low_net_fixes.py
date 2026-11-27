@@ -181,8 +181,8 @@ def test_maldet_url_is_versioned() -> None:
     from oyst_core.pack_sources import MALDET_URL, MALDET_VERSION
 
     assert "current" not in MALDET_URL
-    assert MALDET_URL.endswith(f"/maldetect-{MALDET_VERSION}.tar.gz")
-    assert MALDET_URL.startswith("https://www.rfxn.com/downloads/")
+    assert MALDET_URL.endswith(f"/v{MALDET_VERSION}/maldet-{MALDET_VERSION}.tar.gz")
+    assert MALDET_URL.startswith("https://github.com/rfxn/linux-malware-detect/releases/")
 
 
 # --- 12. build_runtime.sh uses mktemp ---------------------------------------------------

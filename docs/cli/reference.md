@@ -102,6 +102,25 @@ packs, runs a subprocess or asks for a password, so a status bar can poll it. Fi
 findings; `warning` means no scan yet, a failed scan or scanner errors, or missing or
 stale (> 48 h) signatures. uQ's quick-settings tile uses it (`uq/README.md`).
 
+## System hardening
+
+```bash
+oyst-cli status hardening --json                 # read-only checks, no password
+oyst-cli hardening set apply --dry-run --json    # plan: which kernel settings would change
+oyst-cli hardening set apply --confirm --json    # write /etc/sysctl.d/90-oysterav-hardening.conf
+oyst-cli hardening set revert --confirm --json   # remove it (old values return at reboot)
+```
+
+`status hardening` reads only `/proc/sys`, `/sys` and `/run`: app confinement
+(AppArmor or SELinux enforcing), Secure Boot, kernel lockdown, CPU flaw
+mitigations, auditd, USBGuard, and 16 kernel settings from the KSPP / distro
+hardening guides that don't break a desktop (`oyst_core/hardening.py`). Each check
+is `ok`, `warn`, `info` or `unknown` (unreadable here) with a `detail` and a `fix`.
+`hardening set` goes through `oyst-helper sysctl-harden` (polkit action
+`io.github.asafelobotomy.helper.sysctl-harden`): the helper computes the file
+itself, so the caller can't choose keys or values, and a setting already stricter
+than oysterAV's keeps its value. Revert removes only a file oysterAV wrote.
+
 ## Bootstrap roles
 
 | Goal | Command |

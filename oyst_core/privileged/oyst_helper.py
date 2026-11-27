@@ -37,6 +37,7 @@ from oyst_core.privileged.helper_services import (
 )
 from oyst_core.privileged.helper_setup_concert import run_setup_concert
 from oyst_core.privileged.helper_setup_harden import run_setup_harden
+from oyst_core.privileged.helper_sysctl import run_sysctl_harden
 from oyst_core.privileged.helper_validate import (
     ALLOWED_OYSTERAV_PACKAGES,
     ALLOWED_PACKAGE_MANAGERS,
@@ -125,7 +126,8 @@ def run_helper_argv(argv: Sequence[str]) -> int:
         print(
             "usage: oyst-helper run|install-script|firewall|fail2ban|"
             "systemctl|systemctl-up|maldet-config|rkhunter-whitelist|"
-            "clamd-cocontrol|setup-harden|setup-concert|scan-concert|update-concert",
+            "clamd-cocontrol|setup-harden|setup-concert|scan-concert|update-concert|"
+            "sysctl-harden",
             file=sys.stderr,
         )
         return 2
@@ -138,6 +140,8 @@ def run_helper_argv(argv: Sequence[str]) -> int:
         return run_scan_concert_alias(argv[1:])
     if subcommand == "update-concert":
         return run_update_concert_alias(argv[1:])
+    if subcommand == "sysctl-harden":
+        return run_sysctl_harden(argv[1:])
     if subcommand == "run":
         try:
             cmd = resolve_trusted_argv(_validate_run_argv(argv[1:]))

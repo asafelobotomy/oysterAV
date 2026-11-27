@@ -244,6 +244,6 @@ def test_fangfrisch_pip_install_is_hash_pinned() -> None:
     assert argv[argv.index("--only-binary") + 1] == ":all:"
     assert argv[argv.index("-r") + 1] == str(FANGFRISCH_REQUIREMENTS)
     text = FANGFRISCH_REQUIREMENTS.read_text(encoding="utf-8")
-    assert "fangfrisch==1.9.2" in text
+    assert "fangfrisch==1.9.3" in text
     pins = [ln for ln in text.splitlines() if ln and not ln[0].isspace() and ln[0] != "#"]
     assert pins and all("==" in ln and ln.endswith("\\") for ln in pins)

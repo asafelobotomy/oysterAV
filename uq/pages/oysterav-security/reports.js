@@ -193,6 +193,24 @@ function parseAudit(result) {
     return { ok: true, problem: "", rows: rows };
 }
 
+var HARDENING_STATES = { ok: "On", warn: "Weak", info: "Off", unknown: "Can't tell" };
+
+/// `oyst-cli status hardening --json`: one row per check (title, state word, why, how to fix).
+function parseHardening(result) {
+    var env = envelope(result);
+    if (!env.ok || !isObject(env.output) || !Array.isArray(env.output.checks))
+        return { ok: false, problem: env.ok ? "oysterAV printed no hardening checks." : env.error, rows: [], summary: "" };
+    var rows = env.output.checks.slice(0, MAX_ROWS).filter(isObject).map(function (c) {
+        var state = HARDENING_STATES[c.state] ? c.state : "unknown";
+        return { title: clip(c.title || ""), group: clip(c.group || ""), state: state, text: HARDENING_STATES[state], detail: clip(c.detail || ""), fix: clip(c.fix || "") };
+    });
+    var counts = isObject(env.output.counts) ? env.output.counts : {};
+    var weak = Number(counts.warn) || 0;
+    var summary = (Number(counts.ok) || 0) + " of " + rows.length + " checks pass" + (weak > 0 ? ", " + plural(weak, "needs", "need") + " attention" : "") + ".";
+    var fixes = Array.isArray(env.output.sysctl_fixes) ? env.output.sysctl_fixes.length : 0;
+    return { ok: true, problem: "", rows: rows, summary: summary, canHarden: fixes > 0, canUndo: env.output.hardened_by_oysterav === true };
+}
+
 // ---- Preferences --------------------------------------------------------------------------------------------------
 
 /// `config show --json`: the preference groups, each with its rows (key, label, kind, choices, value).

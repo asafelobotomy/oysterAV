@@ -86,6 +86,29 @@ def status_summary_cmd(deep: bool, json_mode: bool) -> None:
         click.echo("A scan is running.")
 
 
+@status_group.command(
+    "hardening",
+    epilog="""
+Examples:
+  oyst-cli status hardening --json
+""",
+)
+@json_option
+def status_hardening_cmd(json_mode: bool) -> None:
+    """Read-only system hardening checks: MAC, Secure Boot, lockdown, auditd, sysctls..."""
+    from oyst_core.hardening import assess_hardening
+
+    data = assess_hardening()
+    if json_mode:
+        emit(data, json_mode=True)
+        return
+    click.echo(f"Hardening: {data['score']} checks pass")
+    for check in data["checks"]:
+        click.echo(f"  [{check['state']}] {check['title']}: {check['detail']}")
+        if check["fix"]:
+            click.echo(f"      fix: {check['fix']}")
+
+
 @click.group("history", invoke_without_command=True)
 @click.option("--limit", default=20, type=int)
 @json_option

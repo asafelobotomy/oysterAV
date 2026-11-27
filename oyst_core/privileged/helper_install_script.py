@@ -111,7 +111,8 @@ def seal_and_run_install_tarball(tarball_path: str, expected_sha256: str) -> int
         extract_dir.mkdir()
         with tarfile.open(sealed_tarball, "r:gz") as archive:
             archive.extractall(extract_dir, filter="data")
-        install_dirs = list(extract_dir.glob("maldetect-*"))
+        # LMD 2.x unpacks to maldet-<ver>/, 1.x to maldetect-<ver>/ (tarball sha is pinned).
+        install_dirs = [d for g in ("maldet-*", "maldetect-*") for d in sorted(extract_dir.glob(g))]
         if not install_dirs:
             print("maldetect directory not found in sealed tarball", file=sys.stderr)
             return 2

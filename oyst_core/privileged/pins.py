@@ -8,8 +8,9 @@ match a pin.
 
 from __future__ import annotations
 
-# maldetect-<MALDET_VERSION>.tar.gz (rfxn). Update via PR after reviewing a new upstream release.
-MALDET_SHA256 = "76f1d260dac5e0bb3ca487f8d3e119655196de87b08ec89dfd73155e083feb5d"
+# maldet-<MALDET_VERSION>.tar.gz (rfxn GitHub release). Update via PR after reviewing a new
+# upstream release.
+MALDET_SHA256 = "26674c72208a4c32ae4ed8770a2b5c036b35c0894a4812450df11c5a53d7d8e5"
 
 PINNED_MALDET_SHA256 = frozenset({MALDET_SHA256})
 

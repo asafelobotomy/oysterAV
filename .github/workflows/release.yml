@@ -391,6 +391,14 @@ jobs:
           git -c "http.https://github.com/.extraheader=${AUTH}" fetch origin main
           git checkout -B main origin/main
           cp "$RUNNER_TEMP/CHANGELOG.md" CHANGELOG.md
+          # Pin the release archive's sha256 on main (PKGBUILD, .SRCINFO, Flathub manifest): a
+          # tagged tree can't hold its own hash, and nobody pinned it by hand after 0.5.1.
+          if [[ "$(tr -d '[:space:]' < VERSION)" == "$VERSION" ]]; then
+            cp staged/PKGBUILD packaging/arch/PKGBUILD
+            cp staged/SRCINFO packaging/arch/.SRCINFO
+            python3 -c 'import sys; sys.path.insert(0, "scripts"); import sync_version as sv; p = sv.FLATHUB_MANIFEST; p.write_text(sv._replace_flathub(sv.read_version(), p.read_text(encoding="utf-8"), sv.pkgbuild_sha256()), encoding="utf-8")'
+            git add packaging/arch/PKGBUILD packaging/arch/.SRCINFO packaging/oysterav/flatpak/flathub/io.github.asafelobotomy.OysterAV.yml
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
@@ -398,7 +406,7 @@ jobs:
             echo "CHANGELOG.md already up to date."
             exit 0
           fi
-          git commit -m "docs(changelog): v${VERSION}"
+          git commit -m "docs(changelog): v${VERSION}; pin release checksums"
           git -c "http.https://github.com/.extraheader=${AUTH}" push origin main
 
   # Releases created with GITHUB_TOKEN do not fire `release: published`, so
