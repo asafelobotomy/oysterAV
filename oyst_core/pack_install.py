@@ -264,7 +264,7 @@ def install_pack(
     if strategy == "aur":
         fallback_hint = _aur_install_hint(packages)
     elif strategy == "tarball" and name == "maldet":
-        fallback_hint = "See https://rfxn.com/projects/linux-malware-detect"
+        fallback_hint = "See https://github.com/rfxn/linux-malware-detect"
 
     result = InstallResult(
         ok=False,

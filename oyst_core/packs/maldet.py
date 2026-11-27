@@ -57,7 +57,7 @@ class MaldetPack(Pack):
                 version = None
         status = self._base_status(installed, version)
         if not installed:
-            status.install_hint = "Install LMD from https://rfxn.com/projects/linux-malware-detect"
+            status.install_hint = "Setup installs it (or see https://github.com/rfxn/linux-malware-detect)"
         monitor = self.monitor_status()
         clam_path, _ = resolve_pack_binary("clamav", "clamscan")
         clamav_ok = clam_path is not None

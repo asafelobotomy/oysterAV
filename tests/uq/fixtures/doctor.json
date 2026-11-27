@@ -125,7 +125,7 @@
     "min_version": "2.0.0",
     "version_ok": false,
     "message": "",
-    "install_hint": "Install LMD from https://rfxn.com/projects/linux-malware-detect",
+    "install_hint": "Setup installs it (or see https://github.com/rfxn/linux-malware-detect)",
     "details": {
       "binary": null,
       "install_root": "/home/user/.local/share/oysterav/runtime/x86_64/maldetect",

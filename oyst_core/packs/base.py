@@ -40,11 +40,10 @@ def distro_install_hint(pack: str) -> str:
         },
         "maldet": {
             "debian": (
-                "See https://rfxn.com/projects/linux-malware-detect"
-                " (or: sudo paru -S maldet on Arch)"
+                "See https://github.com/rfxn/linux-malware-detect (or: sudo paru -S maldet on Arch)"
             ),
             "arch": "sudo paru -S maldet  # AUR, or tarball from rfxn.com",
-            "fedora": "See https://rfxn.com/projects/linux-malware-detect",
+            "fedora": "See https://github.com/rfxn/linux-malware-detect",
         },
         "unhide": {
             "debian": "sudo apt install unhide unhide.rb",
