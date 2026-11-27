@@ -75,6 +75,13 @@ SCHEMA: tuple[dict[str, Any], ...] = (
         "help": "Only quick scans, or every scan.",
     },
     {
+        "key": "scan.skip_rebuildable",
+        "group": "Scanning",
+        "kind": "bool",
+        "label": "Skip cache and build folders",
+        "help": "node_modules, build output and package caches. Tools rebuild them anyway.",
+    },
+    {
         "key": "scan.exclude_dirs",
         "group": "Scanning",
         "kind": "list",

@@ -162,6 +162,8 @@ def set_config_value(key: str, value: str, *, dry_run: bool = False) -> str | No
         if value not in ("quick", "all"):
             raise KeyError("scan.apply_limits_to must be 'quick' or 'all'")
         cfg.scan.apply_limits_to = cast(ApplyLimitsTo, value)
+    elif key == "scan.skip_rebuildable":
+        cfg.scan.skip_rebuildable = _parse_bool(value)
     elif key == "clamav.ignore_sigs":
         names = _parse_csv(value)
         for name in names:

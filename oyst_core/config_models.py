@@ -76,6 +76,8 @@ class ScanDefaults(BaseModel):
     # clamscan --exclude-dir (not clamonacc.exclude_paths / on-access).
     exclude_dirs: list[str] = Field(default_factory=list)
     apply_limits_to: ApplyLimitsTo = "quick"
+    # Skip folders tools rebuild on their own (node_modules, Rust target, pip/npm caches...).
+    skip_rebuildable: bool = True
 
     @field_validator("max_filesize")
     @classmethod

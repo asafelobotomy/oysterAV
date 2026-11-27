@@ -8,6 +8,7 @@
     "scan.max_recursion": 8,
     "scan.max_files": 10000,
     "scan.apply_limits_to": "quick",
+    "scan.skip_rebuildable": true,
     "scan.exclude_dirs": [],
     "clamav.ignore_sigs": [],
     "quarantine.auto": false,
@@ -27,7 +28,7 @@
     "runtime.auto_update_signatures": true,
     "fangfrisch.providers": [
       "sanesecurity",
-      "urlhaus"
+      "interserver"
     ],
     "rkhunter.skip_keypress": true,
     "rkhunter.disable_tests": [
@@ -111,6 +112,13 @@
       ],
       "label": "Apply these limits to",
       "help": "Only quick scans, or every scan."
+    },
+    {
+      "key": "scan.skip_rebuildable",
+      "group": "Scanning",
+      "kind": "bool",
+      "label": "Skip cache and build folders",
+      "help": "node_modules, build output and package caches. Tools rebuild them anyway."
     },
     {
       "key": "scan.exclude_dirs",
@@ -202,7 +210,6 @@
       "kind": "list",
       "choices": [
         "sanesecurity",
-        "urlhaus",
         "interserver",
         "malwarepatrol",
         "securiteinfo"
@@ -286,7 +293,7 @@
         "gruvbox-light-soft"
       ],
       "label": "Colour theme",
-      "help": "The oysterAV window only; uQ Settings follows uQ."
+      "help": "uQ follows the active uQ theme live; the others are fixed."
     }
   ]
 }

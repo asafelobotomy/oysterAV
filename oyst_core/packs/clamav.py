@@ -44,7 +44,7 @@ from oyst_core.privileged.systemctl_route import run_systemctl_helper
 from oyst_core.runtime.bundles.clamav import clamav_db_dir, clamscan_database_args
 from oyst_core.runtime.manifest import is_full_mode
 from oyst_core.scan_excludes import (
-    clamav_exclude_dir_regex,
+    clamscan_exclude_regexes,
     merged_clamav_exclude_dirs,
     path_under_any,
 )
@@ -287,11 +287,7 @@ class ClamAVPack(Pack):
         argv.extend(self.scan_limit_flags(profile))
 
     def _append_exclude_dirs(self, argv: list[str]) -> None:
-        # --exclude-dir is a regex: anchor + escape so /opt never hits ~/x/options/.
-        for raw in merged_clamav_exclude_dirs():
-            expanded = str(Path(raw).expanduser())
-            if expanded and Path(expanded).is_absolute():
-                argv.append(f"--exclude-dir={clamav_exclude_dir_regex(expanded)}")
+        argv.extend(f"--exclude-dir={r}" for r in clamscan_exclude_regexes())
 
     def _append_profile_scan_mode(self, argv: list[str]) -> None:
         """linux-only skips Windows PE scanning for faster desktop clamscan runs."""
@@ -357,7 +353,7 @@ class ClamAVPack(Pack):
         )
         on_line: Callable[[str], None] | None = None
         if on_progress is not None and resolved == "clamscan":
-            on_line = file_counter(on_progress, count_files(paths, merged_clamav_exclude_dirs()))
+            on_line = file_counter(on_progress, count_files(paths, clamscan_exclude_regexes()))
 
         for p in paths:
             try:

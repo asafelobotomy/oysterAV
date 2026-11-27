@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -22,11 +23,12 @@ def keep_line(line: str) -> bool:
     return not line.endswith(": OK")
 
 
-def count_files(paths: list[str], excluded: list[str], budget_s: float = 20.0) -> int | None:
-    """Files clamscan -r will visit (no symlinks followed, excluded dirs skipped), or None
-    when counting takes longer than ``budget_s`` (the scan then shows a running count)."""
+def count_files(paths: list[str], exclude_regexes: list[str], budget_s: float = 20.0) -> int | None:
+    """Files clamscan -r will visit (no symlinks followed, dirs matching the clamscan
+    --exclude-dir regexes skipped), or None when counting takes longer than ``budget_s``
+    (the scan then shows a running count)."""
     stop = time.monotonic() + budget_s
-    skip = {str(Path(d)) for d in excluded}
+    skip = [re.compile(r) for r in exclude_regexes]
     total = 0
     for raw in paths:
         root = Path(raw).expanduser()
@@ -34,7 +36,9 @@ def count_files(paths: list[str], excluded: list[str], budget_s: float = 20.0) -
             total += 1
             continue
         for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-            dirnames[:] = [d for d in dirnames if os.path.join(dirpath, d) not in skip]
+            dirnames[:] = [
+                d for d in dirnames if not any(r.search(os.path.join(dirpath, d)) for r in skip)
+            ]
             total += len(filenames)
             if time.monotonic() > stop:
                 return None

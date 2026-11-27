@@ -42,6 +42,55 @@ def clamav_exclude_dir_regex(path: str) -> str:
     return f"^{escaped}(/|$)"
 
 
+# Folders tools rebuild or re-download on their own, skipped when scan.skip_rebuildable is on.
+# Names match at any depth; home paths only under the user's home.
+REBUILDABLE_DIR_NAMES = (
+    "node_modules",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".gradle",
+    ".next",
+)
+REBUILDABLE_HOME_DIRS = (
+    ".cache/pip",
+    ".cache/pip-audit",
+    ".cache/uv",
+    ".cache/go-build",
+    ".cache/yarn",
+    ".cache/pnpm",
+    ".cache/mesa_shader_cache",
+    ".cache/thumbnails",
+    ".cargo/registry",
+    ".rustup/toolchains",
+    ".npm/_cacache",
+    ".gradle/caches",
+    ".m2/repository",
+)
+
+
+RUST_TARGET_REGEX = "/target/(debug|release|doc|tmp|[^/]+-unknown-[^/]+)(/|$)"
+
+
+def rebuildable_dir_names() -> tuple[str, ...]:
+    return REBUILDABLE_DIR_NAMES if load_config().scan.skip_rebuildable else ()
+
+
+def rebuildable_exclude_regexes() -> list[str]:
+    """clamscan --exclude-dir regexes for rebuildable folders (empty when the option is off).
+    Cargo build output is matched by its layout (``target/debug``, ``target/release``...)."""
+    names = rebuildable_dir_names()
+    if not names:
+        return []
+    alternation = "|".join("".join(f"\\{c}" if c in _ERE_SPECIAL else c for c in n) for n in names)
+    home = str(Path.home())
+    out = [f"/({alternation})(/|$)", RUST_TARGET_REGEX]
+    out.extend(clamav_exclude_dir_regex(f"{home}/{rel}") for rel in REBUILDABLE_HOME_DIRS)
+    return out
+
+
 def merged_clamav_exclude_dirs() -> list[str]:
     """Config excludes plus oysterAV defaults (absolute paths only)."""
     cfg = [str(Path(p).expanduser()) for p in load_config().scan.exclude_dirs]
@@ -58,6 +107,17 @@ def merged_clamav_exclude_dirs() -> list[str]:
             merged.append(path)
             seen.add(path)
     return merged
+
+
+def clamscan_exclude_regexes() -> list[str]:
+    """Every clamscan --exclude-dir regex: configured and default folders, anchored and
+    escaped so /opt never hits ~/x/options/, then the rebuildable folders when enabled."""
+    out = [
+        clamav_exclude_dir_regex(p)
+        for p in (str(Path(raw).expanduser()) for raw in merged_clamav_exclude_dirs())
+        if p and Path(p).is_absolute()
+    ]
+    return out + rebuildable_exclude_regexes()
 
 
 def maldet_ignore_paths_value() -> str:
