@@ -16,7 +16,7 @@ from oyst_core.runtime.progress import ProgressCallback, emit_progress
 from oyst_core.runtime.resolver import copy_system_tool, resolve_tool
 
 CHKROOTKIT_TARBALL = (
-    "https://deb.debian.org/debian/pool/main/c/chkrootkit/chkrootkit_0.58b.orig.tar.gz"
+    "https://deb.debian.org/debian/pool/main/c/chkrootkit/chkrootkit_0.59.orig.tar.gz"
 )
 RKHUNTER_TARBALL = (
     "https://downloads.sourceforge.net/project/rkhunter/rkhunter/1.4.6/rkhunter-1.4.6.tar.gz"
@@ -24,7 +24,7 @@ RKHUNTER_TARBALL = (
 UNHIDE_VERSION = "v20240510"
 UNHIDE_TARBALL = f"https://codeload.github.com/YJesus/Unhide/tar.gz/refs/tags/{UNHIDE_VERSION}"
 
-# chkrootkit 0.58b and unhide predate GCC 14, which turned these warnings into
+# Older chkrootkit (0.58b) and unhide predate GCC 14, which turned these warnings into
 # errors (chklastlog.c: signal() handler type). Keep them warnings so the
 # sources still build on current toolchains (Arch GCC 15).
 LEGACY_C_FLAGS = (

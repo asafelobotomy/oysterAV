@@ -75,6 +75,14 @@ def parse_session_hit_line(line: str) -> Finding | None:
     )
 
 
+def maldet_abort_reason(output: str) -> str:
+    """LMD's own "... aborting!" line (missing signatures, bad path): it still exits 0."""
+    for line in (output or "").splitlines():
+        if "aborting" in line.lower() and "{" in line:
+            return re.sub(r"^.*?\}\s*", "", line.strip())[:300]
+    return ""
+
+
 def parse_console_output(output: str) -> list[Finding]:
     findings: list[Finding] = []
     for line in output.splitlines():
@@ -150,37 +158,94 @@ def maldet_sess_dir(binary: str | None) -> Path | None:
     return pub / "sess"
 
 
-def resolve_session_hits_file(sess_dir: Path) -> Path | None:
-    """Prefer session.last → session.hits.<id>; else newest session.hits.*."""
+def parse_session_tsv_text(text: str) -> list[Finding]:
+    """Parse LMD 2.x ``session.tsv.<id>``: a ``#LMD:`` header, then one hit per line.
+
+    Hit fields (tab-separated): signature, path, quarantine path or ``-``, hash type, ...
+    """
+    findings: list[Finding] = []
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        fields = line.split("\t")
+        if len(fields) < 2:
+            continue
+        threat = fields[0].strip()
+        path = _normalize_path(fields[1])
+        if not threat or not path:
+            continue
+        findings.append(
+            Finding(
+                pack=_PACK,
+                path=path,
+                threat_name=threat,
+                severity=FindingSeverity.HIGH,
+                message=f"maldet hit: {threat} @ {path}",
+                raw_line=line,
+            )
+        )
+    return findings
+
+
+def _session_last_id(sess_dir: Path) -> str:
     last = sess_dir / "session.last"
-    if last.is_file():
-        try:
-            scan_id = last.read_text(encoding="utf-8", errors="replace").strip()
-        except OSError:
-            scan_id = ""
-        if scan_id:
-            candidate = sess_dir / f"session.hits.{scan_id}"
+    if not last.is_file():
+        return ""
+    try:
+        text = last.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+    # LMD 1.x writes the scan id; keep only a plausible id (no path parts).
+    return text if text and "/" not in text and len(text) < 64 else ""
+
+
+_REPORT_ID_RE = re.compile(r"maldet --report ([0-9]{6}-[0-9]{4}\.[0-9]+)")
+
+
+def scan_id_from_output(output: str) -> str:
+    """The scan id LMD prints at the end of a scan (``... run: maldet --report ID``)."""
+    match = _REPORT_ID_RE.search(output or "")
+    return match.group(1) if match else ""
+
+
+def resolve_session_hits_file(sess_dir: Path, scan_id: str = "") -> Path | None:
+    """The scan's hits: ``session.tsv.<id>`` (LMD 2.x) or ``session.hits.<id>`` (1.x).
+
+    Prefer ``scan_id`` (from the scan's own output), then the id in ``session.last``,
+    else the newest of either kind.
+    """
+    scan_id = scan_id or _session_last_id(sess_dir)
+    if scan_id:
+        for name in (f"session.tsv.{scan_id}", f"session.hits.{scan_id}"):
+            candidate = sess_dir / name
             if candidate.is_file():
                 return candidate
     hits = sorted(
-        (p for p in sess_dir.glob("session.hits.*") if p.is_file()),
+        (
+            p
+            for pattern in ("session.tsv.*", "session.hits.*")
+            for p in sess_dir.glob(pattern)
+            if p.is_file()
+        ),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
     return hits[0] if hits else None
 
 
-def load_session_hit_findings(binary: str | None) -> list[Finding]:
+def load_session_hit_findings(binary: str | None, scan_id: str = "") -> list[Finding]:
     sess = maldet_sess_dir(binary)
     if sess is None or not sess.is_dir():
         return []
-    hits_file = resolve_session_hits_file(sess)
+    hits_file = resolve_session_hits_file(sess, scan_id)
     if hits_file is None:
         return []
     try:
         text = hits_file.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
+    if hits_file.name.startswith("session.tsv."):
+        return parse_session_tsv_text(text)
     return parse_session_hits_text(text)
 
 

@@ -57,6 +57,8 @@ var PATTERNS = {
     "quarantine-delete": [ENTRY],
     "preview-restore": [ENTRY],
     "preview-delete": [ENTRY],
+    "harden-set": ["^(apply|revert)$"],
+    "preview-harden": ["^(apply|revert)$"],
     "service-set": [SERVICE, "^(on|off)$"],
     "preview-service": [SERVICE, "^(on|off)$"],
     "schedule-frequency": ["^(hourly|daily|weekly)$"],

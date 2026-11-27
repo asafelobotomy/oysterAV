@@ -117,6 +117,16 @@ def build_polkit_policy() -> str:
             allow_active="auth_admin",
         ),
         _action_xml(
+            action_id="io.github.asafelobotomy.helper.sysctl-harden",
+            description="Apply or remove oysterAV kernel hardening",
+            message=(
+                "Authentication is required to write or remove oysterAV's kernel "
+                "hardening settings (/etc/sysctl.d)"
+            ),
+            argv1="sysctl-harden",
+            allow_active="auth_admin",
+        ),
+        _action_xml(
             action_id="io.github.asafelobotomy.helper.setup-concert",
             description="Run oysterAV first-run setup concert",
             message=(

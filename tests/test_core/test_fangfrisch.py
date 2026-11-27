@@ -47,8 +47,8 @@ def test_retired_urlhaus_provider_is_dropped() -> None:
     """URLhaus exports need an abuse.ch Auth-Key since 2026-10-21 (410 Gone)."""
     from oyst_core.config_models import FangfrischConfig
 
-    assert FangfrischConfig().providers == ["sanesecurity"]
-    assert FangfrischConfig(providers=["urlhaus"]).providers == ["sanesecurity"]
+    assert FangfrischConfig().providers == ["sanesecurity", "interserver"]
+    assert FangfrischConfig(providers=["urlhaus"]).providers == ["sanesecurity", "interserver"]
     assert FangfrischConfig(providers=["urlhaus", "interserver"]).providers == ["interserver"]
     assert FangfrischConfig(providers=[]).providers == []
     with pytest.raises(ValueError):
@@ -87,3 +87,39 @@ def test_stale_managed_conf_is_rewritten(tmp_path: Path, monkeypatch: pytest.Mon
     assert ok
     assert "exists" in msg
     assert "[urlhaus]" in conf.read_text(encoding="utf-8")
+
+
+def test_conf_uses_https_prefixes_and_lowercase_securiteinfo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """fangfrisch's built-in Sanesecurity/InterServer prefixes are plain http."""
+    from oyst_core.config_models import FangfrischConfig
+    from oyst_core.packs.fangfrisch import FangfrischPack
+
+    assert FangfrischConfig(providers=["securiteInfo"]).providers == ["securiteinfo"]
+    text = FangfrischPack()._render_config(tmp_path, ["sanesecurity", "interserver"])
+    assert "prefix = https://mirror.seichter.de/sanesecurity/" in text
+    assert "prefix = https://sigs.interserver.net/" in text
+    assert "http://" not in text
+
+
+def test_refresh_with_logged_download_error_is_not_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """fangfrisch exits 0 when a feed download fails; oysterAV must not call that a success."""
+    from oyst_core.packs import fangfrisch as ff_mod
+    from oyst_core.privileged.runner import CommandResult
+
+    pack = FangfrischPack()
+    conf = tmp_path / "fangfrisch.conf"
+    conf.write_text("x", encoding="utf-8")
+    monkeypatch.setattr(pack, "_binary", lambda: "/usr/bin/fangfrisch")
+    monkeypatch.setattr(pack, "_conf_path", lambda: conf)
+    monkeypatch.setattr(pack, "ensure_config", lambda force=False: (True, "ok"))
+    out = "ERROR: HTTPSConnectionPool(host='sigs.interserver.net'): SSLError\nTraceback ..."
+    monkeypatch.setattr(ff_mod, "run_command", lambda *a, **k: CommandResult(0, out, ""))
+    ok, msg = pack.refresh()
+    assert ok is False
+    assert msg.startswith("ERROR: HTTPSConnectionPool")
+    monkeypatch.setattr(ff_mod, "run_command", lambda *a, **k: CommandResult(0, "", ""))
+    assert pack.refresh() == (True, "ok")

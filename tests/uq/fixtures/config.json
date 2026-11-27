@@ -205,7 +205,7 @@
         "urlhaus",
         "interserver",
         "malwarepatrol",
-        "securiteInfo"
+        "securiteinfo"
       ],
       "label": "Extra signature feeds",
       "help": "Unofficial signatures, refreshed with fangfrisch."

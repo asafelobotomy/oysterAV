@@ -15,6 +15,13 @@ from oyst_core.runtime.manifest import is_full_mode
 from oyst_core.runtime.resolver import resolve_pack_tool
 
 _MANAGED_HEADER = "# Managed by oysterAV — unofficial signatures complement freshclam CVD."
+# fangfrisch's built-in prefixes for these use plain http (Sanesecurity's .sha256 files come over
+# the same channel, InterServer has no integrity check), so a network attacker could swap in
+# signatures. Both mirrors serve the same files over https.
+_HTTPS_PREFIXES: dict[str, str] = {
+    "sanesecurity": "https://mirror.seichter.de/sanesecurity/",
+    "interserver": "https://sigs.interserver.net/",
+}
 
 
 class FangfrischPack(Pack):
@@ -128,7 +135,10 @@ class FangfrischPack(Pack):
             ).rstrip(),
         ]
         for name in providers:
-            sections.append(f"[{name}]\nenabled = yes")
+            section = f"[{name}]\nenabled = yes"
+            if name in _HTTPS_PREFIXES:
+                section += f"\nprefix = {_HTTPS_PREFIXES[name]}"
+            sections.append(section)
         return "\n\n".join(sections) + "\n"
 
     def initdb(self, *, force: bool = False) -> tuple[bool, str]:
@@ -166,5 +176,11 @@ class FangfrischPack(Pack):
             [path, "--conf", str(self._conf_path()), "refresh"],
             timeout=1800,
         )
-        ok = res.returncode == 0
-        return ok, (res.stdout or res.stderr or "").strip() or ("ok" if ok else "refresh failed")
+        text = (res.stdout or res.stderr or "").strip()
+        # fangfrisch exits 0 when a download fails and only logs it ("ERROR: ..."), so a feed
+        # that stopped working (bad TLS, 404, a key now required) would look fine forever.
+        errors = [line for line in text.splitlines() if line.startswith("ERROR")]
+        ok = res.returncode == 0 and not errors
+        if errors:
+            return False, "\n".join(errors[:5])[:1000]
+        return ok, text or ("ok" if ok else "refresh failed")

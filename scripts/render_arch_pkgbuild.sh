@@ -32,8 +32,16 @@ resolve_sha256() {
 }
 
 SHA256="$(resolve_sha256)"
+# uQ's compat/compat.py writes one `# uq-compat:` conflicts line into packaging/arch/PKGBUILD.
+# PKGBUILD.in doesn't carry it, so keep the current one (it goes right after sha256sums).
+COMPAT_LINE="$(grep -m1 '# uq-compat:' packaging/arch/PKGBUILD 2>/dev/null || true)"
 sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA256}/g" \
   packaging/arch/PKGBUILD.in > packaging/arch/PKGBUILD
+if [[ -n "$COMPAT_LINE" ]] && ! grep -q '# uq-compat:' packaging/arch/PKGBUILD; then
+  awk -v line="$COMPAT_LINE" '{ print } /^sha256sums=/ { print ""; print line }' \
+    packaging/arch/PKGBUILD > packaging/arch/PKGBUILD.tmp
+  mv packaging/arch/PKGBUILD.tmp packaging/arch/PKGBUILD
+fi
 cp packaging/arch/PKGBUILD "$OUT_DIR/PKGBUILD"
 
 # .SRCINFO from the PKGBUILD itself (makepkg), so the two can't drift: a hand-written copy

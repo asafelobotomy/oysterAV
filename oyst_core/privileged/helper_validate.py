@@ -283,8 +283,8 @@ def _install_script_path_ok(script: Path) -> None:
     if script.name != "install.sh":
         raise ValueError("only install.sh scripts are allowed")
     parent_name = script.parent.name
-    if not parent_name.startswith("maldetect-"):
-        raise ValueError("install.sh must live in a maldetect-* directory")
+    if not parent_name.startswith(("maldet-", "maldetect-")):
+        raise ValueError("install.sh must live in a maldet-* or maldetect-* directory")
     if not any(p.startswith("oyst-maldet-") for p in script.parts):
         raise ValueError("install.sh must be under an oyst-maldet-* temp extract")
     under_tmp = False

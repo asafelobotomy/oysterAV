@@ -119,6 +119,19 @@
   <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
 </action>
 
+<action id="io.github.asafelobotomy.helper.sysctl-harden">
+  <description>Apply or remove oysterAV kernel hardening</description>
+  <message>Authentication is required to write or remove oysterAV's kernel hardening settings (/etc/sysctl.d)</message>
+  <defaults>
+    <allow_any>auth_admin</allow_any>
+    <allow_inactive>auth_admin</allow_inactive>
+    <allow_active>auth_admin</allow_active>
+  </defaults>
+  <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/oysterav/oyst-helper</annotate>
+  <annotate key="org.freedesktop.policykit.exec.argv1">sysctl-harden</annotate>
+  <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+</action>
+
 <action id="io.github.asafelobotomy.helper.setup-concert">
   <description>Run oysterAV first-run setup concert</description>
   <message>Authentication is required to install security packs and apply recommended host hardenings</message>

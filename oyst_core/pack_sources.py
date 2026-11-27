@@ -13,15 +13,21 @@ from pathlib import Path
 from oyst_core.net_util import DEFAULT_MAX_DOWNLOAD_BYTES, download_to_path
 from oyst_core.privileged.helper import run_privileged_install_script
 from oyst_core.privileged.pins import MALDET_SHA256
-from oyst_core.privileged.runner import CommandResult
+from oyst_core.privileged.runner import CommandResult, run_command
 from oyst_core.privileged.safe_write import write_text_nofollow
-from oyst_core.scan_excludes import maldet_ignore_paths_value
+from oyst_core.scan_excludes import default_scan_exclude_dirs
 from oyst_core.schedule_linger import current_username
 
-MALDET_VERSION = "1.6.6"
-# Versioned tarball: ``maldetect-current`` changes on every upstream release and
-# would break the in-repo SHA-256 pin (oyst_core.privileged.pins, fail-closed).
-MALDET_URL = f"https://www.rfxn.com/downloads/maldetect-{MALDET_VERSION}.tar.gz"
+MALDET_VERSION = "2.0.1"
+# Versioned GitHub release asset: rfxn.com's ``maldetect-current`` still serves 1.6.6 and
+# changes on every upstream release, which would break the in-repo SHA-256 pin
+# (oyst_core.privileged.pins, fail-closed). LMD 2.x tarballs unpack to ``maldet-<ver>/``.
+MALDET_URL = (
+    "https://github.com/rfxn/linux-malware-detect/releases/download/"
+    f"v{MALDET_VERSION}/maldet-{MALDET_VERSION}.tar.gz"
+)
+# Top-level folder of an LMD tarball: ``maldet-<ver>`` (2.x) or ``maldetect-<ver>`` (1.x).
+MALDET_EXTRACT_GLOBS = ("maldet-*", "maldetect-*")
 MALDET_MAX_BYTES = 32 * 1024 * 1024
 
 
@@ -48,7 +54,7 @@ def stage_maldet_install_script() -> tuple[str, str, str, Path] | CommandResult:
     """
     work = Path(tempfile.mkdtemp(prefix="oyst-maldet-"))
     try:
-        tarball = work / f"maldetect-{MALDET_VERSION}.tar.gz"
+        tarball = work / f"maldet-{MALDET_VERSION}.tar.gz"
         _download(MALDET_URL, tarball, max_bytes=MALDET_MAX_BYTES)
         if not _verify_sha256(tarball, MALDET_SHA256):
             shutil.rmtree(work, ignore_errors=True)
@@ -62,7 +68,7 @@ def stage_maldet_install_script() -> tuple[str, str, str, Path] | CommandResult:
         extract_dir.mkdir()
         with tarfile.open(tarball, "r:gz") as archive:
             archive.extractall(extract_dir, filter="data")
-        install_dirs = list(extract_dir.glob("maldetect-*"))
+        install_dirs = [d for g in MALDET_EXTRACT_GLOBS for d in sorted(extract_dir.glob(g))]
         if not install_dirs:
             shutil.rmtree(work, ignore_errors=True)
             return CommandResult(1, "", "Could not find maldetect directory in tarball")
@@ -109,7 +115,14 @@ def _install_maldet_to_runtime(source_dir: Path) -> CommandResult:
     try:
         dest = install_maldet_runtime_tree(source_dir)
         _configure_maldet_clamav(dest)
-        return CommandResult(0, f"Installed maldet to {dest}", "")
+        # Tarballs ship no signatures (install.sh fetches them for system installs); without
+        # this every runtime scan aborted on "required signature file not found".
+        sig = run_command([str(dest / "maldet"), "-u"], timeout=600)
+        if sig.returncode != 0:
+            return CommandResult(
+                0, f"Installed maldet to {dest}; signature update failed (run: maldet -u)", ""
+            )
+        return CommandResult(0, f"Installed maldet to {dest} with signatures", "")
     except OSError as exc:
         return CommandResult(1, "", str(exc))
 
@@ -117,42 +130,49 @@ def _install_maldet_to_runtime(source_dir: Path) -> CommandResult:
 def configure_maldet_clamav(prefix: Path | None = None) -> bool:
     """Tune maldet conf for oysterAV desktop/runtime use.
 
-    Enables ClamAV layering (``scan_clamscan``) and non-root access
+    Turns off LMD's ClamAV stage (``scan_clamscan``) and turns on non-root access
     (``scan_user_access``) so signature updates and scans work without root.
-    Sets ``ignore_paths`` for oysterAV vault / maldet sigs / pub trees.
-    Returns True if the config file changed.
+    Adds oysterAV's vault and maldet's own sigs/pub trees to LMD's ``ignore_paths``
+    *file* (one path per line, next to conf.maldet). ``ignore_paths`` in conf.maldet
+    is the path of that file: older oysterAV wrote the paths themselves there, which
+    made LMD's ``grep -vf`` fail and every scan run on an empty file list, so that
+    line is removed. Returns True if anything changed.
     """
-    if prefix is None:
-        conf = Path("/usr/local/maldetect/conf.maldet")
-    else:
-        conf = prefix / "conf.maldet"
+    conf = Path("/usr/local/maldetect/conf.maldet") if prefix is None else prefix / "conf.maldet"
     if not conf.is_file():
         return False
+    changed = False
     try:
         text = conf.read_text(encoding="utf-8")
         original = text
-        text = text.replace('scan_clamscan="0"', 'scan_clamscan="1"')
-        text = text.replace("scan_clamscan=0", "scan_clamscan=1")
+        # LMD's own engine only: oysterAV already runs ClamAV on the same paths, and LMD 2.0.1's
+        # user-mode clamscan stage loads nothing (its temp .ndb name has a random suffix that
+        # clamscan rejects as "unknown extension"), so layering only doubled the work.
+        text = re.sub(r"^scan_clamscan=.*$", 'scan_clamscan="0"', text, flags=re.MULTILINE)
         text = text.replace('scan_user_access="0"', 'scan_user_access="1"')
         text = text.replace("scan_user_access=0", "scan_user_access=1")
-        ignore = maldet_ignore_paths_value()
-        ignore_line = f'ignore_paths="{ignore}"'
-        if re.search(r"^ignore_paths=", text, flags=re.MULTILINE):
-            text = re.sub(
-                r"^ignore_paths=.*$",
-                ignore_line,
-                text,
-                count=1,
-                flags=re.MULTILINE,
-            )
-        else:
-            text = text.rstrip() + "\n" + ignore_line + "\n"
+        text = re.sub(r"^ignore_paths=.*\n?", "", text, flags=re.MULTILINE)
         if text != original:
             write_text_nofollow(conf, text, mode=0o644)
-            return True
+            changed = True
+        changed = _merge_maldet_ignore_paths(conf.parent / "ignore_paths") or changed
     except OSError:
+        return changed
+    return changed
+
+
+def _merge_maldet_ignore_paths(path: Path) -> bool:
+    """Add oysterAV's exclusions to LMD's ignore_paths file, keeping the user's lines."""
+    try:
+        current = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+    except OSError:
+        current = []
+    lines = [line for line in current if line.strip()]
+    missing = [p for p in default_scan_exclude_dirs() if p not in lines]
+    if not missing:
         return False
-    return False
+    write_text_nofollow(path, "\n".join([*lines, *missing]) + "\n", mode=0o644)
+    return True
 
 
 def ensure_maldet_pub_paths(binary: str) -> tuple[bool, str]:

@@ -100,7 +100,7 @@ def install_maldet_runtime_tree(source_dir: Path) -> Path:
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
     shutil.copytree(files_dir, dest, dirs_exist_ok=True)
-    for subdir in ("clean", "pub", "quarantine", "sess", "sigs", "tmp"):
+    for subdir in ("clean", "logs", "pub", "quarantine", "sess", "sigs", "tmp"):
         (dest / subdir).mkdir(exist_ok=True)
 
     maldet_bin = dest / "maldet"
@@ -138,4 +138,9 @@ def _patch_maldet_runtime_paths(dest: Path) -> None:
                     text = text.replace(old, f"inspath={quote}{inspath}{quote}")
                 else:
                     text = text.replace(old, f"inspath={inspath}")
+        # LMD 2.x logs to /var/log/maldet, which a user can't create: keep logs in the runtime.
+        text = text.replace('logdir="/var/log/maldet"', f'logdir="{dest / "logs"}"')
+        text = text.replace(
+            'inspath="${inspath:-/usr/local/maldetect}"', f'inspath="${{inspath:-{inspath}}}"'
+        )
         target.write_text(text, encoding="utf-8")

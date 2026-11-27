@@ -12,6 +12,7 @@ from oyst_cli.commands.auth_cmd import auth_group
 from oyst_cli.commands.config_cmd import config_group
 from oyst_cli.commands.desktop_cmd import desktop_group
 from oyst_cli.commands.doctor import doctor_cmd
+from oyst_cli.commands.hardening_cmd import hardening_group
 from oyst_cli.commands.install_helper_cmd import helper_status_cmd, install_helper_cmd
 from oyst_cli.commands.job_cmd import job_group
 from oyst_cli.commands.maintenance import maintenance_group
@@ -102,6 +103,7 @@ def _register_commands() -> None:
     cli.add_command(doctor_cmd)
     cli.add_command(version_cmd)
     cli.add_command(status_group)
+    cli.add_command(hardening_group)
     cli.add_command(history_group)
     cli.add_command(scan_cmd)
     cli.add_command(job_group)

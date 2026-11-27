@@ -82,6 +82,7 @@ Item {
             signatures: ok(fixture("signatures.json")),
             doctor: ok(fixture("doctor.json")),
             helper: ok(fixture("helper.json")),
+            hardening: ok(fixture("hardening.json")),
             audit: ok(fixture("audit.json")),
             config: config(),
             "preview-scan": ok(fixture("preview-scan.json")),
@@ -102,6 +103,7 @@ Item {
             "schedule-quarantine": ok({ ok: true, config: {} }),
             "schedule-run": ok({ exit_code: 0, scan: { findings: [] } }),
             "service-set": ok({ ok: true }),
+            "harden-set": ok({ ok: true, message: "Kernel hardening is on." }),
             "config-set": ok({ ok: true, key: "k", value: "v" }),
             firewall: ok(fixture("firewall.json")),
             "fw-turn": ok({ ok: true, message: "The firewall is off." }),
@@ -118,7 +120,7 @@ Item {
     FakeContext {
         id: fake
         commands: root.answers()
-        confirmed: ["quarantine-add", "quarantine-restore", "quarantine-delete", "quarantine-reconcile", "service-set", "rootkit-check", "schedule-disable", "schedule-run", "setup-run", "setup-run-basic", "fw-turn", "fw-use", "fw-policy", "fw-rule-add", "fw-rule-remove", "fw-rule-change", "fw-zone-port", "fw-zone-service"]
+        confirmed: ["quarantine-add", "quarantine-restore", "quarantine-delete", "quarantine-reconcile", "service-set", "rootkit-check", "schedule-disable", "schedule-run", "setup-run", "setup-run-basic", "fw-turn", "fw-use", "fw-policy", "fw-rule-add", "fw-rule-remove", "fw-rule-change", "fw-zone-port", "fw-zone-service", "harden-set"]
         events: ({
             "scan-folder": root.threatEvents(),
             "rootkit-check": root.cleanEvents()

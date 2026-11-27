@@ -11,7 +11,7 @@ from pathlib import Path
 from oyst_core.runtime.manifest import record_artifact, runtime_bin_dir, runtime_root
 from oyst_core.runtime.progress import ProgressCallback, emit_progress
 
-# Hash-pinned closure of fangfrisch==1.9.2 (ships in the wheel next to this module),
+# Hash-pinned closure of fangfrisch==1.9.3 (ships in the wheel next to this module),
 # so pip never resolves transitive deps live or builds an sdist.
 FANGFRISCH_REQUIREMENTS = Path(__file__).with_name("fangfrisch-requirements.txt")
 

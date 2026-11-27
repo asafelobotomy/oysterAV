@@ -7,15 +7,17 @@ from pathlib import Path
 
 from oyst_core.audit import SecurityAudit
 from oyst_core.config import load_config, save_config
-from oyst_core.models import Finding, PackStatus, PackTier
+from oyst_core.models import Finding, PackStatus, PackTier, PartialScanError
 from oyst_core.pack_sources import configure_maldet_clamav, ensure_maldet_pub_paths
 from oyst_core.packs.base import Pack, resolve_pack_binary
 from oyst_core.packs.maldet_parse import (
     filter_malware_findings,
     load_session_hit_findings,
+    maldet_abort_reason,
     maldet_event_log_path,
     merge_findings,
     parse_console_output,
+    scan_id_from_output,
 )
 from oyst_core.privileged.helper import run_privileged_helper
 from oyst_core.privileged.runner import run_command, which
@@ -124,7 +126,7 @@ class MaldetPack(Pack):
     def parse_findings(self, output: str) -> list[Finding]:
         """Parse console output; prefer session.hits when available after a scan."""
         console = parse_console_output(output)
-        session = load_session_hit_findings(self._binary())
+        session = load_session_hit_findings(self._binary(), scan_id_from_output(output))
         merged = merge_findings(session, console)
         return filter_malware_findings(merged)
 
@@ -136,11 +138,18 @@ class MaldetPack(Pack):
     ) -> list[Finding]:
         _ = (backend, profile)
         all_findings: list[Finding] = []
+        errors: list[str] = []
         for p in paths:
             ok, output = self.scan(p)
             if not ok and "not installed" in output:
                 continue
             all_findings.extend(self.parse_findings(output))
+            reason = maldet_abort_reason(output)
+            if reason:
+                errors.append(reason)
+        if errors:
+            # e.g. no signatures yet: LMD prints "aborting!" and exits 0, which looked clean.
+            raise PartialScanError("; ".join(dict.fromkeys(errors)), all_findings)
         return all_findings
 
     def _inotify_watches(self) -> int | None:

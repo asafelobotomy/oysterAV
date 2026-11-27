@@ -107,6 +107,33 @@ PageHarness {
             compare(root.runs("audit").length, 1);
         }
 
+        function test_system_shows_the_hardening_checks_with_fixes() {
+            root.tab("System");
+            tryVerify(() => root.named("hardening-summary") !== null && root.named("hardening-summary").visible);
+            compare(root.named("hardening-summary").text, "15 of 22 checks pass, 3 need attention.");
+            verify(root.shown("App confinement (AppArmor or SELinux)") !== null);
+            verify(root.shown("Kernel pointers hidden") !== null);
+            verify(root.showing("Fix: kernel.kptr_restrict = 1") !== null);
+            compare(root.runs("hardening").length, 1);
+        }
+
+        function test_harden_writes_the_sysctl_file_and_reads_again() {
+            root.tab("System");
+            tryVerify(() => root.named("harden-apply") !== null && root.named("harden-apply").visible);
+            verify(root.named("harden-revert") === null || !root.named("harden-revert").visible, "nothing to undo yet");
+            root.press(root.named("harden-apply"));
+            tryVerify(() => root.runs("harden-set").length === 1);
+            compare(root.runs("harden-set")[0][2], ["apply"]);
+            tryVerify(() => root.runs("hardening").length === 2);
+            tryVerify(() => root.showing("Kernel hardening is on.") !== null);
+        }
+
+        function test_a_failed_hardening_read_says_so() {
+            root.fakeCtx.commands.hardening = { code: 2, error: "exit code 2", output: null };
+            root.tab("System");
+            tryVerify(() => root.showing("the hardening checks") !== null);
+        }
+
         function test_an_empty_audit_log_says_so() {
             root.fakeCtx.commands.audit = root.ok([]);
             root.tab("System");

@@ -1,5 +1,5 @@
-// The System tab: which scanners are installed, whether oysterAV's polkit helper is ready, and the audit
-// log of what ran with elevated rights.
+// The System tab: which scanners are installed, how hardened the system is, whether oysterAV's polkit
+// helper is ready, and the audit log of what ran with elevated rights.
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
@@ -72,6 +72,10 @@ SettingsTab {
                 }
             }
         }
+    }
+
+    HardeningCard {
+        host: tab.host
     }
 
     SettingsCard {

@@ -81,6 +81,11 @@ id = "system"
 label = "Scanners and helper"
 keywords = ["packs", "doctor", "polkit", "helper", "audit"]
 
+[[setting]]
+id = "hardening"
+label = "System hardening"
+keywords = ["apparmor", "selinux", "secure boot", "lockdown", "sysctl", "kernel", "auditd", "usbguard", "mitigations"]
+
 [requires]
 bins = ["oyst-cli"]
 
@@ -147,6 +152,12 @@ output = "json"
 timeout_ms = 60000
 
 [[command]]
+id = "hardening"
+argv = ["/usr/bin/oyst-cli", "status", "hardening", "--json"]
+output = "json"
+timeout_ms = 10000
+
+[[command]]
 id = "helper"
 argv = ["/usr/bin/oyst-cli", "helper-status", "--json"]
 output = "json"
@@ -207,6 +218,13 @@ argv = ["/usr/bin/oyst-cli", "quarantine", "add", "--dry-run", "--json", "--thre
 output = "json"
 timeout_ms = 10000
 args = [{ name = "threat", pattern = '^[A-Za-z0-9][A-Za-z0-9._:/+() -]{0,199}$' }, { name = "path", pattern = '^/[^\x00-\x1f\x7f]*$' }]
+
+[[command]]
+id = "preview-harden"
+argv = ["/usr/bin/oyst-cli", "hardening", "set", "--dry-run", "--json"]
+output = "json"
+timeout_ms = 20000
+args = [{ name = "harden", pattern = '^(apply|revert)$' }]
 
 [[command]]
 id = "preview-service"
@@ -383,6 +401,17 @@ timeout_ms = 120000
 args = [{ name = "service", pattern = '^(clamd|clamonacc|freshclam-timer|fail2ban|maldet-monitor|schedule-linger)$' }, { name = "state", pattern = '^(on|off)$' }]
 confirm = "Change the %s service? oysterAV may ask for your password."
 preview = "preview-service"
+
+# The System tab's Harden button: oysterAV's one sysctl file (/etc/sysctl.d/90-oysterav-hardening.conf),
+# written or removed by its polkit helper. The helper picks the keys and values; never looser than now.
+[[command]]
+id = "harden-set"
+argv = ["/usr/bin/oyst-cli", "hardening", "set", "--confirm", "--json"]
+output = "json"
+timeout_ms = 120000
+args = [{ name = "harden", pattern = '^(apply|revert)$' }]
+confirm = "Change the kernel's security settings? oysterAV will ask for your password."
+preview = "preview-harden"
 
 # `config set` checks every value before it writes and refuses what it wouldn't load.
 [[command]]

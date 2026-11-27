@@ -1,0 +1,193 @@
+{
+  "ok": true,
+  "score": "15/22",
+  "counts": {
+    "ok": 15,
+    "warn": 3,
+    "info": 4,
+    "unknown": 0
+  },
+  "checks": [
+    {
+      "id": "mac",
+      "group": "Access control",
+      "title": "App confinement (AppArmor or SELinux)",
+      "state": "warn",
+      "detail": "Neither AppArmor nor SELinux is active, so an exploited app can reach everything you can. Active security modules: landlock,lockdown,yama,integrity,bpf.",
+      "fix": "Install apparmor, add lsm=landlock,lockdown,yama,integrity,apparmor,bpf to the kernel command line, enable apparmor.service, then reboot."
+    },
+    {
+      "id": "secure_boot",
+      "group": "Boot and kernel",
+      "title": "Secure Boot",
+      "state": "info",
+      "detail": "Off: a tampered bootloader or kernel would still start.",
+      "fix": "Sign your boot files (sbctl) and turn Secure Boot on in the firmware."
+    },
+    {
+      "id": "lockdown",
+      "group": "Boot and kernel",
+      "title": "Kernel lockdown",
+      "state": "info",
+      "detail": "Off: root can still change the running kernel (modules unsigned, /dev/mem).",
+      "fix": "lockdown=integrity on the kernel command line (needs signed modules, Secure Boot)."
+    },
+    {
+      "id": "cpu",
+      "group": "Boot and kernel",
+      "title": "CPU flaw mitigations",
+      "state": "ok",
+      "detail": "All 1 known CPU flaws are mitigated or n/a.",
+      "fix": ""
+    },
+    {
+      "id": "auditd",
+      "group": "Monitoring",
+      "title": "Audit log (auditd)",
+      "state": "info",
+      "detail": "auditd isn't running, so there's no tamper-evident record of logins and privilege use.",
+      "fix": "Install audit and enable auditd.service."
+    },
+    {
+      "id": "usbguard",
+      "group": "Monitoring",
+      "title": "USB device control (USBGuard)",
+      "state": "info",
+      "detail": "Any USB device is trusted as soon as it's plugged in (e.g. a fake keyboard).",
+      "fix": "Install usbguard, generate a policy from your devices, enable usbguard.service."
+    },
+    {
+      "id": "sysctl:kernel.kptr_restrict",
+      "group": "Kernel settings",
+      "title": "Kernel pointers hidden",
+      "state": "warn",
+      "detail": "kernel.kptr_restrict = 0. Hides kernel addresses from users, which exploits use to find their target.",
+      "fix": "kernel.kptr_restrict = 1"
+    },
+    {
+      "id": "sysctl:kernel.dmesg_restrict",
+      "group": "Kernel settings",
+      "title": "Kernel log restricted",
+      "state": "ok",
+      "detail": "kernel.dmesg_restrict = 1. Only admins can read the kernel log, which can leak addresses.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:kernel.yama.ptrace_scope",
+      "group": "Kernel settings",
+      "title": "Process snooping limited",
+      "state": "ok",
+      "detail": "kernel.yama.ptrace_scope = 1. A program can only debug its own children, so malware can't read other apps' memory.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:kernel.unprivileged_bpf_disabled",
+      "group": "Kernel settings",
+      "title": "Unprivileged BPF off",
+      "state": "ok",
+      "detail": "kernel.unprivileged_bpf_disabled = 1. Stops users loading BPF programs, a common kernel exploit path.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:net.core.bpf_jit_harden",
+      "group": "Kernel settings",
+      "title": "BPF JIT hardened",
+      "state": "ok",
+      "detail": "net.core.bpf_jit_harden = 2. Blinds constants in JIT-compiled BPF against JIT spraying.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:kernel.randomize_va_space",
+      "group": "Kernel settings",
+      "title": "Full memory randomisation",
+      "state": "ok",
+      "detail": "kernel.randomize_va_space = 2. ASLR for stack, libraries and heap.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:kernel.kexec_load_disabled",
+      "group": "Kernel settings",
+      "title": "Kernel replacement blocked",
+      "state": "ok",
+      "detail": "kernel.kexec_load_disabled = 1. Stops a root exploit from loading a new kernel without a reboot.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:fs.protected_symlinks",
+      "group": "Kernel settings",
+      "title": "Symlink attacks blocked",
+      "state": "ok",
+      "detail": "fs.protected_symlinks = 1. Stops tricks with links in shared folders like /tmp.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:fs.protected_hardlinks",
+      "group": "Kernel settings",
+      "title": "Hardlink attacks blocked",
+      "state": "ok",
+      "detail": "fs.protected_hardlinks = 1. Users can't hardlink files they don't own.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:fs.protected_fifos",
+      "group": "Kernel settings",
+      "title": "FIFO attacks blocked",
+      "state": "ok",
+      "detail": "fs.protected_fifos = 1. Limits opening other users' pipes in shared folders.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:fs.protected_regular",
+      "group": "Kernel settings",
+      "title": "Shared-folder file attacks blocked",
+      "state": "warn",
+      "detail": "fs.protected_regular = 0. Limits opening other users' files in shared folders.",
+      "fix": "fs.protected_regular = 2"
+    },
+    {
+      "id": "sysctl:fs.suid_dumpable",
+      "group": "Kernel settings",
+      "title": "No core dumps from setuid programs",
+      "state": "ok",
+      "detail": "fs.suid_dumpable = 0. Crashing a privileged program can't leak its memory to a file.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:net.ipv4.tcp_syncookies",
+      "group": "Kernel settings",
+      "title": "SYN flood protection",
+      "state": "ok",
+      "detail": "net.ipv4.tcp_syncookies = 1. Keeps the network stack up under a SYN flood.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:net.ipv4.conf.all.rp_filter",
+      "group": "Kernel settings",
+      "title": "Spoofed packets dropped",
+      "state": "ok",
+      "detail": "net.ipv4.conf.all.rp_filter = 1. Drops packets whose source address can't be routed back.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:net.ipv4.conf.all.accept_redirects",
+      "group": "Kernel settings",
+      "title": "ICMP redirects ignored",
+      "state": "ok",
+      "detail": "net.ipv4.conf.all.accept_redirects = 0. Other machines can't reroute this one's traffic.",
+      "fix": ""
+    },
+    {
+      "id": "sysctl:net.ipv6.conf.all.accept_redirects",
+      "group": "Kernel settings",
+      "title": "IPv6 redirects ignored",
+      "state": "ok",
+      "detail": "net.ipv6.conf.all.accept_redirects = 0. Same as above, for IPv6.",
+      "fix": ""
+    }
+  ],
+  "sysctl_fixes": [
+    "kernel.kptr_restrict = 1",
+    "fs.protected_regular = 2"
+  ],
+  "hardened_by_oysterav": false
+}

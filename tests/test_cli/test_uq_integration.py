@@ -55,6 +55,7 @@ SAMPLES = {
     "zone": "public",
     "port_spec": "8080/tcp",
     "fw_service": "kdeconnect",
+    "harden": "apply",
 }
 
 # Commands that may change something must ask first in Settings; these also show a plan first.
@@ -73,6 +74,7 @@ DESTRUCTIVE = {
     "fw-rule-add",
     "fw-rule-remove",
     "fw-rule-change",
+    "harden-set",
     "fw-zone-port",
     "fw-zone-service",
 }

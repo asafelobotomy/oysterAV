@@ -205,3 +205,35 @@ def test_firewall_fixture_matches_overview(tmp_path: Path, monkeypatch: pytest.M
         path.write_text(json.dumps(got, indent=2) + "\n", encoding="utf-8")
     want = json.loads(path.read_text(encoding="utf-8"))
     assert want == got, f"firewall.json is out of date; run UPDATE_FIXTURES=1 pytest {__file__}"
+
+
+def test_hardening_fixture_matches_a_default_desktop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """hardening.json: `status hardening` on a fake desktop (no AppArmor, Secure Boot off, two
+    weak kernel settings), so the fixture doesn't depend on the machine running the tests."""
+    from oyst_core import hardening
+
+    for rule in hardening.SYSCTL_RULES:
+        path = tmp_path / "proc/sys" / rule.key.replace(".", "/")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        weak = rule.key in ("kernel.kptr_restrict", "fs.protected_regular")
+        path.write_text(str(0 if weak else rule.want))
+    (tmp_path / "sys/kernel/security").mkdir(parents=True)
+    (tmp_path / "sys/kernel/security/lsm").write_text("landlock,lockdown,yama,integrity,bpf")
+    (tmp_path / "sys/kernel/security/lockdown").write_text("[none] integrity confidentiality")
+    efivars = tmp_path / "sys/firmware/efi/efivars"
+    efivars.mkdir(parents=True)
+    (efivars / hardening.SECURE_BOOT_VAR).write_bytes(b"\x06\x00\x00\x00\x00")
+    (tmp_path / "sys/devices/system/cpu/vulnerabilities").mkdir(parents=True)
+    (tmp_path / "sys/devices/system/cpu/vulnerabilities/meltdown").write_text("Not affected")
+    (tmp_path / "run/systemd/units").mkdir(parents=True)
+    real = hardening.assess_hardening
+    monkeypatch.setattr(hardening, "assess_hardening", lambda root=tmp_path: real(root))
+    result = CliRunner().invoke(cli, ["status", "hardening", "--json"])
+    got = json.loads(result.output)
+    path = FIXTURES / "hardening.json"
+    if UPDATE:
+        path.write_text(json.dumps(got, indent=2) + "\n", encoding="utf-8")
+    want = json.loads(path.read_text(encoding="utf-8"))
+    assert want == got, f"hardening.json is out of date; run UPDATE_FIXTURES=1 pytest {__file__}"
