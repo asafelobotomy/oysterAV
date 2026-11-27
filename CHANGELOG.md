@@ -2,6 +2,19 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.6.0 - 2026-11-27
+
+### Documentation
+
+- *(changelog)* V0.5.1
+
+
+### Other
+
+- Say which versions of uQ's family this works with (uq-compat line) (#80)
+
+- 0.6.0 — maldet 2.0.1, https signature feeds, kernel hardening (#81)
+
 ## 0.5.1 - 2026-11-26
 
 ### Documentation

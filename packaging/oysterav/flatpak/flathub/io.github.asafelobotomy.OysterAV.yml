@@ -88,4 +88,4 @@ modules:
     sources:
       - type: archive
         url: https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.6.0.tar.gz
-        sha256: b4d13eb59ba249904978f45e80ef26fb08576c028792e67a6c859ca267267b3b
+        sha256: 21a182423237c4625761a168111dc2e36bb2e27b5d7924edbea587f6c1444d0c
