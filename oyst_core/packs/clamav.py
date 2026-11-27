@@ -12,13 +12,18 @@ from oyst_core.audit import SecurityAudit
 from oyst_core.config import load_config
 from oyst_core.models import (
     Finding,
-    FindingSeverity,
     PackStatus,
     PackTier,
     PartialScanError,
     ScanProfile,
 )
 from oyst_core.packs.base import Pack, detect_distro_family, resolve_pack_binary
+from oyst_core.packs.clamav_output import (
+    count_files,
+    file_counter,
+    keep_line,
+    parse_clamscan_stdout,
+)
 from oyst_core.packs.clamav_version import security_advisory
 from oyst_core.packs.clamd_client import (
     CLAMD_SOCKETS,
@@ -34,6 +39,7 @@ from oyst_core.privileged.runner import (
     run_command_cancellable,
     version_gte,
 )
+from oyst_core.privileged.runner_stream import run_command_streaming
 from oyst_core.privileged.systemctl_route import run_systemctl_helper
 from oyst_core.runtime.bundles.clamav import clamav_db_dir, clamscan_database_args
 from oyst_core.runtime.manifest import is_full_mode
@@ -74,6 +80,7 @@ class ClamAVPack(Pack):
         return None
 
     supports_cancel = True
+    supports_progress = True  # scan_paths(on_progress=(files_done, files_total | None))
 
     def _clamd_socket(self) -> str | None:
         configured = discover_endpoint().local_socket
@@ -297,6 +304,7 @@ class ClamAVPack(Pack):
         backend: str = "auto",
         profile: ScanProfile | str = ScanProfile.QUICK,
         should_cancel: Callable[[], bool] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> CommandResult:
         self.ensure_ignore_sigs()
         target = Path(path).expanduser().resolve()
@@ -316,42 +324,19 @@ class ClamAVPack(Pack):
             self._append_profile_flags(argv, profile)
             self._append_exclude_dirs(argv)
             self._append_profile_scan_mode(argv)
+            if on_line is not None:  # streamed: per-file progress, clean lines not kept
+                return run_command_streaming(
+                    argv,
+                    on_line=on_line,
+                    keep=keep_line,
+                    timeout=SCAN_TIMEOUT_SEC,
+                    should_cancel=should_cancel,
+                )
         return run_command_cancellable(argv, timeout=SCAN_TIMEOUT_SEC, should_cancel=should_cancel)
 
     def parse_findings(self, result: CommandResult) -> list[Finding]:
-        """Parse ``<path>: <threat> FOUND`` lines from clamscan/clamdscan stdout.
-
-        Paths may contain ``:`` (split on the *last* ``": "``) and newlines: a
-        filename with an embedded newline prints as orphan line(s) followed by
-        the result line, so orphans are re-joined onto the next result line's
-        path. Only lines that *end* in `` FOUND`` are detections.
-        """
-        findings: list[Finding] = []
-        pending: list[str] = []
-        for line in result.stdout.split("\n"):
-            if line.startswith("----------- SCAN SUMMARY"):
-                break
-            head, sep, status = line.rpartition(": ")
-            if not sep or not head:
-                if line:
-                    pending.append(line)
-                continue
-            fpath = "\n".join([*pending, head])
-            pending = []
-            if not status.endswith(" FOUND"):
-                continue
-            threat = status[: -len(" FOUND")].strip()
-            findings.append(
-                Finding(
-                    pack=self.name,
-                    path=fpath,
-                    threat_name=threat or "unknown",
-                    severity=FindingSeverity.HIGH,
-                    message=line.strip(),
-                    raw_line=line,
-                )
-            )
-        return findings
+        """``<path>: <threat> FOUND`` lines (see clamav_output.parse_clamscan_stdout)."""
+        return parse_clamscan_stdout(self.name, result.stdout)
 
     def scan_paths(
         self,
@@ -359,6 +344,7 @@ class ClamAVPack(Pack):
         backend: str = "auto",
         profile: ScanProfile | str = ScanProfile.QUICK,
         should_cancel: Callable[[], bool] | None = None,
+        on_progress: Callable[[int, int | None], None] | None = None,
     ) -> list[Finding]:
         all_findings: list[Finding] = []
         failures: list[str] = []
@@ -369,9 +355,19 @@ class ClamAVPack(Pack):
             if resolved == "clamd"
             else []
         )
+        on_line: Callable[[str], None] | None = None
+        if on_progress is not None and resolved == "clamscan":
+            on_line = file_counter(on_progress, count_files(paths, merged_clamav_exclude_dirs()))
+
         for p in paths:
             try:
-                res = self.scan(p, backend=resolved, profile=profile, should_cancel=should_cancel)
+                res = self.scan(
+                    p,
+                    backend=resolved,
+                    profile=profile,
+                    should_cancel=should_cancel,
+                    on_line=on_line,
+                )
             except (FileNotFoundError, OSError) as exc:
                 raise RuntimeError(str(exc)) from exc
             found = self.parse_findings(res)

@@ -207,6 +207,10 @@ class JobOrchestrator(OrchestratorHelpersMixin):
                 scan_kwargs: dict[str, Any] = {"backend": backend, "profile": profile.value}
                 if getattr(pack, "supports_cancel", False):
                     scan_kwargs["should_cancel"] = self.events.cancel_requested
+                if getattr(pack, "supports_progress", False):
+                    scan_kwargs["on_progress"] = self._pack_progress(
+                        job_id, name, pct, ((done + idx + 1) / total) * 100, on_progress
+                    )
                 try:
                     findings = pack.scan_paths(scan_paths, **scan_kwargs)
                     result.findings.extend(findings)

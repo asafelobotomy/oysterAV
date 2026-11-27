@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -67,6 +68,41 @@ class OrchestratorHelpersMixin:
             pass
         if on_progress is not None:
             on_progress(pack or message, percent)
+
+    def _pack_progress(
+        self,
+        job_id: str,
+        pack: str,
+        start: float,
+        end: float,
+        on_progress: Callable[[str, float], None] | None,
+        every_s: float = 3.0,
+    ) -> Callable[[int, int | None], None]:
+        """A pack's (files done, files total) as job progress between ``start`` and ``end``,
+        at most every ``every_s`` seconds. Without a total the count still moves."""
+        last = [0.0]
+
+        def report(done: int, total: int | None) -> None:
+            now = time.monotonic()
+            if done and now - last[0] < every_s:
+                return
+            last[0] = now
+            if total:
+                share = min(done / total, 0.99)
+                message = f"Scanning with {pack}: {done:,} of about {total:,} files"
+            else:
+                share = 0.0
+                message = f"Scanning with {pack}: {done:,} files so far"
+            self._emit_progress(
+                job_id,
+                pack=pack,
+                message=message,
+                percent=start + (end - start) * share,
+                state="running",
+                on_progress=on_progress,
+            )
+
+        return report
 
     def _ensure_job_heartbeat(self, job_id: str) -> None:
         """Keep the job lock's heartbeat fresh while a pack blocks for a long time."""

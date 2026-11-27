@@ -227,3 +227,26 @@ def test_wizard_cancel_leaves_state_and_finish_runs_off_loop(
     on_success({})
     wizard.dialog.destroy.assert_called_once()
     wizard._on_complete.assert_called_once()
+
+
+def test_scan_status_shows_the_pack_file_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scan_job_ui, "refresh_card_progress", lambda _p, _n: None)
+    texts: list[str] = []
+    page = SimpleNamespace(
+        _expected_packs=["rkhunter", "clamav"],
+        _pack_cards={},
+        _card_states={},
+        _set_status=texts.append,
+        progress=MagicMock(),
+    )
+    scan_job_ui.apply_job_status(
+        page,  # type: ignore[arg-type]
+        {
+            "active": True,
+            "pack": "clamav",
+            "percent": 80.0,
+            "message": "Scanning with clamav: 1,200 of about 4,000 files",
+        },
+    )
+    assert texts[-1].endswith(" · 1,200 of about 4,000 files")
+    assert texts[-1].startswith("Pack 2 of 2")

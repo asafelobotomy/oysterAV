@@ -87,5 +87,5 @@ modules:
       - install -Dm644 branding/hicolor/512x512/apps/oysterav.png ${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/oysterav.png
     sources:
       - type: archive
-        url: https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.6.0.tar.gz
+        url: https://github.com/asafelobotomy/oysterAV/archive/refs/tags/v0.6.1.tar.gz
         sha256: 21a182423237c4625761a168111dc2e36bb2e27b5d7924edbea587f6c1444d0c
