@@ -268,6 +268,9 @@ def apply_job_status(page: _ScanJobHost, status: dict[str, Any]) -> None:
         pack,
         fallback=message if message else "Scanning…",
     )
+    if message.startswith("Scanning with ") and ": " in message:
+        # Per-file count from the pack (e.g. "12,345 of about 400,000 files").
+        progress_text += " · " + message.split(": ", 1)[1]
     page._set_status(progress_text)
     page.progress.set_visible(True)
     if percent > 0:
