@@ -30,6 +30,7 @@ concurrency:
 jobs:
   detect:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       should_release: ${{ steps.detect.outputs.should_release }}
       version: ${{ steps.detect.outputs.version }}
@@ -113,6 +114,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write # push the release tag
     steps:
@@ -160,6 +162,7 @@ jobs:
     needs: [detect, prepare]
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -195,6 +198,7 @@ jobs:
     needs: [detect, prepare]
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -233,6 +237,7 @@ jobs:
     needs: [detect, prepare]
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -282,6 +287,7 @@ jobs:
     needs: [detect, prepare]
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Arch, so makepkg writes .SRCINFO from the PKGBUILD (the AUR files, pushed by hand).
     container: archlinux:base-devel
     steps:
@@ -313,6 +319,7 @@ jobs:
     needs: [detect, prepare, python-dist, runtime, flatpak, native-pkgs, arch]
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Create the `release` environment with required reviewers in repo settings.
     environment: release
     permissions:
@@ -418,6 +425,7 @@ jobs:
     needs: [detect, release]
     if: needs.detect.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       actions: write # gh workflow run
     steps:
