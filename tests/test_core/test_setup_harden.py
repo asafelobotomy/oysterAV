@@ -42,7 +42,7 @@ def test_apply_safe_hardenings_single_helper_call() -> None:
             "oyst_core.setup_harden.probe_onaccess_prevention",
             return_value={"conf_path": "/etc/clamav/clamd.conf", "disable_cache": False},
         ),
-        patch("oyst_core.setup_harden.which", return_value="/usr/bin/rkhunter"),
+        patch("oyst_core.setup_harden.system_tool_path", return_value="/usr/bin/rkhunter"),
         patch(
             "oyst_core.setup_harden.load_config",
             return_value=MagicMock(rkhunter=MagicMock(disable_tests=["apps"])),
@@ -101,7 +101,7 @@ def test_apply_safe_hardenings_skips_without_helper() -> None:
             "oyst_core.setup_harden.probe_onaccess_prevention",
             return_value={"disable_cache": True},
         ),
-        patch("oyst_core.setup_harden.which", return_value=None),
+        patch("oyst_core.setup_harden.system_tool_path", return_value=None),
         patch("oyst_core.privilege.run.run_privileged_helper") as helper,
     ):
         clam_cls.return_value.clamd_status.return_value = {"running": True, "unit": "clamav-daemon"}
@@ -131,7 +131,7 @@ def test_apply_safe_hardenings_soft_fails_local() -> None:
                 "conflict_sidecars": ["/etc/clamav/clamd.conf.rpmnew"],
             },
         ),
-        patch("oyst_core.setup_harden.which", return_value=None),
+        patch("oyst_core.setup_harden.system_tool_path", return_value=None),
         patch(
             "oyst_core.privilege.run.run_privileged_helper",
             return_value=MagicMock(

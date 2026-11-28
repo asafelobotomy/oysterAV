@@ -123,3 +123,24 @@ def test_resolve_tool_does_not_map_clamav_tools_to_maldet(
     clam = resolve_tool("clamscan")
     assert fresh.path != str(maldet_bin)
     assert clam.path != str(maldet_bin)
+
+
+def test_resolve_tool_finds_a_root_only_distro_binary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Arch ships /usr/bin/rkhunter 0700: not on the user's PATH, but installed."""
+    import oyst_core.privileged.helper_validate as validate
+
+    binary = tmp_path / "rkhunter"
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    binary.chmod(0o700)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setenv("OYSTERAV_RUNTIME_MODE", "lite")
+    monkeypatch.setattr("oyst_core.runtime.resolver.which", lambda _tool: None)
+    monkeypatch.setattr(validate, "_TRUSTED_BIN_DIRS", (str(tmp_path),))
+    monkeypatch.setattr(validate, "_is_root_owned_file", lambda _path: True)
+
+    resolved = resolve_tool("rkhunter")
+    assert (resolved.path, resolved.source) == (str(binary), "system")
+    assert resolve_tool("chkrootkit").source == "missing"

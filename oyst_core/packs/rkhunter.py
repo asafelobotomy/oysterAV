@@ -31,6 +31,9 @@ class RKHunterPack(Pack):
                 res = run_command([path, "--version"], timeout=30)
                 match = re.search(r"([\d.]+)", res.stdout)
                 version = match.group(1) if match else "1.4.6"
+            except PermissionError:
+                # Root-only on Arch (mode 0700): installed, but only oyst-helper can run it.
+                version = None
             except (ValueError, OSError):
                 version = "unknown"
         status = self._base_status(installed, version)

@@ -17,7 +17,7 @@ from oyst_core.packs.rkhunter_disable_tests import (
 )
 from oyst_core.privilege.recipes import build_harden_plan
 from oyst_core.privilege.run import run_privilege_concert
-from oyst_core.privileged.runner import which
+from oyst_core.runtime.resolver import system_tool_path
 from oyst_core.virusevent import (
     install_wrapper,
     recommended_virus_event_command,
@@ -194,7 +194,7 @@ def _prepare_disable_cache(argv: list[str], local: list[dict[str, Any]]) -> None
 
 
 def _prepare_rkhunter(argv: list[str], local: list[dict[str, Any]]) -> None:
-    if not which("rkhunter"):
+    if not system_tool_path("rkhunter"):
         local.append(
             _step(
                 "harden-rkhunter-defaults",

@@ -43,12 +43,31 @@ def _runtime_candidates(tool: str) -> list[Path]:
     return candidates
 
 
+def system_tool_path(tool: str) -> str | None:
+    """The distro's copy of ``tool``: on PATH, or installed for root only.
+
+    Arch installs /usr/bin/rkhunter with mode 0700, so ``which`` finds nothing as the user and a
+    fresh install showed rkhunter as missing, with a hint to install the package that was already
+    there. oyst-helper runs these scanners as root, so a root-owned file in a trusted directory is
+    installed.
+    """
+    found = which(tool)
+    if found:
+        return found
+    from oyst_core.privileged.helper_validate import resolve_trusted_binary
+
+    try:
+        return resolve_trusted_binary(tool)
+    except ValueError:
+        return None
+
+
 def resolve_tool(tool: str) -> ResolvedTool:
     if is_full_mode():
         for candidate in _runtime_candidates(tool):
             if candidate.is_file():
                 return ResolvedTool(str(candidate), "runtime", tool)
-    found = which(tool)
+    found = system_tool_path(tool)
     if found:
         return ResolvedTool(found, "system", tool)
     if is_lite_mode():
