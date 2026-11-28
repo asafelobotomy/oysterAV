@@ -2,6 +2,17 @@
 
 All notable changes to oysterAV are documented here and on each
 [GitHub Release](https://github.com/asafelobotomy/oysterAV/releases).
+## 0.6.3 - 2026-11-28
+
+### Documentation
+
+- *(changelog)* V0.6.2; pin release checksums
+
+
+### Other
+
+- 0.6.3 — rkhunter is found on Arch, where its program is root-only (#85)
+
 ## 0.6.2 - 2026-11-27
 
 ### Documentation
