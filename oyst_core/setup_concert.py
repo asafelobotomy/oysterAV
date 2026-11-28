@@ -12,10 +12,11 @@ from oyst_core.pack_sources import stage_maldet_install_script
 from oyst_core.packs.base import detect_distro_family
 from oyst_core.privilege.recipes import build_setup_plan
 from oyst_core.privilege.run import run_privilege_concert
-from oyst_core.privileged.runner import CommandResult, which
+from oyst_core.privileged.runner import CommandResult
 from oyst_core.registry import get_registry
 from oyst_core.runtime.bootstrap import RUNTIME_PACKS, install_pack_runtime
 from oyst_core.runtime.manifest import is_full_mode
+from oyst_core.runtime.resolver import system_tool_path
 from oyst_core.schedule_linger import current_username
 from oyst_core.setup_harden import prepare_harden_argv
 
@@ -170,7 +171,9 @@ def build_concert_argv(
             argv.extend(install_flags)
 
     if propupd:
-        will_rkh = bool(which("rkhunter")) or any(a.startswith("--install=rkhunter:") for a in argv)
+        will_rkh = bool(system_tool_path("rkhunter")) or any(
+            a.startswith("--install=rkhunter:") for a in argv
+        )
         if will_rkh:
             argv.append("--propupd")
         else:
